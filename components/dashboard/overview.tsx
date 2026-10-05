@@ -1,0 +1,20 @@
+"use client";
+
+import { ArrowUpRight, ServerCog } from "lucide-react";
+
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { KpiGrid } from "@/components/dashboard/kpi-grid";
+import { PlatformActivity } from "@/components/dashboard/platform-activity";
+import { useAdminResource } from "@/hooks/use-admin-resource";
+import { formatLocalDate, timeGreeting } from "@/lib/utils";
+import type { AdminIdentity } from "@/types/broka";
+import { SectionEyebrow, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
+
+export function Overview({ admin }: { admin: AdminIdentity }) {
+  const summary = useAdminResource("summary");
+  const summaryState = summary.isLoading ? "loading" : summary.isError ? "error" : summary.data ? "schema-unavailable" : "schema-unavailable" as const;
+  const health = useAdminResource("health");
+  const healthTone = health.isLoading ? "neutral" : health.isError ? "danger" : "success";
+
+  return <div className="space-y-6"><section className="relative overflow-hidden rounded-2xl border border-white/[0.075] bg-[linear-gradient(115deg,rgba(20,25,35,0.96),rgba(13,16,23,0.9))] px-6 py-7 sm:px-8"><div className="absolute -right-16 -top-28 h-64 w-64 rounded-full bg-amber-300/[0.07] blur-3xl" aria-hidden="true" /><div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><SectionEyebrow>Internal control center</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white sm:text-4xl">{timeGreeting()}, {admin.displayName}</h1><p className="mt-2 text-sm text-slate-400">BROKA Operations Overview <span className="mx-2 text-slate-700">•</span> {formatLocalDate()}</p></div><div className="flex flex-wrap gap-2"><StatusBadge tone={summary.isError ? "danger" : summary.data ? "success" : "warning"}>{summary.isError ? "Summary unavailable" : summary.data ? "Live backend data" : "Loading summary"}</StatusBadge><a href="/diagnostics" className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-amber-300/25 hover:text-amber-100">Review system diagnostics <ArrowUpRight size={14} /></a></div></div></section><KpiGrid state={summaryState} summary={summary.data} /><div className="grid gap-6 2xl:grid-cols-[minmax(0,1.65fr)_minmax(360px,0.85fr)]"><PlatformActivity /><ActivityFeed state={summaryState} /></div><section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">{summary.data ? <div className="data-panel p-5"><p className="text-sm font-semibold text-slate-100">Backend summary contract</p><p className="mt-2 text-sm leading-6 text-slate-400">Live values are validated against the FastAPI admin router source supplied for this project. Pagination, search, and time-series analytics remain separate backend contracts.</p><div className="mt-4 flex flex-wrap gap-2"><StatusBadge tone="success">Validated response</StatusBadge><StatusBadge tone="neutral">Source-derived contract</StatusBadge></div></div> : <UnavailablePanel title="Admin summary unavailable" detail="The backend could not return a payload matching the verified summary contract. No values are inferred or displayed." action={<a href="/settings" className="text-xs font-semibold text-amber-200 hover:text-amber-100">Review integration status →</a>} />}<div className="data-panel p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-slate-100">API health handshake</p><p className="mt-1 text-xs leading-5 text-slate-500">Application health is exposed at <code className="rounded bg-white/[0.05] px-1.5 py-0.5 text-slate-400">/health</code>.</p></div><ServerCog size={19} className="text-slate-500" aria-hidden="true" /></div><div className="mt-5 border-t border-white/[0.07] pt-4"><StatusBadge tone={healthTone}>{health.isLoading ? "Checking upstream" : health.isError ? "Health unavailable" : health.data ? `${health.data.status} · v${health.data.version}` : "Health unavailable"}</StatusBadge></div></div></section></div>;
+}

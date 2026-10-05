@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --background: #090b10;
+  --foreground: #eef2f8;
+  --panel: #10141d;
+  --copper: #f2b965;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: var(--background); }
+body { margin: 0; min-height: 100vh; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+a { color: inherit; text-decoration: none; }
+::selection { background: rgb(242 185 101 / 0.25); color: #fff; }
+.font-display { font-family: Manrope, Inter, ui-sans-serif, system-ui, sans-serif; }
+
+.data-panel { border: 1px solid rgb(255 255 255 / 0.075); border-radius: 0.9rem; background: linear-gradient(145deg, rgb(18 22 31 / 0.95), rgb(12 15 22 / 0.9)); box-shadow: 0 18px 60px rgb(0 0 0 / 0.12); }
+.metric-card { display: block; border: 1px solid rgb(255 255 255 / 0.075); border-radius: 0.8rem; background: linear-gradient(150deg, rgb(20 24 33 / 0.9), rgb(13 16 23 / 0.94)); padding: 1rem; transition: border-color 180ms ease, background 180ms ease, transform 180ms ease; }
+.metric-card:hover { border-color: rgb(242 185 101 / 0.24); background: linear-gradient(150deg, rgb(28 31 39 / 0.95), rgb(15 18 25 / 0.96)); transform: translateY(-1px); }
+.contract-panel { border: 1px solid rgb(242 185 101 / 0.13); border-radius: 0.85rem; background: linear-gradient(110deg, rgb(242 185 101 / 0.07), rgb(255 255 255 / 0.018)); }
+
+@media (max-width: 639px) { .metric-card:nth-child(n+5) { display: block; } }

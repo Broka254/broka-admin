@@ -28,3 +28,17 @@ test("mutation boundary keeps all four verified user actions allowlisted", async
   assert.match(source, /idempotency-key/);
   assert.match(source, /requireSameOrigin/);
 });
+
+test("production workflow uploads a build artifact without deployment side effects", async () => {
+  const workflow = await readFile(resolve(root, ".github/workflows/ci.yml"), "utf8");
+  assert.match(workflow, /pnpm install --frozen-lockfile/);
+  assert.match(workflow, /pnpm build/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /broka-admin-next-build-/);
+});
+
+test("Broka design system keeps the public-site visual anchors", async () => {
+  const system = await readFile(resolve(root, "docs/DESIGN_SYSTEM.md"), "utf8");
+  for (const token of ["#05060d", "#8b75ff", "#54d7e9", "#dbb75d"]) assert.match(system, new RegExp(token.replace("#", "\\#")));
+  assert.match(system, /read-only references/);
+});

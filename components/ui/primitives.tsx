@@ -8,9 +8,9 @@ type Tone = "neutral" | "success" | "warning" | "danger" | "info";
 const toneClasses: Record<Tone, string> = {
   neutral: "border-white/10 bg-white/[0.035] text-slate-300",
   success: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
-  warning: "border-amber-400/20 bg-amber-400/10 text-amber-200",
-  danger: "border-rose-400/20 bg-rose-400/10 text-rose-200",
-  info: "border-sky-400/20 bg-sky-400/10 text-sky-200",
+  warning: "border-amber-300/25 bg-amber-300/10 text-amber-200",
+  danger: "border-rose-400/25 bg-rose-400/10 text-rose-200",
+  info: "border-cyan-300/20 bg-cyan-300/10 text-cyan-200",
 };
 
 export function StatusBadge({ children, tone = "neutral", className }: { children: ReactNode; tone?: Tone; className?: string }) {
@@ -18,11 +18,11 @@ export function StatusBadge({ children, tone = "neutral", className }: { childre
 }
 
 export function SectionEyebrow({ children }: { children: ReactNode }) {
-  return <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300/80">{children}</p>;
+  return <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#a895ff]">{children}</p>;
 }
 
 export function UnavailablePanel({ title, detail, action, compact = false }: { title: string; detail: string; action?: ReactNode; compact?: boolean }) {
-  return <div className={cn("contract-panel", compact ? "p-4" : "p-6")}><div className="flex items-start gap-3"><div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-amber-300/15 bg-amber-300/10 text-amber-200"><Info size={16} aria-hidden="true" /></div><div className="min-w-0"><p className="text-sm font-semibold text-slate-100">{title}</p><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{detail}</p>{action ? <div className="mt-4">{action}</div> : null}</div></div></div>;
+  return <div className={cn("contract-panel", compact ? "p-4" : "p-6")}><div className="flex items-start gap-3"><div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyan-300/15 bg-cyan-300/10 text-cyan-200"><Info size={16} aria-hidden="true" /></div><div className="min-w-0"><p className="text-sm font-semibold text-slate-100">{title}</p><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{detail}</p>{action ? <div className="mt-4">{action}</div> : null}</div></div></div>;
 }
 
 type ResourceStateName = "loading" | "error" | "empty" | "unavailable" | "unauthorized" | "forbidden";

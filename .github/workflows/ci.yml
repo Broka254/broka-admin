@@ -4,21 +4,67 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: broka-admin-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  BROKA_API_URL: https://api.broka.co.ke
+  BROKA_COOKIE_SECURE: "false"
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    name: Validate and build admin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 11.25.0
-      - uses: actions/setup-node@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm build
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test contracts
+        run: pnpm test
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build production bundle
+        run: pnpm build
+
+      - name: Upload Next.js build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: broka-admin-next-build-${{ github.sha }}
+          path: |
+            .next
+            public
+            package.json
+            pnpm-lock.yaml
+            next.config.ts
+            railway.toml
+          if-no-files-found: error
+          retention-days: 14

@@ -1,25 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090b10;
-  --foreground: #eef2f8;
-  --panel: #10141d;
-  --copper: #f2b965;
+  --broka-bg: #05060d;
+  --broka-surface: #080a14;
+  --broka-surface-2: #0c1020;
+  --broka-surface-3: #13182b;
+  --broka-surface-4: #1a2035;
+  --broka-text: #f7f7fc;
+  --broka-muted: #c5cada;
+  --broka-subtle: #9ba4bc;
+  --broka-violet: #8b75ff;
+  --broka-violet-soft: #ded8ff;
+  --broka-cyan: #54d7e9;
+  --broka-amber: #dbb75d;
+  --broka-outline: rgba(195, 202, 226, 0.13);
+  --broka-outline-strong: rgba(195, 202, 226, 0.22);
+  --background: var(--broka-bg);
+  --foreground: var(--broka-text);
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: var(--background); }
-body { margin: 0; min-height: 100vh; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-button, input { font: inherit; }
+html { min-width: 320px; background: var(--broka-bg); }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 70% 45% at 8% -8%, rgb(139 117 255 / 0.13), transparent 68%),
+    radial-gradient(ellipse 55% 42% at 96% 100%, rgb(84 215 233 / 0.08), transparent 70%),
+    var(--broka-bg);
+  color: var(--broka-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 a { color: inherit; text-decoration: none; }
-::selection { background: rgb(242 185 101 / 0.25); color: #fff; }
-.font-display { font-family: Manrope, Inter, ui-sans-serif, system-ui, sans-serif; }
+::selection { background: rgb(139 117 255 / 0.3); color: #fff; }
+.font-display { font-family: Montserrat, Inter, ui-sans-serif, system-ui, sans-serif; }
 
-.data-panel { border: 1px solid rgb(255 255 255 / 0.075); border-radius: 0.9rem; background: linear-gradient(145deg, rgb(18 22 31 / 0.95), rgb(12 15 22 / 0.9)); box-shadow: 0 18px 60px rgb(0 0 0 / 0.12); }
-.metric-card { display: block; border: 1px solid rgb(255 255 255 / 0.075); border-radius: 0.8rem; background: linear-gradient(150deg, rgb(20 24 33 / 0.9), rgb(13 16 23 / 0.94)); padding: 1rem; transition: border-color 180ms ease, background 180ms ease, transform 180ms ease; }
-.metric-card:hover { border-color: rgb(242 185 101 / 0.24); background: linear-gradient(150deg, rgb(28 31 39 / 0.95), rgb(15 18 25 / 0.96)); transform: translateY(-1px); }
-.contract-panel { border: 1px solid rgb(242 185 101 / 0.13); border-radius: 0.85rem; background: linear-gradient(110deg, rgb(242 185 101 / 0.07), rgb(255 255 255 / 0.018)); }
+.data-panel {
+  border: 1px solid var(--broka-outline);
+  border-radius: 1.1rem;
+  background: linear-gradient(145deg, rgb(19 24 43 / 0.88), rgb(8 10 20 / 0.94));
+  box-shadow: 0 22px 70px rgb(0 0 0 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.025);
+}
+.metric-card {
+  display: block;
+  border: 1px solid var(--broka-outline);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgb(19 24 43 / 0.78), rgb(8 10 20 / 0.92));
+  padding: 1.1rem;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+.metric-card:hover { border-color: rgb(139 117 255 / 0.42); background: linear-gradient(145deg, rgb(26 32 53 / 0.9), rgb(10 13 27 / 0.96)); transform: translateY(-2px); }
+.contract-panel { border: 1px solid rgb(84 215 233 / 0.16); border-radius: 1rem; background: linear-gradient(110deg, rgb(84 215 233 / 0.07), rgb(139 117 255 / 0.04)); }
 
-@media (max-width: 639px) { .metric-card:nth-child(n+5) { display: block; } }
+.dashboard-grid { display: grid; gap: 1rem; }
+.dashboard-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.focus-ring:focus-visible { outline: 2px solid var(--broka-violet); outline-offset: 3px; }
+
+@media (max-width: 900px) { .dashboard-grid-2 { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

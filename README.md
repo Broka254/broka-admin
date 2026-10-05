@@ -32,6 +32,14 @@ Tokens are held only in HttpOnly cookies. The browser does not receive tokens, a
 
 The retrieved OpenAPI document leaves success schemas for all inspected admin endpoints empty. Consequently, the UI deliberately renders **response schema unavailable** rather than mapping unverified fields into KPI values, financial tables, charts, risk levels, or activity records. See [`docs/API_INTEGRATION.md`](docs/API_INTEGRATION.md) and [`BACKEND_GAPS.md`](BACKEND_GAPS.md).
 
+## Design system
+
+The admin uses the Broka public product language: ink navy surfaces, violet primary actions, cyan system signals, restrained amber commerce cues, and a compact Montserrat/Inter-style hierarchy. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md). The public Broka site and connected repositories were used as read-only references; this repository is the only implementation target.
+
+## GitHub Actions build
+
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. It installs with the frozen pnpm lockfile, runs contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. The workflow is intentionally a validation/build gate; deployment remains a hosting-provider concern and must use the target environment's own secrets and protected settings.
+
 ## Railway deployment
 
 1. Create a new Railway service named `broka-admin` from this repository.

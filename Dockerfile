@@ -14,6 +14,7 @@ RUN corepack enable && pnpm build
 FROM base AS production
 ENV NODE_ENV=production
 ENV PORT=3000
+RUN corepack enable pnpm
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
@@ -21,4 +22,4 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm exec next start -p ${PORT}"]
+CMD ["sh", "-c", "pnpm start -p ${PORT}"]

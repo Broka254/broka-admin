@@ -38,7 +38,14 @@ The admin uses the Broka public product language: ink navy surfaces, violet prim
 
 ## GitHub Actions build
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. It installs with the frozen pnpm lockfile, runs contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. The workflow is intentionally a validation/build gate; deployment remains a hosting-provider concern and must use the target environment's own secrets and protected settings.
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. It installs with the frozen pnpm lockfile, runs contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. A successful push to `main` can also deploy the current commit to Railway through the protected `production` environment.
+
+To enable the deployment job, add these GitHub **Actions secrets** under `Settings → Environments → production`:
+
+- `RAILWAY_TOKEN`: a Railway project token; never commit or paste it into source.
+- `RAILWAY_SERVICE_ID`: the service ID for the `broka-admin` Railway service. This is an identifier, not a secret, but keeping it in the environment keeps the workflow portable.
+
+The Railway service variables remain managed by Railway (`BROKA_API_URL`, `BROKA_API_TIMEOUT`, and `BROKA_COOKIE_SECURE`). The workflow only deploys after validation passes.
 
 ## Railway deployment
 

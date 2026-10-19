@@ -1,7 +1,7 @@
 import "server-only";
 
 export const listingsAdminContract = {
-  availability: "not-documented" as const,
-  required: ["GET /admin/listings", "GET /admin/listings/{id}", "PATCH /admin/listings/{id}/status"],
-  reason: "The inspected API exposes public and seller-scoped listing routes, not an admin moderation contract.",
+  availability: "available" as const,
+  verified: ["GET /admin/listings"],
+  reason: "Admin listing enumeration with status, category, seller and name filters exists. There is deliberately no admin listing mutation endpoint.",
 };

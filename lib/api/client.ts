@@ -12,6 +12,7 @@ export class BrokaApiError extends Error {
       | "network"
       | "unauthorized"
       | "forbidden"
+      | "invalid"
       | "upstream"
       | "invalid-response" = "upstream",
   ) {

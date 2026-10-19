@@ -1,60 +1,217 @@
 "use client";
 
-import { ArrowUpRight, ChevronDown, Filter, MoreHorizontal, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { AdminRequestError, useAdminResource } from "@/hooks/use-admin-resource";
-import { formatRouteLabel } from "@/lib/utils";
+import { AdminRequestError, useAdminResource, useAdminUsers } from "@/hooks/use-admin-resource";
 import type { ApiResource } from "@/types/broka";
 import { ResourceState, SectionEyebrow, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import { UsersTable } from "@/components/dashboard/users-table";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
 
-type WorkspaceDefinition = { title: string; eyebrow: string; description: string; endpoint?: string; resource?: ApiResource; columns: string[]; filters: string[]; missing: string; action?: string };
-
-const workspaces: Record<string, WorkspaceDefinition> = {
-  listings: { title: "Listings", eyebrow: "Marketplace operations", description: "Marketplace moderation is designed around safe listing states, filters, and audit visibility.", columns: ["Listing", "Seller", "Category", "Location", "Price", "Status", "Created", "Actions"], filters: ["Category", "Location", "Status", "Seller", "Price range"], missing: "Admin listing list/detail/moderation contracts are not present in the inspected OpenAPI.", action: "Review listing API gap" },
-  deals: { title: "Deals", eyebrow: "Marketplace operations", description: "Deal lifecycle visibility remains backend-authoritative.", columns: ["Deal", "Buyer", "Seller", "Listing", "Amount", "Status", "Updated", "Actions"], filters: ["Status", "Date", "Seller", "Buyer"], missing: "The API has party-scoped deal routes but no documented admin deal queue or response model." },
-  stores: { title: "Stores", eyebrow: "Marketplace operations", description: "Store operations will use explicit admin-scoped data when it is available.", columns: ["Store", "Owner", "Category", "County", "Listings", "Status", "Created", "Actions"], filters: ["Category", "County", "Status"], missing: "Public and owner store routes exist, but no admin-scoped stores contract is documented." },
-  users: { title: "All Users", eyebrow: "Identity & access", description: "User review is grounded in the verified admin user payload; the source currently provides limit/offset but not search, account type, or totals.", endpoint: "/admin/users", resource: "users", columns: ["User", "Contact", "Trust", "Deals", "Status", "Registered"], filters: ["All", "Buyers", "Sellers", "Admins", "Flagged", "Suspended"], missing: "The list route exists but does not document a success response schema, search parameters, profile detail, or suspension workflow.", action: "Open backend gap report" },
-  fraud: { title: "Fraud events", eyebrow: "Trust & Safety", description: "Risk classifications are displayed only when the backend supplies them.", endpoint: "/admin/fraud-events", resource: "fraudEvents", columns: ["User", "Reason", "Risk level", "Resource", "Trust", "Created", "Status", "Action"], filters: ["Open", "Resolved", "Risk level"], missing: "Fraud events are available at a verified route, but response fields and risk-level enum are not documented." },
-  disputes: { title: "Disputes", eyebrow: "Trust & Safety", description: "Case decisions must remain authenticated, auditable, and financially explicit.", columns: ["Dispute", "Buyer", "Seller", "Deal", "Reason", "Amount", "Status", "Updated", "Admin"], filters: ["Status", "Assignee", "Date"], missing: "Existing dispute routes are party-oriented. An admin queue, detail, evidence and safe resolution contracts are required." },
-  reports: { title: "Reports", eyebrow: "Trust & Safety", description: "Reported content and users require a dedicated backend review workflow.", columns: ["Report", "Reporter", "Resource", "Reason", "Created", "Status", "Action"], filters: ["Status", "Resource", "Date"], missing: "No verified admin reports endpoint is present in the inspected OpenAPI." },
-  transactions: { title: "Transactions", eyebrow: "Financial operations", description: "Financial state remains precise: no inferred totals, receipts, or payment status.", endpoint: "/admin/transactions", resource: "transactions", columns: ["Transaction", "Buyer", "Seller", "Deal", "Amount", "Method", "Status", "Receipt", "Created"], filters: ["Date", "Status", "Payment method"], missing: "The verified transaction route lacks a documented response model, date/status/payment filters, and receipt policy." },
-  escrow: { title: "Escrow", eyebrow: "Financial operations", description: "Escrow intervention only becomes available through an explicitly safe, audited backend operation.", columns: ["Escrow", "Deal", "Buyer", "Seller", "Amount", "Status", "Created", "Release condition"], filters: ["Status", "Date"], missing: "Only per-deal escrow state routes exist. Admin escrow list, totals and intervention contracts are missing." },
-  commissions: { title: "Commissions", eyebrow: "Financial operations", description: "Revenue, refunds, and commission reporting must use a backend-defined financial model.", columns: ["Period", "GMV", "Commission", "Refunds", "Net commission", "Average transaction"], filters: ["Daily", "Weekly", "Monthly"], missing: "No verified commission or revenue analytics endpoint is present in the admin surface." },
-  "zeno/activity": { title: "Zeno AI Activity", eyebrow: "BROKA intelligence", description: "Zeno is BROKA’s AI broker. Operational metrics are held to documented backend signals.", columns: ["Provider", "Model", "Latency", "Usage", "Errors", "Fallbacks", "Updated"], filters: ["Period", "Provider", "Status"], missing: "No admin AI activity, model, latency, token usage, error, or fallback response model is documented." },
-  "zeno/negotiations": { title: "Zeno Negotiations", eyebrow: "BROKA intelligence", description: "Negotiation state must come from an admin-safe, aggregate backend source.", columns: ["Negotiation", "Buyer", "Seller", "Listing", "Duration", "Status", "Zeno state"], filters: ["Status", "Period"], missing: "No admin negotiation queue or aggregate Zeno negotiation metric route is documented." },
-  "zeno/savings": { title: "Zeno AI Savings", eyebrow: "BROKA intelligence", description: "Savings claims require a backend calculation definition and a documented time series.", endpoint: "/admin/ai-savings", resource: "aiSavings", columns: ["Period", "AI-assisted deals", "Estimated savings", "Method", "Updated"], filters: ["Period"], missing: "The AI savings endpoint exists but leaves its response schema and calculation definition undocumented." },
-  "analytics/platform": { title: "Platform Analytics", eyebrow: "Analytics", description: "Date-range analytics never backfill missing observations with zeros.", endpoint: "/admin/event-metrics", resource: "eventMetrics", columns: ["Metric", "Value", "Period", "Comparison", "Definition"], filters: ["24H", "7D", "30D", "90D", "1Y"], missing: "Event metrics exist but do not document platform metric definitions or time-series response fields." },
-  "analytics/marketplace": { title: "Marketplace Analytics", eyebrow: "Analytics", description: "Conversion, pricing and marketplace trends need backend-defined aggregates.", columns: ["Metric", "Value", "Period", "Comparison", "Definition"], filters: ["24H", "7D", "30D", "90D", "1Y"], missing: "No documented admin marketplace analytics contract is present." },
-  "analytics/users": { title: "User Analytics", eyebrow: "Analytics", description: "Engagement and registration trends must remain attributable to source metrics.", columns: ["Metric", "Value", "Period", "Comparison", "Definition"], filters: ["24H", "7D", "30D", "90D", "1Y"], missing: "No documented admin user analytics contract is present." },
-  "audit-logs": { title: "Audit Logs", eyebrow: "System administration", description: "Audit records are immutable and read-only from this dashboard.", endpoint: "/admin/audit-logs", resource: "auditLogs", columns: ["Timestamp", "Actor", "Action", "Resource", "Resource ID", "IP", "Details"], filters: ["Admin", "Action", "Resource type", "Date", "User ID"], missing: "The endpoint exists but lacks documented record fields and complete filters. The UI will never expose edit controls." },
-  diagnostics: { title: "Diagnostics", eyebrow: "System administration", description: "Safe operational health excludes credentials, connection strings, secrets, and webhooks.", endpoint: "/admin/diagnostics/econfirm", resource: "econfirmDiagnostics", columns: ["Service", "Status", "Latency", "Last check", "Version", "Environment"], filters: ["Operational", "Degraded", "Down", "Unknown"], missing: "Public health is verified, but a safe admin diagnostics model for API, database, Redis, AI, payments and storage is not documented." },
-  "diagnostics/client-ip": { title: "Client IP Diagnostics", eyebrow: "System administration", description: "Deployment proxy resolution diagnostics are shown only from the authenticated admin endpoint.", endpoint: "/admin/diagnostics/client-ip", resource: "clientIpDiagnostics", columns: ["Field", "Value"], filters: ["Source", "Proxy"], missing: "The backend source provides a diagnostic object; review PII policy before broad access." },
-  events: { title: "Events", eyebrow: "System administration", description: "Event records should provide traceability without claiming real-time delivery that the backend has not exposed.", endpoint: "/admin/event-catalog", resource: "eventCatalog", columns: ["Event", "Type", "Actor", "Resource", "Created", "Status"], filters: ["Event type", "User", "Resource", "Date", "Status"], missing: "The event catalog route exists, but it does not document event-instance records, filters, detail payloads, or realtime transport." },
-  "workflow-versions": { title: "Workflow Versions", eyebrow: "System administration", description: "Workflow data is operational context—not a casual production-logic editor.", endpoint: "/admin/workflow-versions", resource: "workflowVersions", columns: ["Workflow", "Current Version", "Status", "Updated"], filters: ["Workflow", "Status"], missing: "The route exists but has no documented response schema or safe mutation policy." },
-  settings: { title: "Settings", eyebrow: "Control center", description: "Deployment settings remain server-owned and never reveal API keys or secret values.", columns: ["Setting", "State", "Scope", "Updated"], filters: ["Security", "Integration", "Display"], missing: "This deployment intentionally exposes no browser-side secret or direct backend setting mutation." },
+type StaticAdminResource = Exclude<ApiResource, "userDetail" | "dealDetail">;
+type WsFilter =
+  | { kind: "search"; param: string; placeholder: string }
+  | { kind: "select"; param: string; label: string; options: Array<{ value: string; label: string }> };
+type WorkspaceDefinition = {
+  title: string; eyebrow: string; description: string; missing: string;
+  resource?: StaticAdminResource; endpoint?: string;
+  filters?: WsFilter[]; pageSize?: number; defaults?: Record<string, string>;
 };
 
-export function isKnownWorkspaceRoute(slug: string[]) { return Object.hasOwn(workspaces, slug.join("/")); }
+const ALL = { value: "all", label: "All" };
+const DEAL_STATUSES = ["negotiating", "agreed", "paid", "released", "refunded", "disputed", "cancelled", "awaiting_condition_check", "awaiting_resolution", "awaiting_replacement", "goods_not_arrived"];
+const LISTING_STATUSES = ["active", "pending", "completed", "cancelled"];
+const DISPUTE_STATES = ["open", "waiting_seller_explanation", "waiting_buyer_decision", "waiting_replacement", "waiting_return", "ai_review", "ready_for_refund", "ready_for_release", "escalated", "closed_refunded", "closed_released"];
+const MPESA_STATUSES = ["pending", "success", "failed"];
+const ZETUPAY_STATUSES = ["initiated", "processing", "success", "failed"];
+
+const options = (values: string[]) => [ALL, ...values.map((status) => ({ value: status, label: status.replaceAll("_", " ") }))];
+
+const workspaces: Record<string, WorkspaceDefinition> = {
+  listings: {
+    title: "Listings", eyebrow: "Marketplace operations", endpoint: "/admin/listings", resource: "listings",
+    description: "Read-only moderation overview of every listing. Counts and rows come straight from the listing table; no moderation mutation is exposed by the backend.",
+    missing: "Admin listing enumeration is unavailable.",
+    filters: [{ kind: "search", param: "search", placeholder: "Filter by listing name" }, { kind: "select", param: "status", label: "Status", options: options(LISTING_STATUSES) }],
+  },
+  deals: {
+    title: "Deals", eyebrow: "Marketplace operations", endpoint: "/admin/deals", resource: "deals",
+    description: "Deal lifecycle visibility with escrow-relevant timestamps. Money movement remains with the escrow engine; this queue is read-only.",
+    missing: "Admin deal queue is unavailable.",
+    filters: [{ kind: "select", param: "status", label: "Status", options: options(DEAL_STATUSES) }, { kind: "search", param: "seller_id", placeholder: "Filter by seller id" }, { kind: "search", param: "buyer_id", placeholder: "Filter by buyer id" }],
+  },
+  stores: {
+    title: "Stores", eyebrow: "Marketplace operations", endpoint: "/admin/stores", resource: "stores",
+    description: "Store directory backed by the store table. Soft-deleted stores are excluded unless explicitly requested.",
+    missing: "Admin store enumeration is unavailable.",
+    filters: [{ kind: "search", param: "search", placeholder: "Filter by store name or slug" }, { kind: "select", param: "include_deleted", label: "Deleted", options: [ALL, { value: "true", label: "Include deleted" }] }],
+  },
+  users: {
+    title: "All Users", eyebrow: "Identity & access", endpoint: "/admin/users", resource: "users",
+    description: "User review with server-side search, account type and admin filters. The filtered total comes from X-Total-Count.",
+    missing: "Admin user list is unavailable.",
+    filters: [{ kind: "search", param: "search", placeholder: "Search name, email or phone" }, { kind: "select", param: "type", label: "Filter", options: [{ value: "all", label: "All" }, { value: "buyer", label: "Buyers only" }, { value: "buyer_seller", label: "Sellers" }, { value: "admin", label: "Admins" }, { value: "flagged", label: "Flagged" }] }],
+  },
+  fraud: {
+    title: "Fraud events", eyebrow: "Trust & Safety", endpoint: "/admin/fraud-events", resource: "fraudEvents",
+    description: "Engine-recorded flag events. Resolving an event records the reviewer and an audit row; it does not silently edit trust.",
+    missing: "Fraud events endpoint is unavailable.",
+    filters: [{ kind: "select", param: "state", label: "State", options: [{ value: "all", label: "All" }, { value: "open", label: "Open" }, { value: "resolved", label: "Resolved" }] }, { kind: "search", param: "user_id", placeholder: "Filter by user id" }],
+  },
+  disputes: {
+    title: "Disputes", eyebrow: "Trust & Safety", endpoint: "/admin/disputes", resource: "disputes",
+    description: "Dispute-engine cases with rule/AI decision context and deal amounts. Resolution stays with the existing engine and its fund guards.",
+    missing: "Admin dispute queue is unavailable.",
+    filters: [{ kind: "select", param: "state", label: "State", options: options(DISPUTE_STATES) }],
+  },
+  transactions: {
+    title: "Transactions", eyebrow: "Financial operations", endpoint: "/admin/transactions", resource: "transactions",
+    description: "Legacy M-Pesa (Daraja) transactions. Payments is the cross-provider operational view.",
+    missing: "Transactions endpoint is unavailable.",
+    filters: [{ kind: "select", param: "status", label: "Status", options: options(MPESA_STATUSES) }],
+  },
+  payments: {
+    title: "Payments", eyebrow: "Financial operations", endpoint: "/admin/payments", resource: "payments",
+    description: "Normalized cross-provider payment queue. Counts always reflect the whole table, not just the returned page.",
+    missing: "Payments endpoint is unavailable.",
+    filters: [{ kind: "select", param: "source", label: "Provider", options: [{ value: "all", label: "All providers" }, { value: "mpesa", label: "M-Pesa" }, { value: "zetupay", label: "ZetuPay" }] }, { kind: "select", param: "status", label: "Status", options: [] }],
+  },
+  "finance-integrity": {
+    title: "Finance Integrity", eyebrow: "Financial operations", endpoint: "/admin/finance-integrity", resource: "financeIntegrity",
+    description: "Reconciliation checks: released deals must have a ledger escrow debit and a revenue credit; refunds recorded must be distinguishable from refunds returned.",
+    missing: "Finance integrity endpoint is unavailable.",
+  },
+  "service-health": {
+    title: "Service Health", eyebrow: "System administration", endpoint: "/admin/health/services", resource: "serviceHealth",
+    description: "Live DB/Redis probes with latency, plus provider configuration checks that never claim a live provider state.",
+    missing: "Service health endpoint is unavailable.",
+  },
+  "zeno/activity": {
+    title: "Zeno AI Activity", eyebrow: "BROKA intelligence", endpoint: "/admin/zeno/activity", resource: "zenoActivity",
+    description: "Durable Zeno signals from negotiation_messages and audit_logs. Provider/model usage, latency and token costs are declared not instrumented rather than fabricated.",
+    missing: "Zeno activity endpoint is unavailable.",
+    defaults: { window_hours: "168" },
+    filters: [{ kind: "select", param: "window_hours", label: "Window", options: [{ value: "24", label: "24 hours" }, { value: "168", label: "7 days" }, { value: "720", label: "30 days" }] }],
+  },
+  "zeno/savings": {
+    title: "Zeno AI Savings", eyebrow: "BROKA intelligence", endpoint: "/admin/ai-savings", resource: "aiSavings",
+    description: "Process-local classification counters: how many relay classifications the prefilter and cache avoided. Not billing data.",
+    missing: "AI savings endpoint is unavailable.",
+  },
+  "audit-logs": {
+    title: "Audit Logs", eyebrow: "System administration", endpoint: "/admin/audit-logs", resource: "auditLogs",
+    description: "Immutable, read-only audit trail, including every administrative mutation performed through this dashboard.",
+    missing: "Audit logs endpoint is unavailable.",
+    filters: [{ kind: "search", param: "action", placeholder: "Filter by action" }, { kind: "search", param: "actor_id", placeholder: "Filter by actor id" }, { kind: "search", param: "resource_type", placeholder: "Filter by resource type" }],
+  },
+  diagnostics: { title: "Diagnostics", eyebrow: "System administration", description: "Live E-Confirm fee-quote probe; no credentials are exposed.", endpoint: "/admin/diagnostics/econfirm", resource: "econfirmDiagnostics", missing: "E-Confirm diagnostics endpoint is unavailable." },
+  "diagnostics/client-ip": { title: "Client IP Diagnostics", eyebrow: "System administration", description: "Deployment proxy resolution diagnostics from the authenticated admin endpoint.", endpoint: "/admin/diagnostics/client-ip", resource: "clientIpDiagnostics", missing: "Client IP diagnostics endpoint is unavailable." },
+  events: { title: "Events", eyebrow: "System administration", description: "The static event catalog: every event type by domain. Instance records are not exposed by the backend.", endpoint: "/admin/event-catalog", resource: "eventCatalog", missing: "Event catalog endpoint is unavailable." },
+  "workflow-versions": { title: "Workflow Versions", eyebrow: "System administration", description: "Registered workflow rule sets and the current version.", endpoint: "/admin/workflow-versions", resource: "workflowVersions", missing: "Workflow versions endpoint is unavailable." },
+  "analytics/platform": { title: "Platform Analytics", eyebrow: "Analytics", description: "Real event counters for the current process only; they reset on deploy and are per-worker.", endpoint: "/admin/event-metrics", resource: "eventMetrics", missing: "Event metrics endpoint is unavailable." },
+  reports: { title: "Reports", eyebrow: "Trust & Safety", description: "Reported content and users require a dedicated backend review workflow.", missing: "No verified admin reports endpoint exists in the backend admin surface." },
+  escrow: { title: "Escrow", eyebrow: "Financial operations", description: "Escrow state is read-only here: finance integrity and deal detail expose balances, while money movement stays with the escrow engine.", missing: "Use Finance Integrity and Deal Detail for escrow visibility." },
+  commissions: { title: "Commissions", eyebrow: "Financial operations", description: "Recognised commission is on the Command Center and Finance Integrity pages. No time-series commission analytics endpoint exists.", missing: "Use Finance Integrity for commission reconciliation." },
+  "zeno/negotiations": { title: "Zeno Negotiations", eyebrow: "BROKA intelligence", description: "Negotiation message counts are on the Zeno Activity page from durable tables.", missing: "Per-negotiation admin detail is not exposed by the backend." },
+  "analytics/marketplace": { title: "Marketplace Analytics", eyebrow: "Analytics", description: "Marketplace window comparisons live on the Command Center from the ops snapshot.", missing: "No marketplace time-series analytics endpoint exists." },
+  "analytics/users": { title: "User Analytics", eyebrow: "Analytics", description: "User window comparisons live on the Command Center from the ops snapshot.", missing: "No user time-series analytics endpoint exists." },
+  settings: { title: "Settings", eyebrow: "Control center", description: "Deployment settings remain server-owned and never reveal API keys or secret values.", missing: "This deployment intentionally exposes no browser-side secret or direct backend setting mutation." },
+};
+
+function buildQuery(params: URLSearchParams, definition: WorkspaceDefinition, page: number): URLSearchParams {
+  const query = new URLSearchParams();
+  for (const filter of definition.filters ?? []) {
+    const raw = params.get(filter.param) ?? definition.defaults?.[filter.param];
+    if (!raw || raw === "all") continue;
+    if (filter.param === "type" && raw === "flagged") { query.set("flagged_only", "true"); continue; }
+    if (filter.param === "type" && raw === "admin") { query.set("is_admin", "true"); continue; }
+    if (filter.param === "type") { query.set("account_type", raw); continue; }
+    if (filter.param === "state" && definition.resource === "fraudEvents") { query.set("resolved", raw === "resolved" ? "true" : "false"); continue; }
+    query.set(filter.param, raw);
+  }
+  query.set("limit", String(definition.pageSize ?? 50));
+  query.set("offset", String((page - 1) * (definition.pageSize ?? 50)));
+  return query;
+}
+
+function FilterToolbar({ definition, params, onSet }: { definition: WorkspaceDefinition; params: URLSearchParams; onSet: (param: string, value: string | null) => void }) {
+  const active = (definition.filters ?? []).filter((filter) => params.get(filter.param) && params.get(filter.param) !== "all");
+  if (!definition.filters?.length) return null;
+  const source = params.get("source");
+  return <section className="data-panel p-4">
+    <form className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("searchInput") as HTMLInputElement | null; if (input) onSet("search", input.value.trim() || null); }}>
+      {(definition.filters ?? []).map((filter) => {
+        if (filter.kind === "search" && filter.param === "search") {
+          return <div key={filter.param} className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden="true" /><input name="searchInput" defaultValue={params.get(filter.param) ?? ""} placeholder={filter.placeholder} aria-label={filter.placeholder} className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-600" /></div>;
+        }
+        return null;
+      })}
+      {(definition.filters ?? []).filter((filter): filter is Extract<WsFilter, { kind: "search" }> => filter.kind === "search" && filter.param !== "search").map((filter) => <input key={filter.param} defaultValue={params.get(filter.param) ?? ""} placeholder={filter.placeholder} aria-label={filter.placeholder} onBlur={(event) => onSet(filter.param, event.target.value.trim() || null)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onSet(filter.param, event.currentTarget.value.trim() || null); } }} className="h-10 rounded-lg border border-white/[0.08] bg-black/15 px-3 text-xs text-slate-200 placeholder:text-slate-600" />)}
+      {(definition.filters ?? []).filter((filter) => filter.kind === "select").map((filter) => {
+        const dynamicOptions = filter.param === "status" && definition.resource === "payments" ? (source === "mpesa" ? options(MPESA_STATUSES) : source === "zetupay" ? options(ZETUPAY_STATUSES) : []) : filter.options;
+        if (!dynamicOptions.length) return null;
+        return <label key={filter.param} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-slate-400"><SlidersHorizontal size={14} aria-hidden="true" /><span className="text-slate-500">{filter.label}</span><select defaultValue={params.get(filter.param) ?? definition.defaults?.[filter.param] ?? "all"} onChange={(event) => { if (filter.param === "source") onSet("status", null); onSet(filter.param, event.target.value); }} className="bg-transparent text-xs font-semibold text-slate-200 outline-none [&>option]:bg-[#0b0e1a]">{dynamicOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={13} aria-hidden="true" /></label>;
+      })}
+      <button type="submit" className="focus-ring h-10 rounded-lg border border-[#8b75ff]/35 bg-[#8b75ff]/10 px-4 text-xs font-semibold text-[#ded8ff] transition hover:bg-[#8b75ff]/20">Apply search</button>
+      {active.length ? <button type="button" onClick={() => active.forEach((filter) => onSet(filter.param, null))} className="focus-ring inline-flex h-10 items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 text-xs font-semibold text-slate-400 transition hover:text-slate-200"><X size={13} aria-hidden="true" />Clear</button> : null}
+    </form>
+  </section>;
+}
 
 export function ResourceWorkspace({ slug }: { slug: string[] }) {
   const definition = workspaces[slug.join("/")];
   const router = useRouter();
-  const selectedUserType = useSearchParams().get("type");
-  const resource = definition.resource ?? "summary";
-  const page = Math.max(1, Number(useSearchParams().get("page") ?? "1") || 1);
-  const userQuery = resource === "users" ? new URLSearchParams({ limit: "50", offset: String((page - 1) * 50) }) : undefined;
-  const query = useAdminResource(resource, userQuery, Boolean(definition.resource));
-  const error = query.error instanceof AdminRequestError ? query.error : null;
-  const hasData = Boolean(query.data);
-  const state = !definition.resource ? "unavailable" : query.isLoading ? "loading" : error?.status === 401 ? "unauthorized" : error?.status === 403 ? "forbidden" : error ? "error" : "unavailable";
-  const context = useMemo(() => definition.endpoint ? `Verified endpoint: ${definition.endpoint}` : "Required backend contract not yet available", [definition.endpoint]);
+  const searchParams = useSearchParams();
+  const params = useMemo(() => new URLSearchParams(searchParams.toString()), [searchParams]);
+  const page = Math.max(1, Number(params.get("page") ?? "1") || 1);
+  const query = useMemo(() => buildQuery(params, definition, page), [params, definition, page]);
+
+  const isUsers = definition.resource === "users";
+  const resourceQuery = useAdminResource(definition.resource ?? "summary", query, Boolean(definition.resource) && !isUsers);
+  const usersQuery = useAdminUsers(query, isUsers);
+  const queryState = isUsers ? usersQuery : resourceQuery;
+  const error = queryState.error instanceof AdminRequestError ? queryState.error : null;
 
   useEffect(() => { if (error?.status === 401) router.replace("/login?reason=session"); }, [error?.status, router]);
 
-  const stateMessage = state === "loading" ? "Loading backend availability" : state === "unauthorized" ? "Your session has expired. Returning to sign in…" : state === "forbidden" ? "Your BROKA account is not authorized for this resource." : state === "error" ? error?.message ?? "Unable to load this BROKA resource" : definition.missing;
-  return <div className="space-y-6"><section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between"><div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p>{selectedUserType ? <p className="mt-2 text-xs text-slate-500">Requested navigation view: <span className="font-medium text-slate-300">{formatRouteLabel(selectedUserType)}</span>. The verified source supports admin filtering and limit/offset; broader account-type/search metadata is not supplied.</p> : null}</div><StatusBadge tone={hasData ? "success" : definition.endpoint ? "warning" : "neutral"}>{hasData ? "Validated backend data" : definition.endpoint ? "Response contract pending" : "Endpoint required"}</StatusBadge></section><div className="data-panel p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center"><div className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden="true" /><input disabled aria-label={`Search ${definition.title}`} placeholder="Search unavailable until the admin search contract is documented" className="h-10 w-full cursor-not-allowed rounded-lg border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-slate-300 placeholder:text-slate-600" /></div><button disabled title="Filters require a verified backend contract" className="inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-white/[0.08] px-3 text-xs font-semibold text-slate-600"><Filter size={15} /> Filters <ChevronDown size={14} /></button><button disabled title="Table preferences require a documented response model" className="inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-white/[0.08] px-3 text-xs font-semibold text-slate-600"><SlidersHorizontal size={15} /> View</button></div><div className="mt-3 flex flex-wrap gap-2">{definition.filters.map((filter) => <span key={filter} className="rounded-full border border-white/[0.07] bg-white/[0.025] px-2.5 py-1 text-[10px] font-semibold text-slate-500">{filter}</span>)}</div></div><section className="data-panel overflow-hidden" aria-label={`${definition.title} data table`}><div className="overflow-x-auto"><table className="min-w-full border-collapse text-left"><thead className="bg-white/[0.025]"><tr>{definition.columns.map((column) => <th key={column} scope="col" className="whitespace-nowrap border-b border-white/[0.07] px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{column}</th>)}</tr></thead><tbody>{query.data ? <tr><td colSpan={definition.columns.length}>{resource === "users" ? <UsersTable users={query.data as never} filter={selectedUserType ?? "all"} /> : <ValidatedResourceView resource={resource} data={query.data} />}</td></tr> : <tr><td colSpan={definition.columns.length} className="p-5"><ResourceState state={state} message={stateMessage} action={state === "error" ? <button onClick={() => query.refetch()} className="rounded-md border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white">Retry</button> : undefined} /></td></tr>}</tbody></table></div><div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 text-xs text-slate-600"><span>{context}</span><span className="inline-flex items-center gap-1 text-slate-600">{resource === "users" ? <><a className="hover:text-amber-200" href={`/users?page=${Math.max(1, page - 1)}${selectedUserType ? `&type=${selectedUserType}` : ""}`}>Previous</a><span>Page {page}</span><a className="hover:text-amber-200" href={`/users?page=${page + 1}${selectedUserType ? `&type=${selectedUserType}` : ""}`}>Next</a></> : <>Pagination unavailable <MoreHorizontal size={15} /></>}</span></div></section><UnavailablePanel title="Backend integration boundary" detail={definition.missing} action={<a href="/settings" className="inline-flex items-center gap-1 text-xs font-semibold text-amber-200 hover:text-amber-100">View integration notes <ArrowUpRight size={13} /></a>} /></div>;
+  function setParam(param: string, value: string | null) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (value === null || value === "" || value === "all") next.delete(param); else next.set(param, value);
+    if (param !== "page") next.delete("page");
+    router.replace(next.size ? `?${next.toString()}` : "?", { scroll: false });
+  }
+
+  if (!definition.resource) {
+    return <div className="space-y-6">
+      <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between"><div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p></div><StatusBadge tone="neutral">{definition.endpoint ? "Read-only surface" : "Endpoint required"}</StatusBadge></section>
+      <UnavailablePanel title={definition.endpoint ? "Redirected surface" : "Backend endpoint not present"} detail={definition.missing} />
+    </div>;
+  }
+
+  const state = queryState.isLoading ? "loading" : error?.status === 401 ? "unauthorized" : error?.status === 403 ? "forbidden" : error ? "error" : "ready";
+  const stateMessage = state === "loading" ? "Loading backend data" : state === "unauthorized" ? "Your session has expired. Returning to sign in…" : state === "forbidden" ? "Your BROKA account is not authorized for this resource." : state === "error" ? error?.message ?? "Unable to load this BROKA resource" : "";
+  const data = isUsers ? usersQuery.data?.rows : resourceQuery.data;
+  const total = isUsers ? usersQuery.data?.total : (resourceQuery.data as { total?: number } | undefined)?.total;
+  const paginated = Boolean(definition.resource && ["deals", "listings", "stores", "disputes", "users"].includes(definition.resource));
+  const pageSize = definition.pageSize ?? 50;
+  const hasNext = paginated && typeof total === "number" ? page * pageSize < total : false;
+
+  return <div className="space-y-6">
+    <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between">
+      <div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p></div>
+      <div className="flex flex-wrap items-center gap-2">
+        {typeof total === "number" ? <StatusBadge tone="info">{total.toLocaleString()} matching record{total === 1 ? "" : "s"}</StatusBadge> : null}
+        <StatusBadge tone={state === "ready" ? "success" : state === "loading" ? "warning" : "danger"}>{state === "ready" ? "Live backend data" : state === "loading" ? "Loading" : "Unavailable"}</StatusBadge>
+      </div>
+    </section>
+
+    <FilterToolbar definition={definition} params={params} onSet={setParam} />
+
+    <section className="data-panel overflow-hidden">
+      {state !== "ready" || !data ? <div className="p-5"><ResourceState state={state === "ready" ? "loading" : state} message={stateMessage} /></div> : isUsers ? <UsersTable users={usersQuery.data?.rows ?? []} /> : <ValidatedResourceView resource={definition.resource} data={data} />}
+      {paginated && state === "ready" ? <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 text-xs text-slate-500"><span>Page {page}{typeof total === "number" ? ` · ${total.toLocaleString()} total` : ""}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setParam("page", String(page - 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Previous</button><button disabled={!hasNext} onClick={() => setParam("page", String(page + 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div> : null}
+    </section>
+  </div>;
 }

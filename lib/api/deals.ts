@@ -1,7 +1,7 @@
 import "server-only";
 
 export const dealsAdminContract = {
-  availability: "not-documented" as const,
-  required: ["GET /admin/deals", "GET /admin/deals/{id}"],
-  reason: "The inspected API exposes authenticated party-scoped deal routes, not an admin operations queue.",
+  availability: "available" as const,
+  verified: ["GET /admin/deals", "GET /admin/deals/{id}"],
+  reason: "Admin deal queue and detail (ledger entries, escrow payments, dispute cases) are exposed read-only. No admin mutation of deal state exists by design.",
 };

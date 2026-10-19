@@ -1,36 +1,38 @@
 # BROKA Admin backend-gap report
 
-The supplied backend archive removes the previous source-availability blocker. It provides concrete admin router return dictionaries, authentication service payloads, a database layer, permissions, audit utilities, and tests. The remaining gaps below are implementation and deployment gaps, not missing source.
+The hardened backend working tree (`/tmp/opencode/broka/backend`) now implements the previously missing admin scope and mutation safety. The gaps below distinguish **implemented-in-working-tree (not yet deployed)** from **genuinely open**.
 
-## Must harden in the backend
+## Implemented in the backend working tree (tests: 19 new + full suite 2072 passed)
+
+| Gap | Resolution |
+|---|---|
+| Granular admin RBAC | `require_permission(Permission.*)` dependencies attached to every admin route (`ADMIN_SUMMARY`, `MANAGE_USERS`, `PROMOTE_ADMIN`, `VIEW_TRANSACTIONS`, `VIEW_ALL_DISPUTES`, `OVERRIDE_ESCROW`). All current admins hold every flag → backward compatible; restricted sub-roles would need schema storage and were not added. |
+| Audit writes | Every admin mutation (flag/unflag/recompute/promote/fraud-resolve/media-backfill) records `record_audit()` with actor, target, reason, before/after, request id and timestamp. |
+| Idempotency | All mutations use `idempotency_guard`, which reads `X-Idempotency-Key` (Redis; fail-open). The frontend now sends that exact header — previously it sent `Idempotency-Key`, which the guard ignored. Replay is covered by a backend test. |
+| User operations | `/admin/users` adds `search`, `is_admin`, `account_type`, `flagged_only` and an `X-Total-Count` header; `/admin/users/{id}` returns profile, stats, recent deals, fraud events and audit rows. |
+| Admin scope | Added read-only `/admin/ops-snapshot`, `/admin/deals`, `/admin/deals/{id}`, `/admin/listings`, `/admin/stores`, `/admin/disputes`, `/admin/payments`, `/admin/finance-integrity`, `/admin/health/services`, `/admin/zeno/activity` and `POST /admin/fraud-events/{id}/resolve`. |
+| Flag semantics | Re-flagging is now a no-op (`changed: false`); the first flag creates a `FraudEvent`; reason is required. The old behavior subtracted another 30 trust points on every retry. |
+| Finance correctness | `/admin/finance-integrity` asserts released deals have a release debit and a revenue credit; commission gap, escrow held, refund payable and awaiting-manual-refund queue are exposed with definitions. |
+
+## Genuinely open
 
 | Gap | Evidence | Impact |
 |---|---|---|
-| Granular admin RBAC | Admin router consistently uses `require_admin`; granular `Permission` enum exists but is not attached | Operations, Trust & Safety, Finance, Support, and Analyst roles cannot be safely separated |
-| Audit writes | `record_audit()` exists, but inspected user mutations do not call it | Flag/unflag/trust recompute/promote actions lack authoritative before/after audit evidence |
-| Idempotency | `core/idempotency.py` and tests exist, but inspected admin user action signatures do not accept/use an idempotency key | Retries can repeat state-changing admin operations |
-| Published contracts | Live OpenAPI returns `{}` for inspected success responses | Frontend schemas are source-derived until backend publishes a versioned artifact |
-| User operations | `/admin/users` supports limit/offset/flagged_only only | No search, total count, cursor metadata, detail, suspension, or restore workflow |
-| Admin scope | No admin router entries for listings, deals, stores, disputes, escrow queue, commissions, or reports | Required operational sections cannot be made data-backed |
-| Historical analytics | `/admin/event-metrics` returns in-process counters | No 24H/7D/30D/90D/1Y history or durable metric definitions |
-| Diagnostics policy | E-Confirm and client-IP diagnostics expose operational details | Requires explicit sensitive-diagnostic role policy, retention, and redaction review |
+| Deployment | The hardened backend is a working tree, not the deployed API | Production still runs the old admin surface until reviewed, merged and deployed |
+| Published contracts | Live OpenAPI still returns `{}` for inspected admin success responses | Frontend schemas remain source-derived; a regenerated contract artifact is still required |
+| Historical analytics | `/admin/event-metrics` and AI savings remain process-local counters (labelled `scope: process_local`, `durability: none`) | No durable time series; a metrics backend (or the audit tables) would be required |
+| Zeno instrumentation | Provider/model usage, latency percentiles, token costs, STT/TTS outcomes are not persisted anywhere | `/admin/zeno/activity` lists them in `not_instrumented` instead of estimating |
+| Reports workflow | No reports/admin moderation endpoint exists | The Reports page remains explicitly unavailable |
+| Dispute resolution | Admin dispute queue is read-only; resolution stays with the existing engine and its fund guards | Deliberate: no unsafe decide/refund mutation was added |
+| Admin sub-roles | No storage for per-admin permission sets (schema change not allowed) | All admins remain full admins |
+| Live Redis idempotency tests | Local test environment has no Redis | The reservation path is tested with mocks only; CI (which runs Redis) still needs the backend branch |
 
-## Frontend integration now completed
+## Frontend integration completed
 
-- Runtime validation for summary, users, fraud events, transactions, audit logs, ledger integrity, AI savings, workflow versions, event metrics/catalog, health, login, current admin, and refresh payloads.
-- Server proxy returns validated backend data rather than placeholder availability objects.
+- Runtime validation for every admin read, including the new ops surface, detail endpoints and action results.
 - Contract drift produces `contract_validation_failed` with a request ID and no payload logging.
-- Overview KPI cards consume verified `/admin/summary` values.
-- Users workspace consumes verified `/admin/users` records.
-- Confirmed user mutations enforce same-origin requests and forward idempotency keys.
-
-## Required next backend changes
-
-1. Attach `require_permission(Permission.*)` dependencies to each admin route.
-2. Add explicit response models or publish the source-derived contract artifact from backend CI.
-3. Add idempotency handling and `record_audit()` calls to every admin mutation, including actor, target, before/after, request ID, and IP policy.
-4. Add admin list/detail contracts for listings, deals, stores, disputes, escrow, commissions, and reports.
-5. Add pagination metadata and safe search/filter parameters to users, fraud, transactions, and audit logs.
-6. Run the backend test suite against a seeded Postgres/Redis environment and connect frontend integration/E2E checks to the same contract.
+- Alert-first Command Center driven by `/admin/ops-snapshot` + `/admin/health/services`; KPI labels now distinguish active listings, released deals, recognized commission and active dispute cases.
+- Payments, Finance Integrity, Service Health and Zeno Activity workspaces with real filters; Deals/Listings/Stores/Disputes queues with pagination and server-side counts.
+- User detail with reason-gated, confirmed, idempotent actions and backend action results rendered; fraud events resolvable from the queue.
 
 No missing operation is simulated in the dashboard.

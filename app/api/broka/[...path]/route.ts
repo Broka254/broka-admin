@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { refreshAccessToken } from "@/lib/api/auth";
-import { resourceForPath, SAFE_ADMIN_PATHS, validateAdminResource } from "@/lib/api/admin";
+import { isSafeAdminPath, resourceForPath, validateAdminResource } from "@/lib/api/admin";
 import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE, parseUnknownJson, publicErrorMessage, upstreamFetch } from "@/lib/api/client";
 import { sessionCookieOptions } from "@/lib/auth/cookies";
 
@@ -24,7 +24,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
   const id = requestId(request);
   const { path: segments } = await context.params;
   const requestedPath = `/${segments.join("/")}`;
-  if (!SAFE_ADMIN_PATHS.has(requestedPath.slice(1))) return NextResponse.json({ code: "path_not_allowlisted", message: "This admin endpoint is not allowlisted by the dashboard.", request_id: id }, { status: 404, headers: { "X-Request-ID": id } });
+  if (!isSafeAdminPath(requestedPath.slice(1))) return NextResponse.json({ code: "path_not_allowlisted", message: "This admin endpoint is not allowlisted by the dashboard.", request_id: id }, { status: 404, headers: { "X-Request-ID": id } });
   const resource = resourceForPath(requestedPath);
   if (!resource) return NextResponse.json({ code: "contract_not_registered", message: "This admin endpoint has no registered response contract.", request_id: id }, { status: 502, headers: { "X-Request-ID": id } });
 

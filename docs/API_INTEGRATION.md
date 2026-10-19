@@ -1,7 +1,7 @@
 # BROKA FastAPI integration audit
 
-**Runtime API:** `https://api.broka.co.ke`  
-**Reference archive:** `/home/ubuntu/upload/broka-latest-release(10).zip`  
+**Runtime API:** `https://api.broka.co.ke`
+**Backend working tree:** `/tmp/opencode/broka/backend` (hardened admin surface; not yet deployed)
 **Source version observed:** backend health returns `6.0.0`.
 
 ## Authentication
@@ -17,25 +17,33 @@ The admin app validates these source-compatible payloads on the server and store
 
 ## Administrative reads
 
-The source router exposes `/admin/summary`, `/users`, `/ai-savings`, `/ledger-integrity`, `/audit-logs`, `/fraud-events`, `/transactions`, `/workflow-versions`, `/event-metrics`, `/event-catalog`, `/diagnostics/econfirm`, and `/diagnostics/client-ip`. The frontend allowlist and Zod schemas mirror the source return dictionaries and arrays.
+Original reads: `/admin/summary`, `/users`, `/ai-savings`, `/ledger-integrity`, `/audit-logs`, `/fraud-events`, `/transactions`, `/workflow-versions`, `/event-metrics`, `/event-catalog`, `/diagnostics/econfirm`, `/diagnostics/client-ip`.
 
-`GET /health` is also registered and validated as `{status:"healthy",version}`.
+Added in the working tree: `/admin/ops-snapshot`, `/admin/deals`, `/admin/deals/{id}`, `/admin/listings`, `/admin/stores`, `/admin/disputes`, `/admin/payments`, `/admin/finance-integrity`, `/admin/health/services`, `/admin/zeno/activity`, `/admin/users/{user_id}`, `POST /admin/fraud-events/{event_id}/resolve`.
+
+The frontend allowlist, dynamic detail patterns, and Zod schemas mirror these return dictionaries; contract drift fails closed with a 502 and a structured log line.
 
 ## Administrative writes
 
-The source router exposes four confirmed user actions:
-
-- `POST /admin/users/{user_id}/flag`
+- `POST /admin/users/{user_id}/flag` — requires `reason` (3-500 chars), no-op when already flagged, creates a fraud event on first flag.
 - `POST /admin/users/{user_id}/unflag`
 - `POST /admin/users/{user_id}/recompute-trust`
-- `POST /admin/users/{user_id}/promote-admin`
+- `POST /admin/users/{user_id}/promote-admin` — requires `reason`.
+- `POST /admin/fraud-events/{event_id}/resolve` — records `reviewed_by_admin` and an audit row.
 
-The frontend requires a same-origin browser request, a confirmation flow, and an idempotency key. It forwards that key as `Idempotency-Key`; the supplied backend source currently does not read or enforce it, and the inspected mutations do not call `record_audit()`.
+Every mutation is guarded by `idempotency_guard`, which reads **`X-Idempotency-Key`**, and records an audit row with actor, action, target, reason, before/after values, request id and timestamp. The frontend previously sent `Idempotency-Key`, which the guard did not read; this is fixed end-to-end and covered by tests.
 
-## Authorization finding
+## Authorization
 
-Every admin route in `api/domains/admin/router.py` uses `Depends(require_admin)`. `api/core/permissions.py` defines granular flags such as `ADMIN_SUMMARY`, `MANAGE_USERS`, `PROMOTE_ADMIN`, `VIEW_TRANSACTIONS`, and `OVERRIDE_ESCROW`, but those dependencies are not attached to the admin routes in the supplied source. This remains a backend hardening item.
+The admin router now attaches granular dependencies from `api/core/permissions.py`: `ADMIN_SUMMARY`, `MANAGE_USERS`, `PROMOTE_ADMIN`, `VIEW_TRANSACTIONS`, `VIEW_ALL_DISPUTES`, `OVERRIDE_ESCROW`. All current admins hold every flag, so behavior is backward compatible; defining restricted admin sub-roles would require schema storage and is intentionally not done.
 
 ## OpenAPI mismatch
 
-The live OpenAPI document currently advertises empty success schemas for these responses even though the supplied source contains concrete return dictionaries. The frontend therefore labels its schemas **source-derived** and fails closed on drift. The backend CI should publish a regenerated OpenAPI document or a versioned contract artifact consumed by the frontend build.
+The live OpenAPI document still advertises empty success schemas for these responses even though the router returns concrete dictionaries. The frontend labels its schemas **source-derived** and fails closed on drift. The backend CI should publish a regenerated OpenAPI document or a versioned contract artifact.
+
+## Known operational notes
+
+- `commission_earned_kes` (and the ops snapshot commission figures) are recognized commission on `released` deals — not proof of reconciled bank cash. `/admin/finance-integrity` exposes the real reconciliation checks.
+- `ledger-integrity.balanced` is true by construction; `escrow_integrity_ok` and `negative_escrow_deals` are the assertions that can fail.
+- Process-local counters (AI savings, event metrics) are labelled `scope: process_local`, `durability: none` in both backend responses and UI.
+- External provider statuses in `/admin/health/services` are configuration checks only (`probe: not_run`); the live E-Confirm probe remains `/admin/diagnostics/econfirm`.

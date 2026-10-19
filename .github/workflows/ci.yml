@@ -109,3 +109,9 @@ jobs:
           fi
           railway --version
           echo "Railway credentials are present."
+
+      - name: Deploy current commit to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: railway up --service "$RAILWAY_SERVICE_ID" --ci

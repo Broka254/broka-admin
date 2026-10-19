@@ -20,6 +20,14 @@ export class AdminRequestError extends Error {
   constructor(message: string, public readonly status: number, public readonly code?: string) { super(message); this.name = "AdminRequestError"; }
 }
 
+// A 404 from a registered static admin endpoint means the deployed backend
+// does not serve it yet (newer dashboard, pre-upgrade API), not that the
+// request failed. Views use this to say "backend upgrade required" instead
+// of rendering a red error.
+export function isEndpointMissing(error: unknown): boolean {
+  return error instanceof AdminRequestError && error.status === 404;
+}
+
 async function fetchAdminPath<T>(path: string, query?: URLSearchParams): Promise<T> {
   const suffix = query?.size ? `?${query.toString()}` : "";
   const response = await fetch(`/api/broka/${path}${suffix}`, { credentials: "same-origin", cache: "no-store" });

@@ -47,11 +47,14 @@ function Delta({ current, previous, label }: { current: number; previous: number
 export function CommandCenter({ snapshot, health, snapshotState, healthState }: {
   snapshot?: Snapshot;
   health?: Health;
-  snapshotState: "loading" | "error" | "unavailable";
-  healthState: "loading" | "error" | "unavailable";
+  snapshotState: "loading" | "error" | "not-deployed" | "unavailable";
+  healthState: "loading" | "error" | "not-deployed" | "unavailable";
 }) {
   if (!snapshot) {
-    return <UnavailablePanel title="Operations snapshot" detail={snapshotState === "loading" ? "Loading live queue data from /admin/ops-snapshot…" : "The ops snapshot is unavailable. Queue alerting is disabled until the backend responds."} />;
+    const detail = snapshotState === "loading" ? "Loading live queue data from /admin/ops-snapshot…"
+      : snapshotState === "not-deployed" ? "The deployed backend does not expose /admin/ops-snapshot yet (HTTP 404). Alert queues and the money position activate automatically after the backend upgrade — nothing is estimated in the meantime."
+      : "The ops snapshot is unavailable. Queue alerting is disabled until the backend responds.";
+    return <UnavailablePanel title="Operations snapshot" detail={detail} />;
   }
 
   const alerts = buildAlerts(snapshot, health);
@@ -92,7 +95,7 @@ export function CommandCenter({ snapshot, health, snapshotState, healthState }: 
       </div>
     </section>
 
-    {healthState === "error" ? <UnavailablePanel compact title="Service health unavailable" detail="The dependency probe endpoint did not respond; alerting above still reflects durable queue counts." /> : null}
+    {healthState === "error" || healthState === "not-deployed" ? <UnavailablePanel compact title={healthState === "not-deployed" ? "Service health probe not deployed" : "Service health unavailable"} detail={healthState === "not-deployed" ? "The deployed backend does not expose /admin/health/services yet (HTTP 404). Dependency probes appear after the backend upgrade." : "The dependency probe endpoint did not respond; alerting above still reflects durable queue counts."} /> : null}
     {health ? <section className="data-panel p-5"><div className="flex items-center justify-between"><p className="font-display text-sm font-semibold text-slate-100">Dependency probes</p><div className="flex items-center gap-2"><Banknote size={14} className="text-slate-500" aria-hidden="true" /><Link href="/service-health" className="text-xs font-semibold text-amber-200 hover:text-amber-100">Full health report →</Link></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{health.checks.filter((check) => check.kind === "internal").map((check) => <div key={check.name} className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><div><p className="text-xs font-semibold text-slate-200">{check.name}</p><p className="mt-0.5 text-[11px] text-slate-500">{check.latency_ms !== null ? `${check.latency_ms} ms` : check.detail}</p></div><StatusBadge tone={check.status === "ok" ? "success" : check.status === "warning" || check.status === "degraded" ? "warning" : check.status === "not_configured" ? "neutral" : "danger"}>{check.status}</StatusBadge></div>)}</div><p className="mt-4 text-[11px] text-slate-600"><ShieldCheck size={12} className="mr-1 inline" aria-hidden="true" />{health.note}</p></section> : null}
   </div>;
 }

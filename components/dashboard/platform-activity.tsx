@@ -8,10 +8,10 @@ import { ResourceState } from "@/components/ui/primitives";
 
 type Snapshot = AdminResourcePayloads["opsSnapshot"];
 
-export function PlatformActivity({ snapshot, state }: { snapshot?: Snapshot; state?: "loading" | "error" | "unavailable" }) {
+export function PlatformActivity({ snapshot, state }: { snapshot?: Snapshot; state?: "loading" | "error" | "not-deployed" | "unavailable" }) {
   if (!snapshot) {
-    const message = state === "loading" ? "Loading live window comparisons from /admin/ops-snapshot…" : state === "error" ? "Unable to load the operations snapshot" : "Window comparisons require the ops snapshot contract";
-    return <section className="data-panel" aria-labelledby="activity-heading"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-5"><div><p id="activity-heading" className="text-base font-semibold text-slate-100">Platform activity</p><p className="mt-1 text-xs text-slate-500">Two real windows, not a backfilled time series.</p></div><span className="grid h-8 w-8 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.025] text-slate-500"><Activity size={16} aria-hidden="true" /></span></div><div className="p-5"><ResourceState state={state ?? "unavailable"} message={message} /></div></section>;
+    const message = state === "loading" ? "Loading live window comparisons from /admin/ops-snapshot…" : state === "not-deployed" ? "The deployed backend does not expose /admin/ops-snapshot yet (HTTP 404). Window comparisons appear after the backend upgrade." : state === "error" ? "Unable to load the operations snapshot" : "Window comparisons require the ops snapshot contract";
+    return <section className="data-panel" aria-labelledby="activity-heading"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-5"><div><p id="activity-heading" className="text-base font-semibold text-slate-100">Platform activity</p><p className="mt-1 text-xs text-slate-500">Two real windows, not a backfilled time series.</p></div><span className="grid h-8 w-8 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.025] text-slate-500"><Activity size={16} aria-hidden="true" /></span></div><div className="p-5"><ResourceState state={state === "not-deployed" ? "unavailable" : state ?? "unavailable"} message={message} /></div></section>;
   }
 
   const rows = [

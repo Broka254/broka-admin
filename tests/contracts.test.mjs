@@ -59,6 +59,15 @@ test("KPI grid labels filtered counts, not unfiltered totals", async () => {
   assert.doesNotMatch(kpi, /label: "Active listings"[^}]*s\.listings\.toLocaleString/);
 });
 
+test("summary tolerates pre-upgrade backends without fabricating counts", async () => {
+  const schemas = await readFile(resolve(root, "lib/api/schemas.ts"), "utf8");
+  for (const field of ["listings_active", "deals_released", "dispute_cases_active"]) {
+    assert.match(schemas, new RegExp(`${field}: z\\.number\\(\\)\\.int\\(\\)\\.nonnegative\\(\\)\\.optional\\(\\)`), `${field} must stay optional`);
+  }
+  const kpi = await readFile(resolve(root, "components/dashboard/kpi-grid.tsx"), "utf8");
+  assert.match(kpi, /Backend upgrade required/);
+});
+
 test("new ops response contracts are registered", async () => {
   const schemas = await readFile(resolve(root, "lib/api/schemas.ts"), "utf8");
   for (const schema of ["OpsSnapshotSchema", "AdminDealsSchema", "AdminDealDetailSchema", "AdminListingsSchema", "AdminStoresSchema", "AdminDisputesSchema", "AdminPaymentsSchema", "FinanceIntegritySchema", "ServiceHealthSchema", "ZenoActivitySchema", "AdminUserDetailSchema"]) {

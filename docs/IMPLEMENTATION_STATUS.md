@@ -48,6 +48,7 @@ All mutations use granular `require_permission` dependencies. The frontend sends
 - Audit correlation: the dashboard request id is forwarded as `X-Request-ID` and recorded in the backend audit `detail.request_id`.
 - Unauthenticated page access redirects to `/login?reason=restricted`; `/`, `/deals`, `/deals/{id}`, `/users/{id}`, `/payments`, `/finance-integrity`, `/service-health` all render 200.
 - Two integration bugs were found and fixed by this smoke run: the allowlist key normalization (proxy paths lack the leading slash that `ADMIN_ENDPOINTS` values carry) and `event-metrics.registered_handlers`, which is a subscriber-count map, not a number.
+- Compatibility with pre-upgrade backends: the three status-filtered summary counts are optional and missing endpoints (HTTP 404) render explicit "Backend upgrade required" states instead of red errors or estimated numbers. Verified against a stub serving the exact old summary payload and 404s for the new routes; the old payload parses and no counts are fabricated.
 
 ## Still required before production claim
 

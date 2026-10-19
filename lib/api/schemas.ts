@@ -6,15 +6,18 @@ const money = z.number();
 const countMap = z.record(z.string(), z.number().int().nonnegative());
 const nullableMoney = z.number().nullable();
 
+// The three status-filtered counts are optional so the dashboard keeps
+// working against backends that predate them; the UI labels them as
+// requiring the backend upgrade instead of hiding the gap.
 export const AdminSummarySchema = z.object({
   users: z.number().int().nonnegative(),
   listings: z.number().int().nonnegative(),
-  listings_active: z.number().int().nonnegative(),
+  listings_active: z.number().int().nonnegative().optional(),
   deals: z.number().int().nonnegative(),
-  deals_released: z.number().int().nonnegative(),
+  deals_released: z.number().int().nonnegative().optional(),
   commission_earned_kes: money.nonnegative(),
   disputes: z.number().int().nonnegative(),
-  dispute_cases_active: z.number().int().nonnegative(),
+  dispute_cases_active: z.number().int().nonnegative().optional(),
   flagged_users: z.number().int().nonnegative(),
 });
 

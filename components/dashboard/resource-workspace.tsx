@@ -191,7 +191,8 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
   }
 
   const state = queryState.isLoading ? "loading" : error?.status === 401 ? "unauthorized" : error?.status === 403 ? "forbidden" : error ? "error" : "ready";
-  const stateMessage = state === "loading" ? "Loading backend data" : state === "unauthorized" ? "Your session has expired. Returning to sign in…" : state === "forbidden" ? "Your BROKA account is not authorized for this resource." : state === "error" ? error?.message ?? "Unable to load this BROKA resource" : "";
+  const endpointMissing = error?.status === 404;
+  const stateMessage = state === "loading" ? "Loading backend data" : state === "unauthorized" ? "Your session has expired. Returning to sign in…" : state === "forbidden" ? "Your BROKA account is not authorized for this resource." : state === "error" ? (endpointMissing ? "This workspace needs the upgraded backend — the live API does not expose this endpoint yet (HTTP 404). It activates automatically after the backend upgrade." : error?.message ?? "Unable to load this BROKA resource") : "";
   const data = isUsers ? usersQuery.data?.rows : resourceQuery.data;
   const total = isUsers ? usersQuery.data?.total : (resourceQuery.data as { total?: number } | undefined)?.total;
   const paginated = Boolean(definition.resource && ["deals", "listings", "stores", "disputes", "users"].includes(definition.resource));
@@ -203,14 +204,14 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
       <div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p></div>
       <div className="flex flex-wrap items-center gap-2">
         {typeof total === "number" ? <StatusBadge tone="info">{total.toLocaleString()} matching record{total === 1 ? "" : "s"}</StatusBadge> : null}
-        <StatusBadge tone={state === "ready" ? "success" : state === "loading" ? "warning" : "danger"}>{state === "ready" ? "Live backend data" : state === "loading" ? "Loading" : "Unavailable"}</StatusBadge>
+        <StatusBadge tone={state === "ready" ? "success" : state === "loading" || endpointMissing ? "warning" : "danger"}>{state === "ready" ? "Live backend data" : state === "loading" ? "Loading" : endpointMissing ? "Awaiting backend upgrade" : "Unavailable"}</StatusBadge>
       </div>
     </section>
 
     <FilterToolbar definition={definition} params={params} onSet={setParam} />
 
     <section className="data-panel overflow-hidden">
-      {state !== "ready" || !data ? <div className="p-5"><ResourceState state={state === "ready" ? "loading" : state} message={stateMessage} /></div> : isUsers ? <UsersTable users={usersQuery.data?.rows ?? []} /> : <ValidatedResourceView resource={definition.resource} data={data} />}
+      {state !== "ready" || !data ? <div className="p-5"><ResourceState state={endpointMissing ? "unavailable" : state === "ready" ? "loading" : state} message={stateMessage} /></div> : isUsers ? <UsersTable users={usersQuery.data?.rows ?? []} /> : <ValidatedResourceView resource={definition.resource} data={data} />}
       {paginated && state === "ready" ? <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 text-xs text-slate-500"><span>Page {page}{typeof total === "number" ? ` · ${total.toLocaleString()} total` : ""}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setParam("page", String(page - 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Previous</button><button disabled={!hasNext} onClick={() => setParam("page", String(page + 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div> : null}
     </section>
   </div>;

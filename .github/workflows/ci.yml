@@ -90,27 +90,29 @@ jobs:
         run: npm install --global @railway/cli
 
       - name: Verify Railway deployment configuration
+        id: railway-config
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
         run: |
           missing=0
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "::error title=Missing RAILWAY_TOKEN::Set RAILWAY_TOKEN under Settings → Environments → production (environment secret) or as a repository secret."
+            echo "::notice title=Railway deploy skipped::RAILWAY_TOKEN is not set. Deploy via Railway's GitHub integration, or add the secret under Settings → Environments → production."
             missing=1
           fi
           if [ -z "$RAILWAY_SERVICE_ID" ]; then
-            echo "::error title=Missing RAILWAY_SERVICE_ID::Set RAILWAY_SERVICE_ID under Settings → Environments → production (environment secret) or as a repository secret."
+            echo "::notice title=Railway deploy skipped::RAILWAY_SERVICE_ID is not set. Deploy via Railway's GitHub integration, or add the secret under Settings → Environments → production."
             missing=1
           fi
           if [ "$missing" -ne 0 ]; then
-            echo "Railway deploy aborted before invoking the CLI: without these secrets 'railway up' cannot authenticate."
-            exit 1
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           railway --version
           echo "Railway credentials are present."
 
       - name: Deploy current commit to Railway
+        if: steps.railway-config.outputs.skip != 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}

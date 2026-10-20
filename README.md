@@ -28,9 +28,16 @@ The application uses:
 - `POST /auth/token/revoke` at logout; and
 - an allowlisted server-side proxy for verified, read-only `/admin/*` endpoints.
 
-Tokens are held only in HttpOnly cookies. The browser does not receive tokens, and no token is written to `localStorage` or `sessionStorage`.
+The proxy forwards `X-Total-Count` when the backend returns it, so a filtered users total is never inferred from the number of rows on the current page. Tokens are held only in HttpOnly cookies. The browser does not receive tokens, and no token is written to `localStorage` or `sessionStorage`.
 
 The retrieved OpenAPI document leaves success schemas for all inspected admin endpoints empty. Consequently, the UI deliberately renders **response schema unavailable** rather than mapping unverified fields into KPI values, financial tables, charts, risk levels, or activity records. See [`docs/API_INTEGRATION.md`](docs/API_INTEGRATION.md) and [`BACKEND_GAPS.md`](BACKEND_GAPS.md).
+
+## Notification surfaces
+
+- `/alerts` is a **derived operational view** over `/admin/ops-snapshot` and `/admin/health/services`. It shows severity, snapshot time and links, but no unread count or acknowledgement because the backend does not record alert state.
+- `/communications` documents the planned Service Communications workspace and its lifecycle. It is read-only until the backend exposes the persistence, scheduling, publication and per-channel delivery contracts in [`docs/NOTIFICATION_CONTRACTS.md`](docs/NOTIFICATION_CONTRACTS.md). A published record is never presented as a delivered SMS, email or push notification.
+
+The header's API badge only turns green after a validated `/health` response. `BROKA_API_URL` being present is not treated as proof of connectivity or endpoint availability.
 
 ## Design system
 
@@ -59,10 +66,13 @@ The Railway service variables remain managed by Railway (`BROKA_API_URL`, `BROKA
 ## Quality commands
 
 ```bash
+pnpm test
 pnpm typecheck
 pnpm lint
 pnpm build
 pnpm zip
 ```
+
+Railway uses `/api/live` for process liveness. `/api/health` remains the readiness/API-status endpoint and returns `503` when the BROKA API is unreachable; it no longer determines whether the web process is restarted.
 
 `pnpm zip` writes `../broka-admin.zip` and excludes dependencies, build artifacts, `.git`, and environment files.

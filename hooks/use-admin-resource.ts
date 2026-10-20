@@ -44,15 +44,17 @@ export function useAdminResource<K extends StaticAdminResource>(resource: K, que
 }
 
 export function useAdminUsers(query: URLSearchParams, enabled = true) {
-  return useQuery<{ rows: AdminResourcePayloads["users"]; total: number }>({
+  return useQuery<{ rows: AdminResourcePayloads["users"]; total: number | null }>({
     queryKey: ["broka-admin", "users", query.toString()], enabled,
     queryFn: async () => {
       const response = await fetch(`/api/broka/admin/users?${query.toString()}`, { credentials: "same-origin", cache: "no-store" });
       const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
       if (!response.ok) throw new AdminRequestError(payload.message ?? "Unable to load BROKA data.", response.status, payload.code);
       const rows = payload as AdminResourcePayloads["users"];
-      const total = Number(response.headers.get("X-Total-Count"));
-      return { rows, total: Number.isFinite(total) ? total : rows.length };
+      // Absence of the filtered total is "unknown", not the page length.
+      const rawTotal = response.headers.get("X-Total-Count")?.trim();
+      const total = rawTotal && /^\d+$/.test(rawTotal) ? Number(rawTotal) : null;
+      return { rows, total: total !== null && Number.isSafeInteger(total) ? total : null };
     },
   });
 }

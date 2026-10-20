@@ -29,6 +29,15 @@ const ZETUPAY_STATUSES = ["initiated", "processing", "success", "failed"];
 
 const options = (values: string[]) => [ALL, ...values.map((status) => ({ value: status, label: status.replaceAll("_", " ") }))];
 
+function isEmptyList(data: unknown): boolean {
+  if (Array.isArray(data)) return data.length === 0;
+  if (data && typeof data === "object" && "items" in data) {
+    const items = (data as { items?: unknown }).items;
+    if (Array.isArray(items)) return items.length === 0;
+  }
+  return false;
+}
+
 const workspaces: Record<string, WorkspaceDefinition> = {
   listings: {
     title: "Listings", eyebrow: "Marketplace operations", endpoint: "/admin/listings", resource: "listings",
@@ -136,12 +145,12 @@ function buildQuery(params: URLSearchParams, definition: WorkspaceDefinition, pa
   return query;
 }
 
-function FilterToolbar({ definition, params, onSet }: { definition: WorkspaceDefinition; params: URLSearchParams; onSet: (param: string, value: string | null) => void }) {
+function FilterToolbar({ definition, params, onSet, onSetMany }: { definition: WorkspaceDefinition; params: URLSearchParams; onSet: (param: string, value: string | null) => void; onSetMany: (updates: Record<string, string | null>) => void }) {
   const active = (definition.filters ?? []).filter((filter) => params.get(filter.param) && params.get(filter.param) !== "all");
   if (!definition.filters?.length) return null;
   const source = params.get("source");
   return <section className="data-panel p-4">
-    <form className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("searchInput") as HTMLInputElement | null; if (input) onSet("search", input.value.trim() || null); }}>
+    <form key={params.toString()} className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("searchInput") as HTMLInputElement | null; if (input) onSet("search", input.value.trim() || null); }}>
       {(definition.filters ?? []).map((filter) => {
         if (filter.kind === "search" && filter.param === "search") {
           return <div key={filter.param} className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden="true" /><input name="searchInput" defaultValue={params.get(filter.param) ?? ""} placeholder={filter.placeholder} aria-label={filter.placeholder} className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-600" /></div>;
@@ -152,10 +161,10 @@ function FilterToolbar({ definition, params, onSet }: { definition: WorkspaceDef
       {(definition.filters ?? []).filter((filter) => filter.kind === "select").map((filter) => {
         const dynamicOptions = filter.param === "status" && definition.resource === "payments" ? (source === "mpesa" ? options(MPESA_STATUSES) : source === "zetupay" ? options(ZETUPAY_STATUSES) : []) : filter.options;
         if (!dynamicOptions.length) return null;
-        return <label key={filter.param} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-slate-400"><SlidersHorizontal size={14} aria-hidden="true" /><span className="text-slate-500">{filter.label}</span><select defaultValue={params.get(filter.param) ?? definition.defaults?.[filter.param] ?? "all"} onChange={(event) => { if (filter.param === "source") onSet("status", null); onSet(filter.param, event.target.value); }} className="bg-transparent text-xs font-semibold text-slate-200 outline-none [&>option]:bg-[#0b0e1a]">{dynamicOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={13} aria-hidden="true" /></label>;
+        return <label key={filter.param} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-slate-400"><SlidersHorizontal size={14} aria-hidden="true" /><span className="text-slate-500">{filter.label}</span><select defaultValue={params.get(filter.param) ?? definition.defaults?.[filter.param] ?? "all"} onChange={(event) => { if (filter.param === "source") onSetMany({ status: null, [filter.param]: event.target.value }); else onSet(filter.param, event.target.value); }} className="bg-transparent text-xs font-semibold text-slate-200 outline-none [&>option]:bg-[#0b0e1a]">{dynamicOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={13} aria-hidden="true" /></label>;
       })}
       <button type="submit" className="focus-ring h-10 rounded-lg border border-[#8b75ff]/35 bg-[#8b75ff]/10 px-4 text-xs font-semibold text-[#ded8ff] transition hover:bg-[#8b75ff]/20">Apply search</button>
-      {active.length ? <button type="button" onClick={() => active.forEach((filter) => onSet(filter.param, null))} className="focus-ring inline-flex h-10 items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 text-xs font-semibold text-slate-400 transition hover:text-slate-200"><X size={13} aria-hidden="true" />Clear</button> : null}
+      {active.length ? <button type="button" onClick={() => onSetMany(Object.fromEntries(active.map((filter) => [filter.param, null])))} className="focus-ring inline-flex h-10 items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 text-xs font-semibold text-slate-400 transition hover:text-slate-200"><X size={13} aria-hidden="true" />Clear</button> : null}
     </form>
   </section>;
 }
@@ -176,11 +185,17 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
 
   useEffect(() => { if (error?.status === 401) router.replace("/login?reason=session"); }, [error?.status, router]);
 
-  function setParam(param: string, value: string | null) {
+  function setParams(updates: Record<string, string | null>) {
     const next = new URLSearchParams(searchParams.toString());
-    if (value === null || value === "" || value === "all") next.delete(param); else next.set(param, value);
-    if (param !== "page") next.delete("page");
+    for (const [param, value] of Object.entries(updates)) {
+      if (value === null || value === "" || value === "all") next.delete(param); else next.set(param, value);
+    }
+    if (Object.keys(updates).some((param) => param !== "page")) next.delete("page");
     router.replace(next.size ? `?${next.toString()}` : "?", { scroll: false });
+  }
+
+  function setParam(param: string, value: string | null) {
+    setParams({ [param]: value });
   }
 
   if (!definition.resource) {
@@ -194,10 +209,14 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
   const endpointMissing = error?.status === 404;
   const stateMessage = state === "loading" ? "Loading backend data" : state === "unauthorized" ? "Your session has expired. Returning to sign in…" : state === "forbidden" ? "Your BROKA account is not authorized for this resource." : state === "error" ? (endpointMissing ? "This workspace needs the upgraded backend — the live API does not expose this endpoint yet (HTTP 404). It activates automatically after the backend upgrade." : error?.message ?? "Unable to load this BROKA resource") : "";
   const data = isUsers ? usersQuery.data?.rows : resourceQuery.data;
-  const total = isUsers ? usersQuery.data?.total : (resourceQuery.data as { total?: number } | undefined)?.total;
+  const usersTotal = usersQuery.data?.total;
+  const total: number | undefined = isUsers ? usersTotal ?? undefined : (resourceQuery.data as { total?: number } | undefined)?.total;
   const paginated = Boolean(definition.resource && ["deals", "listings", "stores", "disputes", "users"].includes(definition.resource));
   const pageSize = definition.pageSize ?? 50;
-  const hasNext = paginated && typeof total === "number" ? page * pageSize < total : false;
+  // When the backend does not return X-Total-Count, a full page still means
+  // another page may exist; never invent a total from the page length.
+  const hasNext = paginated && (typeof total === "number" ? page * pageSize < total : isUsers && (usersQuery.data?.rows.length ?? 0) >= pageSize);
+  const empty = state === "ready" && data ? (isUsers ? (usersQuery.data?.rows.length ?? 0) === 0 : isEmptyList(data)) : false;
 
   return <div className="space-y-6">
     <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between">
@@ -208,11 +227,11 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
       </div>
     </section>
 
-    <FilterToolbar definition={definition} params={params} onSet={setParam} />
+    <FilterToolbar definition={definition} params={params} onSet={setParam} onSetMany={setParams} />
 
     <section className="data-panel overflow-hidden">
-      {state !== "ready" || !data ? <div className="p-5"><ResourceState state={endpointMissing ? "unavailable" : state === "ready" ? "loading" : state} message={stateMessage} /></div> : isUsers ? <UsersTable users={usersQuery.data?.rows ?? []} /> : <ValidatedResourceView resource={definition.resource} data={data} />}
-      {paginated && state === "ready" ? <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 text-xs text-slate-500"><span>Page {page}{typeof total === "number" ? ` · ${total.toLocaleString()} total` : ""}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setParam("page", String(page - 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Previous</button><button disabled={!hasNext} onClick={() => setParam("page", String(page + 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div> : null}
+      {state !== "ready" || !data ? <div className="p-5"><ResourceState state={endpointMissing ? "unavailable" : state === "ready" ? "loading" : state} message={stateMessage} /></div> : empty ? <div className="p-5"><ResourceState state="empty" message="No records match the current backend filters." /></div> : isUsers ? <UsersTable users={usersQuery.data?.rows ?? []} /> : <ValidatedResourceView resource={definition.resource} data={data} />}
+      {paginated && state === "ready" ? <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 text-xs text-slate-500"><span>Page {page}{typeof total === "number" ? ` · ${total.toLocaleString()} total` : isUsers ? " · filtered total unavailable" : ""}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setParam("page", String(page - 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Previous</button><button disabled={!hasNext} onClick={() => setParam("page", String(page + 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div> : null}
     </section>
   </div>;
 }

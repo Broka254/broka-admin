@@ -43,12 +43,16 @@ test("mutation boundary keeps all four verified user actions allowlisted with re
   assert.match(fraudRoute, /FRAUD_EVENT_ACTIONS/);
 });
 
-test("idempotency header matches the backend guard (X-Idempotency-Key)", async () => {
+test("idempotency header matches the backend guard and retries reuse the key", async () => {
   const admin = await readFile(resolve(root, "lib/api/admin.ts"), "utf8");
   assert.match(admin, /X-Idempotency-Key/);
   assert.doesNotMatch(admin, /headers\["Idempotency-Key"\]/);
   const recordDetail = await readFile(resolve(root, "components/dashboard/record-detail.tsx"), "utf8");
-  assert.match(recordDetail, /"Idempotency-Key": crypto\.randomUUID\(\)/);
+  assert.match(recordDetail, /attempt\?\.action === selectedAction \? attempt\.key : crypto\.randomUUID\(\)/);
+  assert.match(recordDetail, /"Idempotency-Key": idempotencyKey/);
+  const fraud = await readFile(resolve(root, "components/dashboard/validated-resource-view.tsx"), "utf8");
+  assert.match(fraud, /idempotencyKey \|\| crypto\.randomUUID\(\)/);
+  assert.match(fraud, /"Idempotency-Key": key/);
 });
 
 test("KPI grid labels filtered counts, not unfiltered totals", async () => {
@@ -87,4 +91,78 @@ test("Broka design system keeps the public-site visual anchors", async () => {
   const system = await readFile(resolve(root, "docs/DESIGN_SYSTEM.md"), "utf8");
   for (const token of ["#05060d", "#8b75ff", "#54d7e9", "#dbb75d"]) assert.match(system, new RegExp(token.replace("#", "\\#")));
   assert.match(system, /read-only references/);
+});
+
+test("financial labels separate external escrow and recognised commission from cash", async () => {
+  const command = await readFile(resolve(root, "components/dashboard/command-center.tsx"), "utf8");
+  assert.match(command, /Escrow held externally/);
+  assert.match(command, /not BROKA cash/);
+  assert.match(command, /Commission recognised/);
+  assert.match(command, /not reconciled bank cash/);
+  const finance = await readFile(resolve(root, "components/dashboard/validated-resource-view.tsx"), "utf8");
+  assert.match(finance, /Escrow held externally/);
+  assert.match(finance, /external funds/);
+});
+
+test("users total comes from the upstream header, never from page length", async () => {
+  const proxy = await readFile(resolve(root, "app/api/broka/[...path]/route.ts"), "utf8");
+  assert.match(proxy, /x-total-count/);
+  assert.match(proxy, /headers\["X-Total-Count"\] = total/);
+  const hook = await readFile(resolve(root, "hooks/use-admin-resource.ts"), "utf8");
+  assert.match(hook, /total: number \| null/);
+  assert.doesNotMatch(hook, /total: Number\.isFinite\(total\) \? total : rows\.length/);
+  const workspace = await readFile(resolve(root, "components/dashboard/resource-workspace.tsx"), "utf8");
+  assert.match(workspace, /filtered total unavailable/);
+});
+
+test("API status badge reflects verified health, not env presence", async () => {
+  const shell = await readFile(resolve(root, "components/layout/admin-shell.tsx"), "utf8");
+  assert.match(shell, /useAdminResource\("health"/);
+  assert.match(shell, /API health verified/);
+  assert.match(shell, /API health check failed/);
+  assert.doesNotMatch(shell, /apiConfigured \? "success"/);
+  assert.match(shell, /href="\/alerts"/);
+  assert.doesNotMatch(shell, /Notifications unavailable until backend event delivery is configured/);
+  assert.doesNotMatch(shell, /absolute right-2 top-2 h-1\.5 w-1\.5 rounded-full bg-\[#54d7e9\]/);
+});
+
+test("filter clearing updates all filters at once and lists have an empty state", async () => {
+  const workspace = await readFile(resolve(root, "components/dashboard/resource-workspace.tsx"), "utf8");
+  assert.match(workspace, /onSetMany/);
+  assert.match(workspace, /Object\.fromEntries\(active/);
+  assert.doesNotMatch(workspace, /active\.forEach/);
+  assert.match(workspace, /state="empty"/);
+});
+
+test("notification surfaces are honest about missing backend contracts", async () => {
+  const alertCenter = await readFile(resolve(root, "components/dashboard/alert-center.tsx"), "utf8");
+  assert.match(alertCenter, /derived from the live operations snapshot/);
+  assert.match(alertCenter, /No bell badge or unread indicator is rendered/);
+  const communications = await readFile(resolve(root, "app/(dashboard)/communications/page.tsx"), "utf8");
+  assert.match(communications, /Backend endpoint required/);
+  assert.match(communications, /does not prove a notification was sent/);
+  assert.doesNotMatch(communications, /<form|<input|<textarea/);
+  const manifest = JSON.parse(await readFile(resolve(root, "public/manus-routes.json"), "utf8"));
+  for (const path of ["/alerts", "/communications"]) assert.ok(manifest.routes.some((route) => route.path === path), `missing ${path}`);
+  const contracts = await readFile(resolve(root, "docs/NOTIFICATION_CONTRACTS.md"), "utf8");
+  for (const endpoint of ["GET /admin/alerts", "POST /admin/alerts/{id}/acknowledge", "GET /admin/communications", "GET /admin/communications/{id}/deliveries"]) {
+    assert.ok(contracts.includes(endpoint), `missing ${endpoint}`);
+  }
+});
+
+test("middleware bounds authorization checks and fails closed", async () => {
+  const middleware = await readFile(resolve(root, "middleware.ts"), "utf8");
+  assert.match(middleware, /AUTH_TIMEOUT_MS = 5000/);
+  assert.equal((middleware.match(/AbortSignal\.timeout\(AUTH_TIMEOUT_MS\)/g) ?? []).length, 2);
+  assert.match(middleware, /Fail closed/);
+});
+
+test("Railway liveness does not depend on the BROKA API", async () => {
+  const live = await readFile(resolve(root, "app/api/live/route.ts"), "utf8");
+  assert.match(live, /status: "ok"/);
+  assert.doesNotMatch(live, /import .*upstreamFetch|process\.env\.BROKA_API_URL/);
+  const railway = await readFile(resolve(root, "railway.toml"), "utf8");
+  assert.match(railway, /healthcheckPath = "\/api\/live"/);
+  const readiness = await readFile(resolve(root, "app/api/health/route.ts"), "utf8");
+  assert.match(readiness, /status: response\.ok \? "operational" : "degraded"/);
 });

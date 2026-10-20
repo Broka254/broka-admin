@@ -41,8 +41,15 @@ The admin router now attaches granular dependencies from `api/core/permissions.p
 
 The live OpenAPI document still advertises empty success schemas for these responses even though the router returns concrete dictionaries. The frontend labels its schemas **source-derived** and fails closed on drift. The backend CI should publish a regenerated OpenAPI document or a versioned contract artifact.
 
+## Notification surfaces
+
+No admin alert-retrieval or acknowledgement endpoint exists. `/alerts` is therefore a derived view over `/admin/ops-snapshot` and `/admin/health/services`; it renders severity, snapshot time and links, but no unread count, notification delivery or acknowledgement state.
+
+No service-communications CRUD, scheduling, publication or delivery-receipt endpoint exists. `/communications` is a read-only capability/contract page. The required endpoints and lifecycle semantics are specified in [`NOTIFICATION_CONTRACTS.md`](NOTIFICATION_CONTRACTS.md). Publishing a record must never be equated with an SMS, email or push delivery.
+
 ## Known operational notes
 
+- Middleware authorization calls to `/auth/me` and `/auth/token/refresh` are bounded at 5 seconds; timeouts fail closed to the login screen instead of holding the request open.
 - `commission_earned_kes` (and the ops snapshot commission figures) are recognized commission on `released` deals — not proof of reconciled bank cash. `/admin/finance-integrity` exposes the real reconciliation checks.
 - `ledger-integrity.balanced` is true by construction; `escrow_integrity_ok` and `negative_escrow_deals` are the assertions that can fail.
 - Process-local counters (AI savings, event metrics) are labelled `scope: process_local`, `durability: none` in both backend responses and UI.

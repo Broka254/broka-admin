@@ -23,6 +23,8 @@ The hardened backend working tree (`/tmp/opencode/broka/backend`) now implements
 | Historical analytics | `/admin/event-metrics` and AI savings remain process-local counters (labelled `scope: process_local`, `durability: none`) | No durable time series; a metrics backend (or the audit tables) would be required |
 | Zeno instrumentation | Provider/model usage, latency percentiles, token costs, STT/TTS outcomes are not persisted anywhere | `/admin/zeno/activity` lists them in `not_instrumented` instead of estimating |
 | Reports workflow | No reports/admin moderation endpoint exists | The Reports page remains explicitly unavailable |
+| Admin alert persistence | `/admin/ops-snapshot` exposes current queue counts, but no alert list, unread state, acknowledgement or per-alert timestamps exist | `/alerts` is a derived ops view only; it renders no unread count or acknowledge control. Required contract: `docs/NOTIFICATION_CONTRACTS.md` |
+| Service communications | No admin communications CRUD, scheduling, publication or per-channel delivery-receipt endpoint exists | `/communications` is read-only and states that publication and delivery are not instrumented. Required contract: `docs/NOTIFICATION_CONTRACTS.md` |
 | Dispute resolution | Admin dispute queue is read-only; resolution stays with the existing engine and its fund guards | Deliberate: no unsafe decide/refund mutation was added |
 | Admin sub-roles | No storage for per-admin permission sets (schema change not allowed) | All admins remain full admins |
 | Live Redis idempotency tests | Local test environment has no Redis | The reservation path is tested with mocks only; CI (which runs Redis) still needs the backend branch |
@@ -34,5 +36,8 @@ The hardened backend working tree (`/tmp/opencode/broka/backend`) now implements
 - Alert-first Command Center driven by `/admin/ops-snapshot` + `/admin/health/services`; KPI labels now distinguish active listings, released deals, recognized commission and active dispute cases.
 - Payments, Finance Integrity, Service Health and Zeno Activity workspaces with real filters; Deals/Listings/Stores/Disputes queues with pagination and server-side counts.
 - User detail with reason-gated, confirmed, idempotent actions and backend action results rendered; fraud events resolvable from the queue.
+- `/alerts` derived from the ops snapshot and service health, with no fabricated unread/acknowledgement state; the header bell links to it without a fake badge.
+- `/communications` documents the future communications lifecycle while exposing no editor or publish control.
+- The API badge turns green only after a validated `/health` response; the users total uses the upstream `X-Total-Count` instead of page length.
 
 No missing operation is simulated in the dashboard.

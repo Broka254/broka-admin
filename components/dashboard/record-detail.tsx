@@ -3,6 +3,7 @@
 import { ArrowLeft, BadgeCheck, CircleAlert, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useAdminDetail } from "@/hooks/use-admin-resource";
 import { ResourceState, SectionEyebrow, StatusBadge } from "@/components/ui/primitives";
@@ -29,7 +30,11 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
   const [selectedAction, setSelectedAction] = useState<UserAction>("flag");
   const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  // Keep one key per action attempt so a retry after a network failure cannot
+  // be applied twice. A different action gets a fresh key.
+  const [attempt, setAttempt] = useState<{ action: UserAction; key: string } | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
   const config = copy[resource];
 
   const userDetail = useAdminDetail("userDetail", resourceId, resource === "users");
@@ -58,15 +63,18 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
     if (REASON_REQUIRED[selectedAction] && reason.trim().length < 3) { setStatus("error"); setMessage("A written reason (3-500 characters) is required for this action."); return; }
     setStatus("sending");
     setMessage("");
+    const idempotencyKey = attempt?.action === selectedAction ? attempt.key : crypto.randomUUID();
+    if (attempt?.action !== selectedAction) setAttempt({ action: selectedAction, key: idempotencyKey });
     try {
       const response = await fetch(`/api/broka/users/${encodeURIComponent(resourceId)}/${selectedAction}`, {
         method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
         body: JSON.stringify(reason.trim() ? { reason: reason.trim() } : {}),
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string; changed?: boolean; already_flagged?: boolean; trust_score?: number; trust_band?: string; is_admin?: boolean };
       if (!response.ok) throw new Error(payload.message ?? "The BROKA API could not complete this action.");
       setStatus("success");
+      void queryClient.invalidateQueries({ queryKey: ["broka-admin"] });
       const outcome = payload.changed === true ? "applied" : payload.changed === false ? "was already in that state (no duplicate change)" : "accepted";
       const detail = payload.trust_score !== undefined ? ` Trust score: ${payload.trust_score}${payload.trust_band ? ` (${payload.trust_band})` : ""}.` : payload.is_admin !== undefined ? ` is_admin: ${payload.is_admin}.` : "";
       setMessage(`${ACTION_LABELS[selectedAction]} ${outcome}.${detail} The action is recorded in the audit log.`);
@@ -76,7 +84,7 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
     }
   }
 
-  function closeDialog() { setOpen(false); setConfirmation(""); setReason(""); setStatus("idle"); setMessage(""); setSelectedAction("flag"); }
+  function closeDialog() { setOpen(false); setConfirmation(""); setReason(""); setStatus("idle"); setMessage(""); setSelectedAction("flag"); setAttempt(null); }
   const hasApiAction = resource === "users";
   const user = userDetail.data?.user;
 
@@ -115,7 +123,7 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
     {hasApiAction ? <section className="data-panel border-rose-400/15 p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-rose-300/20 bg-rose-400/[0.08] text-rose-200"><ShieldAlert size={17} /></span><div><p className="text-sm font-semibold text-slate-100">Administrative action guard</p><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Actions are allowlisted, reason-gated where required, confirmed, sent idempotently through the server-only FastAPI boundary, and recorded in the audit log. The backend remains authoritative.</p></div></div>
-        <button onClick={() => { setOpen(true); setStatus("idle"); setMessage(""); }} className="focus-ring inline-flex w-fit items-center gap-2 rounded-lg border border-rose-300/25 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/20"><CircleAlert size={14} />Open action panel</button>
+        <button onClick={() => { setOpen(true); setStatus("idle"); setMessage(""); setAttempt(null); }} className="focus-ring inline-flex w-fit items-center gap-2 rounded-lg border border-rose-300/25 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/20"><CircleAlert size={14} />Open action panel</button>
       </div>
       {status === "success" && message ? <p className="mt-3 inline-flex items-center gap-2 text-xs text-emerald-200"><BadgeCheck size={13} />{message}</p> : null}
       {status === "error" && message && !open ? <p className="mt-3 text-xs text-rose-200">{message}</p> : null}
@@ -134,10 +142,11 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
         <label className="mt-3 block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Type CONFIRM to proceed
           <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} className="mt-2 w-full rounded-lg border border-white/[0.08] bg-black/30 p-3 text-xs text-slate-200" />
         </label>
-        {status === "error" ? <p className="mt-3 text-xs text-rose-200">{message}</p> : null}
+        {status === "error" ? <p className="mt-3 text-xs text-rose-200" role="alert">{message}</p> : null}
+        {status === "success" ? <p className="mt-3 inline-flex items-center gap-2 text-xs text-emerald-200" role="status"><BadgeCheck size={13} />{message}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={closeDialog} className="focus-ring rounded-lg border border-white/[0.09] px-3 py-2 text-xs font-semibold text-slate-400 transition hover:text-slate-200">Cancel</button>
-          <button onClick={confirmAction} disabled={confirmation !== "CONFIRM" || status === "sending"} className="focus-ring rounded-lg bg-rose-400/15 px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/25 disabled:cursor-not-allowed disabled:opacity-40">{status === "sending" ? "Sending…" : "Confirm action"}</button>
+          <button onClick={closeDialog} className="focus-ring rounded-lg border border-white/[0.09] px-3 py-2 text-xs font-semibold text-slate-400 transition hover:text-slate-200">{status === "success" ? "Close" : "Cancel"}</button>
+          <button onClick={confirmAction} disabled={confirmation !== "CONFIRM" || status === "sending" || status === "success"} className="focus-ring rounded-lg bg-rose-400/15 px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/25 disabled:cursor-not-allowed disabled:opacity-40">{status === "sending" ? "Sending…" : "Confirm action"}</button>
         </div>
       </div>
     </div> : null}

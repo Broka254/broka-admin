@@ -4,6 +4,7 @@ import { sessionCookieOptions } from "@/lib/auth/cookies";
 
 const ACCESS_COOKIE = "broka_admin_access";
 const REFRESH_COOKIE = "broka_admin_refresh";
+const AUTH_TIMEOUT_MS = 5000;
 
 function loginRedirect(request: NextRequest, reason: "restricted" | "forbidden" | "session") {
   const url = new URL("/login", request.url);
@@ -19,6 +20,7 @@ async function requestMe(api: string, accessToken: string) {
   const response = await fetch(`${api}/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
     cache: "no-store",
+    signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
   });
   const data = response.ok ? await response.json().catch(() => null) : null;
   return { response, data };
@@ -48,6 +50,7 @@ export async function middleware(request: NextRequest) {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
         cache: "no-store",
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       });
       const tokens = refreshed.ok ? await refreshed.json().catch(() => null) : null;
       const tokenRecord = tokens && typeof tokens === "object" && !Array.isArray(tokens) ? (tokens as Record<string, unknown>) : null;

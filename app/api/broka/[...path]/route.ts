@@ -20,18 +20,25 @@ function requestId(request: Request) {
   return supplied && /^[A-Za-z0-9._-]{8,128}$/.test(supplied) ? supplied : crypto.randomUUID();
 }
 
+function totalCount(response: Response): string | null {
+  const value = response.headers.get("x-total-count")?.trim();
+  if (!value || !/^\d+$/.test(value)) return null;
+  const count = Number(value);
+  return Number.isSafeInteger(count) ? String(count) : null;
+}
+
 export async function GET(request: Request, context: { params: Promise<{ path: string[] }> }) {
   const id = requestId(request);
   const { path: segments } = await context.params;
   const requestedPath = `/${segments.join("/")}`;
-  if (!isSafeAdminPath(requestedPath.slice(1))) return NextResponse.json({ code: "path_not_allowlisted", message: "This admin endpoint is not allowlisted by the dashboard.", request_id: id }, { status: 404, headers: { "X-Request-ID": id } });
+  if (!isSafeAdminPath(requestedPath.slice(1))) return NextResponse.json({ code: "path_not_allowlisted", message: "This admin endpoint is not allowlisted by the dashboard.", request_id: id }, { status: 404, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } });
   const resource = resourceForPath(requestedPath);
-  if (!resource) return NextResponse.json({ code: "contract_not_registered", message: "This admin endpoint has no registered response contract.", request_id: id }, { status: 502, headers: { "X-Request-ID": id } });
+  if (!resource) return NextResponse.json({ code: "contract_not_registered", message: "This admin endpoint has no registered response contract.", request_id: id }, { status: 502, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } });
 
   const tokenStore = await cookies();
   let accessToken = tokenStore.get(ACCESS_COOKIE)?.value;
   const refreshToken = tokenStore.get(REFRESH_COOKIE)?.value;
-  if (!accessToken) return NextResponse.json({ code: "unauthorized", message: "Authentication required.", request_id: id }, { status: 401, headers: { "X-Request-ID": id } });
+  if (!accessToken) return NextResponse.json({ code: "unauthorized", message: "Authentication required.", request_id: id }, { status: 401, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } });
 
   const sourceUrl = new URL(request.url);
   const upstreamPath = `${requestedPath}${sourceUrl.search}`;
@@ -44,12 +51,18 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
       upstream = await upstreamFetch(upstreamPath, { method: "GET", headers: { "X-Request-ID": id } }, accessToken);
     }
     if (!upstream.ok) {
-      const response = NextResponse.json({ code: upstream.status === 403 ? "forbidden" : upstream.status === 401 ? "unauthorized" : "upstream_error", message: publicErrorMessage(upstream), request_id: id }, { status: upstream.status, headers: { "X-Request-ID": id } });
+      const response = NextResponse.json({ code: upstream.status === 403 ? "forbidden" : upstream.status === 401 ? "unauthorized" : "upstream_error", message: publicErrorMessage(upstream), request_id: id }, { status: upstream.status, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } });
       return upstream.status === 401 ? clearSession(response) : response;
     }
 
     const validated = validateAdminResource(resource, await parseUnknownJson(upstream));
-    const response = NextResponse.json(validated, { headers: { "X-Request-ID": id } });
+    const headers: Record<string, string> = { "X-Request-ID": id, "Cache-Control": "no-store" };
+    // /admin/users reports its filtered total only through this header. The
+    // browser needs it to distinguish "50 rows on this page" from the total
+    // number of matching records; never synthesise it when it is absent.
+    const total = totalCount(upstream);
+    if (total !== null) headers["X-Total-Count"] = total;
+    const response = NextResponse.json(validated, { headers });
     if (refreshedTokens) {
       response.cookies.set(ACCESS_COOKIE, refreshedTokens.accessToken, sessionCookieOptions());
       if (refreshedTokens.refreshToken) response.cookies.set(REFRESH_COOKIE, refreshedTokens.refreshToken, sessionCookieOptions(60 * 60 * 24 * 14));
@@ -60,7 +73,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
     const code = error instanceof BrokaApiError && error.code === "invalid-response" ? "contract_validation_failed" : status === 401 ? "unauthorized" : "backend_unavailable";
     const message = error instanceof BrokaApiError ? error.message : "The BROKA API could not be reached.";
     console.error(JSON.stringify({ event: "admin_proxy_failure", request_id: id, resource, status, code }));
-    const response = NextResponse.json({ code, message, request_id: id }, { status, headers: { "X-Request-ID": id } });
+    const response = NextResponse.json({ code, message, request_id: id }, { status, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } });
     return status === 401 ? clearSession(response) : response;
   }
 }

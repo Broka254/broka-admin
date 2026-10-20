@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, CheckCircle2, ExternalLink, ShieldQuestion } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -23,25 +24,31 @@ function ResolveFraudEvent({ eventId }: { eventId: string }) {
   const [note, setNote] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState("");
+  const queryClient = useQueryClient();
   async function submit() {
     setStatus("sending");
     setMessage("");
+    // Reuse the key when retrying the same unresolved event.
+    const key = idempotencyKey || crypto.randomUUID();
+    if (!idempotencyKey) setIdempotencyKey(key);
     try {
       const response = await fetch(`/api/broka/fraud-events/${encodeURIComponent(eventId)}/resolve`, {
         method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": key },
         body: JSON.stringify(note.trim() ? { reason: note.trim() } : {}),
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string; changed?: boolean };
       if (!response.ok) throw new Error(payload.message ?? "The BROKA API could not resolve this event.");
       setStatus("done");
+      void queryClient.invalidateQueries({ queryKey: ["broka-admin"] });
       setMessage(payload.changed === false ? "Already resolved." : "Resolved and audited.");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "The BROKA API could not resolve this event.");
     }
   }
-  if (status === "done") return <p className="mt-2 text-xs text-emerald-200">{message}</p>;
+  if (status === "done") return <p role="status" className="mt-2 text-xs text-emerald-200">{message}</p>;
   return <div className="mt-3">
     {open ? <div className="space-y-2">
       <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={500} placeholder="Optional review note (3-500 characters)" className="w-full rounded-lg border border-white/[0.08] bg-black/20 p-3 text-xs text-slate-200 placeholder:text-slate-600" />
@@ -94,7 +101,7 @@ export function ValidatedResourceView({ resource, data }: { resource: ApiResourc
         <Metric label="Commission on released deals" value={kes(row.commission.released_deals_kes)} hint="Recognised, from Deal.status = released" />
         <Metric label="Ledger revenue credits" value={kes(row.commission.ledger_revenue_credits_kes)} hint="BROKA_REVENUE credits actually posted" />
         <Metric label="Gap" value={kes(row.commission.gap_kes)} hint="Released commission minus posted revenue" />
-        <Metric label="Escrow held" value={kes(row.escrow_held_kes)} hint="ESCROW_HOLDING credits minus debits" />
+        <Metric label="Escrow held externally" value={kes(row.escrow_held_kes)} hint="ESCROW_HOLDING credits minus debits · external funds" />
         <Metric label="Refund payable" value={kes(row.refund_payable_kes)} hint="Recorded refunds not yet returned" />
         <Metric label="Awaiting manual refund" value={row.awaiting_manual_refund.count} hint="refund_outcome set, refunded_at empty" />
         <Metric label="Missing release entries" value={row.released_deals_without_release_entries.count} hint="Released deals with no escrow debit" />

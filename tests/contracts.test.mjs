@@ -141,14 +141,15 @@ test("notification surfaces are honest about backend contracts and delivery evid
   const communications = await readFile(resolve(root, "app/(dashboard)/communications/page.tsx"), "utf8");
   assert.match(communications, /Backend Upgrade Required/);
   assert.match(communications, /useAdminCommunications/);
-  const detailDialog = await readFile(resolve(root, "components/dashboard/communications/communication-detail-dialog.tsx"), "utf8");
-  assert.match(detailDialog, /FCM Accepted/);
-  assert.match(detailDialog, /Confirmed Device/);
-  assert.match(detailDialog, /does NOT confirm/i);
+  const deliveryEvidence = await readFile(resolve(root, "components/dashboard/communications/delivery-evidence.tsx"), "utf8");
+  assert.match(deliveryEvidence, /FCM Accepted/);
+  assert.match(deliveryEvidence, /Device Delivery Evidence/);
+  assert.match(deliveryEvidence, /Unavailable/);
+  assert.doesNotMatch(deliveryEvidence, /Confirmed Device/);
   const manifest = JSON.parse(await readFile(resolve(root, "public/manus-routes.json"), "utf8"));
   for (const path of ["/alerts", "/communications"]) assert.ok(manifest.routes.some((route) => route.path === path), `missing ${path}`);
   const contracts = await readFile(resolve(root, "docs/NOTIFICATION_CONTRACTS.md"), "utf8");
-  for (const endpoint of ["GET /admin/alerts", "POST /admin/alerts/{id}/acknowledge", "GET /admin/communications", "GET /admin/communications/{id}/deliveries"]) {
+  for (const endpoint of ["GET /admin/alerts", "POST /admin/alerts/{id}/acknowledge", "GET /admin/communications", "POST /admin/communications/preview", "GET /admin/communications/{id}/stats"]) {
     assert.ok(contracts.includes(endpoint), `missing ${endpoint}`);
   }
 });

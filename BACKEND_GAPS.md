@@ -1,45 +1,137 @@
-# BROKA Admin backend-gap report
+# BROKA Admin backend gaps and release blockers
 
-The hardened backend working tree (`/tmp/opencode/broka/backend`) now implements the previously missing admin scope and mutation safety. The gaps below distinguish **implemented-in-working-tree (not yet deployed)** from **genuinely open**.
+**Inspected backend:** `Broka254/broka` at commit `e79a364`, domain
+`backend/api/domains/service_communications`.
 
-## Implemented in the backend working tree (tests: 19 new + full suite 2072 passed)
+**Scope:** no backend file was modified in this remediation. The items below are
+integration blockers that must be fixed, tested, and deployed in the backend
+repository before the corresponding guarantees can be claimed in this admin app.
 
-| Gap | Resolution |
+## Release blockers
+
+### 1. Draft creation is not idempotent on the server
+
+The admin client sends `X-Idempotency-Key`, and the server-side admin proxy
+forwards it. The frontend also reuses one key for retries of the same logical
+payload and blocks duplicate in-flight submissions. Those are client request
+identity controls, **not server-side deduplication**.
+
+Evidence from the inspected backend:
+
+- `POST /admin/communications` is handled by the draft creation handler at
+  `backend/api/domains/service_communications/router.py:612`.
+- That handler accepts the communication body, authenticated admin, and database
+  session; it does not read, persist, scope, or replay an idempotency key.
+- The frontend therefore cannot guarantee that a timeout plus retry creates one
+  draft, and it cannot guarantee that concurrent identical requests converge.
+
+Required backend behavior:
+
+1. Require and validate an idempotency key for draft creation.
+2. Scope the key to the authenticated actor and the create-draft operation.
+3. Persist a request fingerprint and result (or a concurrency-safe reservation)
+   in durable storage.
+4. Reject reuse of the key with a different payload.
+5. Return the original result for a valid replay, including concurrent identical
+   requests, without creating a second draft.
+6. Cover replay, conflicting-payload reuse, and concurrent submission in backend
+   tests.
+
+Until that exists, the dashboard must not call draft creation idempotency-safe.
+No browser-only registry is used as a substitute for this guarantee.
+
+### 2. `confirmed_delivered` is not device-delivery evidence
+
+The backend records an in-app-only recipient as `status="delivered"` once the
+announcement is available in the authenticated feed. The delivery summary then
+sets `confirmed_delivered` to the count of recipient rows whose status is
+`delivered`.
+
+Evidence from the inspected backend:
+
+- In-app-only delivery is written as `delivered` in
+  `backend/api/domains/service_communications/service.py:822-836`.
+- The summary maps `confirmed_delivered` directly to
+  `by_status["delivered"]` in
+  `backend/api/domains/service_communications/router.py:446-475`.
+- FCM provider acceptance is a separate recipient status and does not prove that
+  a device displayed a notification.
+
+Required backend correction:
+
+- Keep in-app publication/availability, provider acceptance, in-app read
+  acknowledgement, and device acknowledgement as distinct states.
+- Derive a device-confirmed metric only from evidence that actually proves device
+  display or receipt.
+- Rename or remove `confirmed_delivered` so a misleading label cannot be rendered
+  by another client.
+- Add contract fixtures for in-app-only, provider-accepted, read, failed, and
+  device-confirmed outcomes.
+
+The admin dashboard hides the confirmed-device metric as **Unavailable** and
+labels the backend `delivered` status as “In-app available / device unverified”.
+It does not substitute a different statistic under the old label.
+
+### 3. Delivery completion is conflated with incident resolution
+
+The delivery worker automatically marks any published communication
+`completed` when no recipient rows remain queued, sending, or retry-scheduled. It
+does not check whether an incident is operationally resolved.
+
+Evidence from the inspected backend:
+
+- `complete_published_communications()` in
+  `backend/api/domains/service_communications/service.py:1048-1065` updates all
+  published communications with terminal recipient rows to `completed`.
+- Recipient delivery settlement is therefore used as the incident communication's
+  completion trigger, even though delivery success is unrelated to incident
+  resolution.
+- The manual `POST /admin/communications/{id}/complete` endpoint also completes a
+  communication; it is not an incident-resolution record.
+
+Required backend correction:
+
+- Keep “delivery campaign finished” and “operational incident resolved” as
+  distinct lifecycle events.
+- Do not infer incident resolution from recipient status, statistics, provider
+  acceptance, or a `completed_at` communication timestamp.
+- Require an explicit, authorized administrator action to resolve the incident,
+  with actor, timestamp, reason, and audit evidence.
+- Keep communication completion behavior separate for communication types whose
+  lifecycle is valid.
+
+The dashboard labels a completed incident as **DELIVERY COMPLETE**, shows a
+prominent warning, and never renders “Incident Resolved”. Production approval for
+incident management remains blocked until the backend correction is implemented
+and verified.
+
+## Verified contract facts and limitations
+
+| Area | Verified backend behavior |
 |---|---|
-| Granular admin RBAC | `require_permission(Permission.*)` dependencies attached to every admin route (`ADMIN_SUMMARY`, `MANAGE_USERS`, `PROMOTE_ADMIN`, `VIEW_TRANSACTIONS`, `VIEW_ALL_DISPUTES`, `OVERRIDE_ESCROW`). All current admins hold every flag → backward compatible; restricted sub-roles would need schema storage and were not added. |
-| Audit writes | Every admin mutation (flag/unflag/recompute/promote/fraud-resolve/media-backfill) records `record_audit()` with actor, target, reason, before/after, request id and timestamp. |
-| Idempotency | All mutations use `idempotency_guard`, which reads `X-Idempotency-Key` (Redis; fail-open). The frontend now sends that exact header — previously it sent `Idempotency-Key`, which the guard ignored. Replay is covered by a backend test. |
-| User operations | `/admin/users` adds `search`, `is_admin`, `account_type`, `flagged_only` and an `X-Total-Count` header; `/admin/users/{id}` returns profile, stats, recent deals, fraud events and audit rows. |
-| Admin scope | Added read-only `/admin/ops-snapshot`, `/admin/deals`, `/admin/deals/{id}`, `/admin/listings`, `/admin/stores`, `/admin/disputes`, `/admin/payments`, `/admin/finance-integrity`, `/admin/health/services`, `/admin/zeno/activity` and `POST /admin/fraud-events/{id}/resolve`. |
-| Flag semantics | Re-flagging is now a no-op (`changed: false`); the first flag creates a `FraudEvent`; reason is required. The old behavior subtracted another 30 trust points on every retry. |
-| Finance correctness | `/admin/finance-integrity` asserts released deals have a release debit and a revenue credit; commission gap, escrow held, refund payable and awaiting-manual-refund queue are exposed with definitions. |
+| Audience preview | `POST /admin/communications/preview` validates `{audience:{kind,user_ids}}` and returns `kind`, `count`, `max_audience`, and `allowed`. `/admin/communications/audience/preview` is not a supported route. |
+| List search | `GET /admin/communications` supports `status`, `communication_type`, `severity`, `search`, `limit`, and `offset`. `search` is a case-insensitive **title-only** match; message bodies are not searched. |
+| Expiry clearing | `PATCH /admin/communications/{id}` accepts `expires_at: null` to clear an existing expiry. The dashboard sends JSON `null`, not an omitted field. |
+| Types and severities | `announcement`, `maintenance`, `incident`, `product_update`; `low`, `normal`, `high`, `critical`. |
+| Channels | `in_app` (required) and `push` (optional). SMS and email are not implemented. |
+| Audience kinds | `all`, `buyers`, `sellers`, `store_owners`, `user_ids`, with at most 5,000 explicit user IDs. |
+| Recipient retry | Recipient responses include `retry_eligible`. Retry accepts an optional `recipient_ids` list; an explicit empty selection must not be treated as “retry all”. |
+| Provider acceptance | `provider_accepted` means FCM accepted the request. It is not device-display proof. |
+| In-app reads | `read_count` counts in-app read acknowledgements. It is not push or device-delivery evidence. |
+| Worker diagnostics | The response documents sweep/claim timing, batch/concurrency configuration, process-local counters for the last pass, and durable backlog counts. The `last_pass` counters are process-local and reset on process restart; they are not a durable delivery history. |
 
-## Genuinely open
+## Other open platform gaps
 
-| Gap | Evidence | Impact |
-|---|---|---|
-| Deployment | The hardened backend is a working tree, not the deployed API | Production still runs the old admin surface until reviewed, merged and deployed |
-| Published contracts | Live OpenAPI still returns `{}` for inspected admin success responses | Frontend schemas remain source-derived; a regenerated contract artifact is still required |
-| Historical analytics | `/admin/event-metrics` and AI savings remain process-local counters (labelled `scope: process_local`, `durability: none`) | No durable time series; a metrics backend (or the audit tables) would be required |
-| Zeno instrumentation | Provider/model usage, latency percentiles, token costs, STT/TTS outcomes are not persisted anywhere | `/admin/zeno/activity` lists them in `not_instrumented` instead of estimating |
-| Reports workflow | No reports/admin moderation endpoint exists | The Reports page remains explicitly unavailable |
-| Admin alert persistence | `/admin/ops-snapshot` exposes current queue counts, but no alert list, unread state, acknowledgement or per-alert timestamps exist | `/alerts` is a derived ops view only; it renders no unread count or acknowledge control. Required contract: `docs/NOTIFICATION_CONTRACTS.md` |
-| Incident auto-completion defect (Release Blocker) | service.py:complete_published_communications marks all published communications as completed once recipient rows reach terminal status | Technical incidents are auto-completed on delivery completion, regardless of technical resolution. Backend fix required before production release. |
-| Missing communication channels & operations | Backend does not implement SMS, email, app_release type, or withdrawal endpoint (`POST /admin/communications/{id}/withdraw`) | Frontend strictly restricts channels to `in_app` and `push`; withdrawal is not offered once published. |
-| Push notification FCM dependency | Push channel delivery requires valid Firebase Admin SDK credentials (`service_account.json`) on the backend | Push attempts fail gracefully when FCM is not configured; in-app announcements operate independently. |
-| Dispute resolution | Admin dispute queue is read-only; resolution stays with the existing engine and its fund guards | Deliberate: no unsafe decide/refund mutation was added |
-| Admin sub-roles | No storage for per-admin permission sets (schema change not allowed) | All admins remain full admins |
-| Live Redis idempotency tests | Local test environment has no Redis | The reservation path is tested with mocks only; CI (which runs Redis) still needs the backend branch |
+| Gap | Impact |
+|---|---|
+| Hardened backend not deployed | The inspected source must be reviewed, merged, deployed, and verified in staging before the frontend can rely on it. |
+| No persisted admin Alert Centre | `/alerts` remains a derived view over ops/health responses; there is no unread state or acknowledgement endpoint. |
+| No post-publication withdrawal | Published notices can expire or be marked delivery-complete, but cannot be recalled through a supported endpoint. |
+| FCM configuration dependency | Push attempts require backend Firebase credentials. In-app publication remains available when push is not configured. |
 
-## Frontend integration completed
+## Production decision
 
-- Runtime validation for every admin read, including the new ops surface, detail endpoints and action results.
-- Contract drift produces `contract_validation_failed` with a request ID and no payload logging.
-- Alert-first Command Center driven by `/admin/ops-snapshot` + `/admin/health/services`; KPI labels now distinguish active listings, released deals, recognized commission and active dispute cases.
-- Payments, Finance Integrity, Service Health and Zeno Activity workspaces with real filters; Deals/Listings/Stores/Disputes queues with pagination and server-side counts.
-- User detail with reason-gated, confirmed, idempotent actions and backend action results rendered; fraud events resolvable from the queue.
-- `/alerts` derived from the ops snapshot and service health, with no fabricated unread/acknowledgement state; the header bell links to it without a fake badge.
-- `/communications` workspace: complete production management workspace supporting draft creation, audience preview, editing with concurrency guards, scheduling, publishing, cancellation, completion, recipient ledger inspection with retry triggers, and live worker diagnostics. Truthfully separates FCM provider acceptance from confirmed device receipts and in-app reads.
-- The API badge turns green only after a validated `/health` response; the users total uses the upstream `X-Total-Count` instead of page length.
-
-No missing operation is simulated in the dashboard.
+Production approval is **not** justified while blockers 1-3 remain open. The
+frontend is intentionally honest about these limitations, but honesty is not a
+substitute for backend idempotency, reliable device evidence, or an explicit
+incident-resolution lifecycle.

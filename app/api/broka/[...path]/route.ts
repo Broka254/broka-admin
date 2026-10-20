@@ -6,6 +6,7 @@ import { refreshAccessToken } from "@/lib/api/auth";
 import { isSafeAdminPath, resourceForPath, validateAdminResource } from "@/lib/api/admin";
 import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE, parseUnknownJson, publicErrorMessage, upstreamFetch } from "@/lib/api/client";
 import { sessionCookieOptions } from "@/lib/auth/cookies";
+import { readBoundedJsonBody } from "@/lib/http/bounded-body";
 import { requireSameOrigin } from "@/lib/security/csrf";
 import {
   AudiencePreviewInSchema,
@@ -194,15 +195,6 @@ async function handleMutation(
   const pathWithoutLeadingSlash = segments.join("/");
   const requestedPath = `/${pathWithoutLeadingSlash}`;
 
-  // Content-Length guard
-  const contentLength = Number(request.headers.get("content-length") ?? "0");
-  if (contentLength > MAX_PAYLOAD_BYTES) {
-    return NextResponse.json(
-      { code: "payload_too_large", message: "Request payload exceeds allowed limit.", request_id: id },
-      { status: 413, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
-    );
-  }
-
   // Find explicit allowed operation
   const operation = findMutationOperation(method, pathWithoutLeadingSlash);
   if (!operation) {
@@ -228,13 +220,14 @@ async function handleMutation(
   // Validate incoming request body if required
   let validatedBody: unknown = undefined;
   if (operation.requestSchema) {
-    let rawBody: unknown;
-    try {
-      rawBody = await request.json();
-    } catch {
-      rawBody = {};
+    const bodyResult = await readBoundedJsonBody(request, MAX_PAYLOAD_BYTES);
+    if (!bodyResult.ok) {
+      return NextResponse.json(
+        { code: bodyResult.code, message: bodyResult.message, request_id: id },
+        { status: bodyResult.status, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
+      );
     }
-    const parseResult = operation.requestSchema.safeParse(rawBody);
+    const parseResult = operation.requestSchema.safeParse(bodyResult.value);
     if (!parseResult.success) {
       return NextResponse.json(
         {

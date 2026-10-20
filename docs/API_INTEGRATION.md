@@ -1,7 +1,8 @@
 # BROKA FastAPI integration audit
 
 **Runtime API:** `https://api.broka.co.ke`
-**Backend working tree:** `/tmp/opencode/broka/backend` (hardened admin surface; not yet deployed)
+**Inspected backend source:** `Broka254/broka` at commit `e79a364`
+(hardened admin surface; not yet deployed)
 **Source version observed:** backend health returns `6.0.0`.
 
 ## Authentication
@@ -31,7 +32,12 @@ The frontend allowlist, dynamic detail patterns, and Zod schemas mirror these re
 - `POST /admin/users/{user_id}/promote-admin` — requires `reason`.
 - `POST /admin/fraud-events/{event_id}/resolve` — records `reviewed_by_admin` and an audit row.
 
-Every mutation is guarded by `idempotency_guard`, which reads **`X-Idempotency-Key`**, and records an audit row with actor, action, target, reason, before/after values, request id and timestamp. The frontend previously sent `Idempotency-Key`, which the guard did not read; this is fixed end-to-end and covered by tests.
+The admin-domain user/fraud mutations above are guarded by
+`idempotency_guard`, which reads **`X-Idempotency-Key`**, and record audit rows.
+The frontend previously sent `Idempotency-Key`, which the guard did not read; that
+header mismatch is fixed. This statement does **not** extend to Service
+Communications draft creation, whose inspected handler has no creation-idempotency
+enforcement.
 
 ## Authorization
 
@@ -45,17 +51,26 @@ The live OpenAPI document still advertises empty success schemas for these respo
 
 No admin alert-retrieval or acknowledgement endpoint exists. `/alerts` is therefore a derived view over `/admin/ops-snapshot` and `/admin/health/services`; it renders severity, snapshot time and links, but no unread count, notification delivery or acknowledgement state.
 
-The service-communications workspace (`/communications`) is fully integrated with the backend implementation (`Broka254/broka`, domain `service_communications`).
+The service-communications workspace (`/communications`) is integrated with the
+backend source in `Broka254/broka`, domain `service_communications`. Its frontend
+work is complete, but production use is blocked by the backend gaps listed below.
 It supports:
 - CRUD on communication drafts (`GET /admin/communications`, `POST /admin/communications`, `PATCH /admin/communications/{id}`)
 - Concurrency control via `expected_version`
-- Non-side-effecting audience preview (`POST /admin/communications/audience/preview`)
+- Non-side-effecting audience preview (`POST /admin/communications/preview`)
 - Lifecycle actions: `POST /admin/communications/{id}/schedule`, `POST /admin/communications/{id}/publish`, `POST /admin/communications/{id}/cancel`, `POST /admin/communications/{id}/complete`
 - Per-recipient delivery ledger and retry: `GET /admin/communications/{id}/recipients`, `POST /admin/communications/{id}/recipients/retry`
-- Durable worker telemetry: `GET /admin/communications/diagnostics/worker`
-- Delivery telemetry truthfulness: FCM provider acceptance is strictly separated from confirmed device receipts and in-app reads.
+- Worker diagnostics: `GET /admin/communications/diagnostics/worker` (durable backlog plus process-local last-pass counters that reset on worker restart)
+- Server-side title search and pagination through `search`, `limit`, and `offset`; message bodies are not searchable.
+- Delivery telemetry truthfulness: FCM provider acceptance, in-app availability/read acknowledgements, and device evidence are kept distinct. Confirmed device delivery is shown as unavailable because the backend's `confirmed_delivered` field includes in-app-only rows.
 - Channels supported: `in_app` (required) and `push` (optional, requires backend FCM configuration). SMS, email, app_release, and withdrawal endpoints do not exist in the backend and are not exposed.
-- Known release blocker: `service.py:complete_published_communications` automatically marks published incidents as complete once recipient delivery attempts settle, regardless of incident resolution.
+- Expiry updates accept ISO UTC timestamps and JSON `null` to clear an existing expiry.
+- Known release blockers: draft creation has no server-side idempotency guarantee; `confirmed_delivered` is not device evidence; and `service.py:complete_published_communications` automatically marks published incidents as complete once recipient delivery attempts settle, regardless of incident resolution.
+
+The client reuses an idempotency key for retries of the same logical draft payload
+and prevents duplicate in-flight submissions. This is request identity only, not a
+substitute for persisted server-side deduplication. See
+[`BACKEND_GAPS.md`](../BACKEND_GAPS.md).
 
 ## Known operational notes
 

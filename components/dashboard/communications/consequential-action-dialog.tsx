@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, Clock, Send, ShieldAlert, X } from "lucide-react";
 import { StatusBadge } from "@/components/ui/primitives";
 import type { CommunicationOut } from "@/lib/api/schemas";
+import { useAudiencePreview } from "@/hooks/use-audience-preview";
+import { canPublishWithPreview } from "@/lib/communications/audience";
 
 export type ConsequentialActionType = "schedule" | "publish" | "cancel" | "complete" | "retry";
 
@@ -14,7 +16,6 @@ interface ConsequentialActionDialogProps {
   onClose: () => void;
   onConfirm: (payload: { scheduledAt?: string; reason?: string; recipientIds?: string[] }) => Promise<void>;
   selectedRecipientIds?: string[];
-  totalFailedEligible?: number;
 }
 
 export function ConsequentialActionDialog({
@@ -24,13 +25,26 @@ export function ConsequentialActionDialog({
   onClose,
   onConfirm,
   selectedRecipientIds = [],
-  totalFailedEligible = 0,
 }: ConsequentialActionDialogProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scheduledAt, setScheduledAt] = useState("");
   const [reason, setReason] = useState("");
-  const [retryTarget, setRetryTarget] = useState<"selected" | "all">("all");
+  const audiencePreview = useAudiencePreview({
+    kind: communication.audience.kind,
+    user_ids: communication.audience.user_ids ?? [],
+  });
+
+  useEffect(() => {
+    if (isOpen && action === "publish") {
+      void audiencePreview.requestPreview();
+    }
+  }, [action, audiencePreview.definitionKey, isOpen, audiencePreview.requestPreview]);
+
+  const publishPreviewReady = canPublishWithPreview(
+    audiencePreview.preview,
+    audiencePreview.definitionKey,
+  );
 
   if (!isOpen) return null;
 
@@ -60,14 +74,23 @@ export function ConsequentialActionDialog({
         }
         await onConfirm({ scheduledAt: scheduleDate.toISOString() });
       } else if (action === "publish") {
+        if (!publishPreviewReady) {
+          setError("A current, allowed audience preview is required before publication. The backend still revalidates the audience at publish time.");
+          setBusy(false);
+          return;
+        }
         await onConfirm({});
       } else if (action === "cancel") {
         await onConfirm({ reason: reason.trim() || undefined });
       } else if (action === "complete") {
         await onConfirm({ reason: reason.trim() || undefined });
       } else if (action === "retry") {
-        const ids = retryTarget === "selected" && selectedRecipientIds.length > 0 ? selectedRecipientIds : undefined;
-        await onConfirm({ recipientIds: ids });
+        if (selectedRecipientIds.length === 0) {
+          setError("Select at least one retry-eligible recipient from the ledger.");
+          setBusy(false);
+          return;
+        }
+        await onConfirm({ recipientIds: selectedRecipientIds });
       }
       onClose();
     } catch (err: unknown) {
@@ -105,12 +128,14 @@ export function ConsequentialActionDialog({
       icon: <CheckCircle2 size={20} className="text-indigo-300" />,
       confirmLabel: "Mark Complete",
       confirmStyle: "bg-indigo-600 hover:bg-indigo-500 text-white font-semibold",
-      description: "Mark this published communication as complete. Allowed only when all recipient delivery attempts have settled (no pending recipients).",
+      description: communication.communication_type === "incident"
+        ? "Complete the delivery campaign only. This does not resolve the operational incident; incident resolution remains an explicit authorized action that the backend does not yet expose."
+        : "Mark this published communication as complete. Allowed only when all recipient delivery attempts have settled (no pending recipients).",
     },
     retry: {
       title: "Retry Failed Delivery",
       icon: <ShieldAlert size={20} className="text-rose-300" />,
-      confirmLabel: "Retry Recipients",
+      confirmLabel: `Retry Selected (${selectedRecipientIds.length})`,
       confirmStyle: "bg-rose-600 hover:bg-rose-500 text-white font-semibold",
       description: "Queue eligible failed recipients for retry. Dead tokens, permanently unregistered devices, and expired campaigns will not be retried.",
     },
@@ -167,6 +192,21 @@ export function ConsequentialActionDialog({
                 Firebase Cloud Messaging is not configured on the backend. Push notifications will fail safely, but in-app announcements will still publish.
               </div>
             )}
+            <div className="mt-2 rounded-lg border border-white/[0.07] bg-black/20 p-2.5 text-[11px] text-slate-400">
+              {audiencePreview.loading ? (
+                "Refreshing the current audience preview..."
+              ) : audiencePreview.result ? (
+                <>
+                  Current preview: {audiencePreview.result.count.toLocaleString()} recipients
+                  (maximum {audiencePreview.result.max_audience.toLocaleString()}).{" "}
+                  {audiencePreview.result.allowed
+                    ? "Preview is informational; the backend revalidates the audience and limits at publication."
+                    : "This audience exceeds the configured maximum and cannot be published."}
+                </>
+              ) : (
+                audiencePreview.error ?? "No current audience preview is available."
+              )}
+            </div>
           </div>
         )}
 
@@ -205,34 +245,16 @@ export function ConsequentialActionDialog({
         {action === "retry" && (
           <div className="mt-4 space-y-3">
             <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-xs space-y-2">
-              <p className="font-semibold text-slate-200">Retry Target Selection</p>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="retry-target"
-                    checked={retryTarget === "all"}
-                    onChange={() => setRetryTarget("all")}
-                    className="accent-[#8b75ff]"
-                  />
-                  <span className="text-slate-300">All failed eligible recipients ({totalFailedEligible})</span>
-                </label>
-                {selectedRecipientIds.length > 0 && (
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="retry-target"
-                      checked={retryTarget === "selected"}
-                      onChange={() => setRetryTarget("selected")}
-                      className="accent-[#8b75ff]"
-                    />
-                    <span className="text-slate-300">Selected recipients ({selectedRecipientIds.length})</span>
-                  </label>
-                )}
-              </div>
+              <p className="font-semibold text-slate-200">Targeted retry</p>
+              <p className="text-slate-300">
+                {selectedRecipientIds.length} eligible recipient{selectedRecipientIds.length === 1 ? "" : "s"} selected.
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Selection is limited to the current ledger page. Pagination or filter changes clear it so a hidden recipient is never retried accidentally.
+              </p>
             </div>
             <p className="text-[11px] text-slate-500 leading-4">
-              Note: Retrying queues recipients back to &apos;retry_scheduled&apos;. Only failed recipients with retry attempts remaining are eligible. Permanent errors (e.g. invalid FCM tokens) are filtered out by the backend.
+              Retry queues the selected eligible recipients for another attempt; acceptance is not proof of delivery. Permanent errors and exhausted retry budgets are rejected by the backend.
             </p>
           </div>
         )}
@@ -255,7 +277,7 @@ export function ConsequentialActionDialog({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={busy}
+            disabled={busy || (action === "publish" && !publishPreviewReady)}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition ${config.confirmStyle} disabled:opacity-50`}
           >
             {busy && <CircleDashed size={14} className="animate-spin" />}

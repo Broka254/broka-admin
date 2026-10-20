@@ -14,9 +14,9 @@ export function WorkerDiagnosticsDialog({ isOpen, onClose }: WorkerDiagnosticsDi
 
   if (!isOpen) return null;
 
-  const worker = (data?.worker ?? {}) as Record<string, unknown>;
+  const worker = data?.worker;
   const backlog = data?.backlog;
-  const lastPass = (worker.last_pass ?? {}) as Record<string, unknown>;
+  const lastPass = worker?.last_pass;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title">
@@ -76,19 +76,19 @@ export function WorkerDiagnosticsDialog({ isOpen, onClose }: WorkerDiagnosticsDi
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Mode</span>
-                  <span className="font-mono text-xs font-semibold text-slate-200">{String(worker.mode ?? "n/a")}</span>
+                  <span className="font-mono text-xs font-semibold text-slate-200">{worker?.mode ?? "n/a"}</span>
                 </div>
                 <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Sweep Interval</span>
-                  <span className="font-mono text-xs font-semibold text-slate-200">{String(worker.sweep_seconds ?? "n/a")}s</span>
+                  <span className="font-mono text-xs font-semibold text-slate-200">{worker?.sweep_seconds ?? "n/a"}s</span>
                 </div>
                 <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Claim Lease</span>
-                  <span className="font-mono text-xs font-semibold text-slate-200">{String(worker.claim_lease_seconds ?? "n/a")}s</span>
+                  <span className="font-mono text-xs font-semibold text-slate-200">{worker?.claim_seconds ?? "n/a"}s</span>
                 </div>
                 <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Provider Concurrency</span>
-                  <span className="font-mono text-xs font-semibold text-slate-200">{String(worker.provider_concurrency ?? "n/a")}</span>
+                  <span className="font-mono text-xs font-semibold text-slate-200">{worker?.provider_concurrency ?? "n/a"}</span>
                 </div>
               </div>
             </section>
@@ -134,35 +134,38 @@ export function WorkerDiagnosticsDialog({ isOpen, onClose }: WorkerDiagnosticsDi
             <section className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
               <h3 className="font-semibold text-slate-200 uppercase tracking-wider text-[11px] mb-3 flex items-center gap-2">
                 <Activity size={14} className="text-cyan-300" />
-                Last Sweep Pass Statistics
+                Last Sweep Pass Statistics (Process-Local)
               </h3>
-              {Object.keys(lastPass).length === 0 ? (
+              <p className="mb-3 text-[10px] text-slate-500">
+                These counters reset when the worker process restarts. The queue backlog is durable; last-pass counters are not a cross-instance delivery history.
+              </p>
+              {!lastPass ? (
                 <p className="text-slate-500 italic">No pass has completed since worker boot.</p>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
-                    <span className="text-[10px] text-slate-500 uppercase block">Completed At</span>
-                    <span className="text-xs text-slate-300">{lastPass.completed_at ? new Date(String(lastPass.completed_at)).toLocaleString() : "n/a"}</span>
+                    <span className="text-[10px] text-slate-500 uppercase block">Last Pass At</span>
+                    <span className="text-xs text-slate-300">{lastPass.last_pass_at ? new Date(lastPass.last_pass_at).toLocaleString() : "No pass yet"}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block">Duration</span>
-                    <span className="font-mono text-xs text-slate-300">{String(lastPass.duration_ms ?? "0")} ms</span>
+                    <span className="font-mono text-xs text-slate-300">{lastPass.last_pass_seconds.toFixed(2)} s</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block">Communications Claimed</span>
-                    <span className="font-mono text-xs text-slate-300">{String(lastPass.communications_claimed ?? "0")}</span>
+                    <span className="font-mono text-xs text-slate-300">{lastPass.communications_claimed}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block">Provider Accepted</span>
-                    <span className="font-mono text-xs text-emerald-400">{String(lastPass.provider_accepted ?? "0")}</span>
+                    <span className="font-mono text-xs text-emerald-400">{lastPass.provider_accepted}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 uppercase block">Provider Failures</span>
-                    <span className="font-mono text-xs text-rose-400">{String(lastPass.provider_failed ?? "0")}</span>
+                    <span className="text-[10px] text-slate-500 uppercase block">Failures</span>
+                    <span className="font-mono text-xs text-rose-400">{lastPass.failures}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block">Retries Scheduled</span>
-                    <span className="font-mono text-xs text-amber-300">{String(lastPass.retries_scheduled ?? "0")}</span>
+                    <span className="font-mono text-xs text-amber-300">{lastPass.retries_scheduled}</span>
                   </div>
                 </div>
               )}
@@ -170,7 +173,7 @@ export function WorkerDiagnosticsDialog({ isOpen, onClose }: WorkerDiagnosticsDi
 
             <div className="text-[11px] text-slate-500 flex items-center justify-between pt-2">
               <span>Report generated at: {data?.generated_at ? new Date(data.generated_at).toLocaleString() : "Unknown"}</span>
-              <span className="text-slate-400">Durable worker sweep state</span>
+              <span className="text-slate-400">Durable backlog; process-local last-pass counters</span>
             </div>
           </div>
         )}

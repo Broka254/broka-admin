@@ -32,7 +32,10 @@ import {
 } from "@/lib/api/communications";
 import { StatusBadge } from "@/components/ui/primitives";
 import type { CommunicationOut, RecipientOut } from "@/lib/api/schemas";
+import { eligibleRecipientIds, recipientStatusLabel, toggleRetrySelection } from "@/lib/communications/recipients";
 import { ConsequentialActionDialog, type ConsequentialActionType } from "./consequential-action-dialog";
+import { DeliveryEvidenceGrid } from "./delivery-evidence";
+import { IncidentLifecycleNotice } from "./incident-lifecycle-notice";
 
 interface CommunicationDetailDialogProps {
   communicationId: string | null;
@@ -56,6 +59,7 @@ export function CommunicationDetailDialog({
 
   // Selected recipient IDs for targeted retry
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
 
   // Action dialog state
   const [activeAction, setActiveAction] = useState<ConsequentialActionType | null>(null);
@@ -106,7 +110,10 @@ export function CommunicationDetailDialog({
     } else if (activeAction === "complete") {
       await completeCommunication(comm.id, payload.reason, idempotencyKey);
     } else if (activeAction === "retry") {
-      await retryRecipients(comm.id, payload.recipientIds, idempotencyKey);
+      const result = await retryRecipients(comm.id, payload.recipientIds, idempotencyKey);
+      setRetryNotice(
+        `${result.retried} eligible recipient${result.retried === 1 ? "" : "s"} accepted for retry queuing. Retry acceptance is not delivery success; the ledger and statistics will refresh when the worker settles them.`,
+      );
       setSelectedRecipientIds([]);
     }
 
@@ -151,7 +158,13 @@ export function CommunicationDetailDialog({
   const isDraft = comm?.status === "draft";
   const isScheduled = comm?.status === "scheduled";
   const isPublished = comm?.status === "published";
-  const totalFailed = delivery?.failed ?? 0;
+  const visibleRecipients = recipientsData?.items ?? [];
+  const eligibleOnPage = eligibleRecipientIds(visibleRecipients);
+
+  function setRecipientPageAndClearSelection(nextPage: number) {
+    setRecipientPage(Math.max(0, nextPage));
+    setSelectedRecipientIds([]);
+  }
 
   return (
     <>
@@ -190,8 +203,10 @@ export function CommunicationDetailDialog({
                   <StatusBadge tone={comm.severity === "critical" ? "danger" : comm.severity === "high" ? "warning" : "info"}>
                     {comm.severity.toUpperCase()}
                   </StatusBadge>
-                  <StatusBadge tone={getStatusBadgeTone(comm.status)}>
-                    {comm.status.toUpperCase()}
+                  <StatusBadge tone={comm.communication_type === "incident" && comm.status === "completed" ? "warning" : getStatusBadgeTone(comm.status)}>
+                    {comm.communication_type === "incident" && comm.status === "completed"
+                      ? "DELIVERY COMPLETE"
+                      : comm.status.toUpperCase()}
                   </StatusBadge>
                   <span className="font-mono text-[11px] text-slate-500">v{comm.version}</span>
                 </div>
@@ -260,24 +275,15 @@ export function CommunicationDetailDialog({
                         className="flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white"
                       >
                         <CheckCircle2 size={13} />
-                        Mark Complete
+                        {comm.communication_type === "incident" ? "Complete Delivery Campaign" : "Mark Complete"}
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Release blocker callout for incident auto-completion */}
               {comm.communication_type === "incident" && (
-                <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3.5 text-xs text-amber-200">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <AlertTriangle size={15} />
-                    Backend Incident Lifecycle Notice (Documented Release Blocker)
-                  </div>
-                  <p className="mt-1 text-[11px] leading-4 text-amber-300/80">
-                    The backend background worker evaluates <code>complete_published_communications()</code> and automatically marks all published communications as completed once recipient rows reach terminal status, without checking incident resolution state. Operational teams should not rely on the completed status to indicate technical incident mitigation.
-                  </p>
-                </div>
+                <IncidentLifecycleNotice completedAt={comm.completed_at} />
               )}
 
               {/* Message Content & Metadata Grid */}
@@ -369,59 +375,31 @@ export function CommunicationDetailDialog({
                       Durable Delivery Telemetry &amp; Evidence
                     </h3>
                     <p className="text-[11px] text-slate-400">
-                      Preserving the strict operational distinction between FCM provider acceptance, in-app reads, and confirmed device receipts.
+                      Provider acceptance is not device-display evidence, in-app publication is not a read, and confirmed device-delivery evidence is currently unavailable.
                     </p>
                   </div>
-                  {totalFailed > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-400">
+                      {eligibleOnPage.length} eligible on this page; {selectedRecipientIds.length} selected
+                    </span>
                     <button
                       onClick={() => setActiveAction("retry")}
-                      className="flex items-center gap-1.5 rounded-lg bg-rose-600/20 border border-rose-500/40 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-600/30 transition"
+                      disabled={selectedRecipientIds.length === 0}
+                      className="flex items-center gap-1.5 rounded-lg bg-rose-600/20 border border-rose-500/40 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-600/30 transition disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ShieldAlert size={14} />
-                      Retry Failed ({totalFailed})
+                      Retry Selected ({selectedRecipientIds.length})
                     </button>
-                  )}
-                </div>
-
-                {/* Delivery Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-                  <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Total Recipients</span>
-                    <span className="font-mono text-base font-bold text-white">{delivery?.total_recipients ?? 0}</span>
-                  </div>
-
-                  <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">In-App Reads</span>
-                    <span className="font-mono text-base font-bold text-emerald-400">{delivery?.read_count ?? 0}</span>
-                    <span className="text-[10px] text-slate-500 block">Confirmed opened</span>
-                  </div>
-
-                  <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">FCM Accepted</span>
-                    <span className="font-mono text-base font-bold text-cyan-300">{delivery?.provider_accepted ?? 0}</span>
-                    <span className="text-[10px] text-slate-500 block">Accepted by FCM. Provider acceptance does NOT confirm device display.</span>
-                  </div>
-
-                  <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Confirmed Device</span>
-                    <span className="font-mono text-base font-bold text-purple-300">{delivery?.confirmed_delivered ?? 0}</span>
-                    <span className="text-[10px] text-slate-500 block">Hardware evidence</span>
-                  </div>
-
-                  <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Pending / Queued</span>
-                    <span className="font-mono text-base font-bold text-amber-300">{delivery?.pending ?? 0}</span>
-                    <span className="text-[10px] text-slate-500 block">In worker pipeline</span>
-                  </div>
-
-                  <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Failed / Retry</span>
-                    <span className="font-mono text-base font-bold text-rose-400">
-                      {delivery?.failed ?? 0}
-                      <span className="text-xs text-slate-500 ml-1">({delivery?.retry_scheduled ?? 0} queued)</span>
-                    </span>
                   </div>
                 </div>
+
+                <DeliveryEvidenceGrid delivery={delivery} />
+
+                {retryNotice && (
+                  <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-3 text-xs text-cyan-200">
+                    {retryNotice}
+                  </div>
+                )}
 
                 {/* Recipient Ledger Table */}
                 <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 space-y-3">
@@ -435,6 +413,7 @@ export function CommunicationDetailDialog({
                         onChange={(e) => {
                           setRecipientStatusFilter(e.target.value);
                           setRecipientPage(0);
+                          setSelectedRecipientIds([]);
                         }}
                         className="rounded-lg border border-white/10 bg-[#0c0f1d] px-2.5 py-1 text-xs text-slate-300 outline-none"
                       >
@@ -442,7 +421,7 @@ export function CommunicationDetailDialog({
                         <option value="queued">Queued</option>
                         <option value="sending">Sending</option>
                         <option value="provider_accepted">Provider Accepted</option>
-                        <option value="delivered">Confirmed Delivered</option>
+                        <option value="delivered">In-app available / device unverified</option>
                         <option value="failed">Failed</option>
                         <option value="retry_scheduled">Retry Scheduled</option>
                       </select>
@@ -451,8 +430,9 @@ export function CommunicationDetailDialog({
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       <span>Total: {recipientsData?.total ?? 0}</span>
                       <button
-                        onClick={() => setRecipientPage(Math.max(0, recipientPage - 1))}
+                        onClick={() => setRecipientPageAndClearSelection(recipientPage - 1)}
                         disabled={recipientPage === 0 || recipientsLoading}
+                        aria-label="Previous recipient page"
                         className="rounded p-1 hover:bg-white/10 disabled:opacity-30"
                       >
                         <ChevronLeft size={16} />
@@ -461,8 +441,9 @@ export function CommunicationDetailDialog({
                         Page {recipientPage + 1} of {Math.max(1, Math.ceil((recipientsData?.total ?? 0) / pageSize))}
                       </span>
                       <button
-                        onClick={() => setRecipientPage(recipientPage + 1)}
+                        onClick={() => setRecipientPageAndClearSelection(recipientPage + 1)}
                         disabled={(recipientPage + 1) * pageSize >= (recipientsData?.total ?? 0) || recipientsLoading}
+                        aria-label="Next recipient page"
                         className="rounded p-1 hover:bg-white/10 disabled:opacity-30"
                       >
                         <ChevronRight size={16} />
@@ -474,6 +455,7 @@ export function CommunicationDetailDialog({
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-white/[0.07] text-[10px] text-slate-400 uppercase tracking-wider">
+                          <th className="py-2.5 px-3">Select</th>
                           <th className="py-2.5 px-3">User ID</th>
                           <th className="py-2.5 px-3">Delivery Status</th>
                           <th className="py-2.5 px-3">Attempts</th>
@@ -486,24 +468,34 @@ export function CommunicationDetailDialog({
                       <tbody className="divide-y divide-white/[0.04]">
                         {recipientsLoading ? (
                           <tr>
-                            <td colSpan={7} className="py-8 text-center text-slate-500">
+                            <td colSpan={8} className="py-8 text-center text-slate-500">
                               <RefreshCw size={16} className="mx-auto animate-spin mb-1 text-[#8b75ff]" />
                               Loading recipient ledger...
                             </td>
                           </tr>
                         ) : (recipientsData?.items ?? []).length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="py-8 text-center text-slate-500">
+                            <td colSpan={8} className="py-8 text-center text-slate-500">
                               No recipient records match the selected filter.
                             </td>
                           </tr>
                         ) : (
                           recipientsData?.items.map((r: RecipientOut) => (
                             <tr key={r.id} className="hover:bg-white/[0.01]">
+                              <td className="py-2.5 px-3">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select ${r.user_id} for retry`}
+                                  checked={selectedRecipientIds.includes(r.id)}
+                                  disabled={!r.retry_eligible}
+                                  onChange={() => setSelectedRecipientIds((current) => toggleRetrySelection(current, r))}
+                                  className="rounded border-white/20 bg-white/5 accent-[#8b75ff] disabled:opacity-30"
+                                />
+                              </td>
                               <td className="py-2.5 px-3 font-mono text-[11px] text-slate-200">{r.user_id}</td>
                               <td className="py-2.5 px-3">
                                 <StatusBadge tone={getStatusBadgeTone(r.status)}>
-                                  {r.status.replace("_", " ")}
+                                  {recipientStatusLabel(r.status)}
                                 </StatusBadge>
                               </td>
                               <td className="py-2.5 px-3 font-mono">{r.attempt_count}</td>
@@ -550,7 +542,6 @@ export function CommunicationDetailDialog({
           onClose={() => setActiveAction(null)}
           onConfirm={handleConfirmAction}
           selectedRecipientIds={selectedRecipientIds}
-          totalFailedEligible={totalFailed}
         />
       )}
     </>

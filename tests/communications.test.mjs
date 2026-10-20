@@ -67,6 +67,7 @@ test("admin resource registry includes all communications endpoints and detail p
 
 test("server-side proxy allowlists communications mutations and enforces security boundaries", async () => {
   const proxyFile = await readFile(resolve(root, "app/api/broka/[...path]/route.ts"), "utf8");
+  const boundedBodyFile = await readFile(resolve(root, "lib/http/bounded-body.ts"), "utf8");
   
   // CSRF enforcement
   assert.match(proxyFile, /requireSameOrigin\(request\)/, "proxy mutations must enforce requireSameOrigin CSRF check");
@@ -74,7 +75,8 @@ test("server-side proxy allowlists communications mutations and enforces securit
   // Payload size limit
   assert.match(proxyFile, /MAX_PAYLOAD_BYTES/, "proxy must define MAX_PAYLOAD_BYTES");
   assert.match(proxyFile, /512 \* 1024/, "proxy payload limit must be 512KB");
-  assert.match(proxyFile, /payload_too_large/, "proxy must return payload_too_large on oversized bodies");
+  assert.match(proxyFile, /readBoundedJsonBody/, "proxy must read bodies through bounded parsing");
+  assert.match(boundedBodyFile, /payload_too_large/, "bounded parser must reject oversized bodies");
   
   // Idempotency key forwarding
   assert.match(proxyFile, /x-idempotency-key/, "proxy must extract x-idempotency-key header");
@@ -145,40 +147,46 @@ test("communications workspace provides overview, filters, diagnostics, and crea
   assert.match(pageFile, /WorkerDiagnosticsDialog/, "must include worker diagnostics dialog");
 });
 
-test("form dialog implements client validation, live audience preview, and concurrent edit protection", async () => {
+test("form dialog implements client validation, current audience preview, retry identity, and concurrent edit protection", async () => {
   const formFile = await readFile(resolve(root, "components/dashboard/communications/communication-form-dialog.tsx"), "utf8");
   
   // Validations
   assert.match(formFile, /160/, "title limit must be 160 characters");
   assert.match(formFile, /10000|10,000/, "body limit must be 10000 characters");
   assert.match(formFile, /3600/, "push byte limit must be 3600 bytes");
-  assert.match(formFile, /previewAudience/, "form must call previewAudience");
+  assert.match(formFile, /useAudiencePreview/, "form must use the current audience preview hook");
   
   // Concurrent edit protection
   assert.match(formFile, /expected_version/, "form must pass expected_version when updating");
-  assert.match(formFile, /crypto\.randomUUID\(\)/, "form must generate idempotency key");
+  assert.match(formFile, /IdempotencyKeyLedger/, "form must keep a stable key for retries of the same logical mutation");
+  assert.match(formFile, /SingleFlight/, "form must prevent duplicate in-flight submissions");
+  assert.match(formFile, /audiencePreview/, "form must use the current audience preview hook");
 });
 
-test("detail view preserves delivery truthfulness and separates FCM acceptance from device confirmation", async () => {
+test("detail view preserves delivery truthfulness and does not claim device confirmation", async () => {
   const detailFile = await readFile(resolve(root, "components/dashboard/communications/communication-detail-dialog.tsx"), "utf8");
+  const evidenceFile = await readFile(resolve(root, "components/dashboard/communications/delivery-evidence.tsx"), "utf8");
+  const incidentFile = await readFile(resolve(root, "components/dashboard/communications/incident-lifecycle-notice.tsx"), "utf8");
   
   // Delivery telemetry distinctions
-  assert.match(detailFile, /Total Recipients/, "must display Total Recipients");
-  assert.match(detailFile, /In-App Reads/, "must display In-App Reads");
-  assert.match(detailFile, /FCM Accepted/, "must display FCM Accepted");
-  assert.match(detailFile, /Confirmed Device/, "must display Confirmed Device");
-  assert.match(detailFile, /does NOT confirm device display/i, "must emphasize FCM acceptance is not device confirmation");
-  assert.match(detailFile, /Hardware evidence|confirmed device receipts/i, "must emphasize confirmed device receipts require real evidence");
+  assert.match(detailFile, /DeliveryEvidenceGrid/, "must render the shared delivery evidence grid");
+  assert.match(evidenceFile, /Total Recipients/, "must display Total Recipients");
+  assert.match(evidenceFile, /In-App Reads/, "must display In-App Reads");
+  assert.match(evidenceFile, /FCM Accepted/, "must display FCM Accepted");
+  assert.match(evidenceFile, /Device Delivery Evidence/, "must label unavailable device evidence");
+  assert.match(evidenceFile, /Unavailable/, "must not substitute confirmed_delivered for device evidence");
+  assert.doesNotMatch(evidenceFile, /Confirmed Device/, "must not claim confirmed device delivery");
   
   // Recipient ledger
   assert.match(detailFile, /Recipient Ledger/, "must include Recipient Ledger section");
   assert.match(detailFile, /recipientStatusFilter/, "must filter recipient ledger by status");
-  assert.match(detailFile, /Retry Failed/, "must provide Retry Failed action");
+  assert.match(detailFile, /Retry Selected/, "must provide targeted retry action");
   assert.match(detailFile, /retry_eligible/, "must inspect retry_eligible flag");
   
   // Documented backend gap
-  assert.match(detailFile, /Backend Incident Lifecycle Notice/, "must document backend incident auto-completion gap");
-  assert.match(detailFile, /complete_published_communications/, "must cite backend function with gap");
+  assert.match(detailFile, /IncidentLifecycleNotice/, "must render the incident lifecycle warning");
+  assert.match(incidentFile, /complete_published_communications/, "must cite the backend function with the gap");
+  assert.match(incidentFile, /delivery campaign does\s+not prove the operational incident was resolved/i, "must distinguish delivery completion from incident resolution");
 });
 
 test("worker diagnostics dialog displays engine profile, backlog, and last pass telemetry", async () => {

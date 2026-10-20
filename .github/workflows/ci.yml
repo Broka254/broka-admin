@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test contracts
+      - name: Test unit and contract suites
         run: pnpm test
 
       - name: Typecheck

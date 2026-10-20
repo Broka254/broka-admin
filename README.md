@@ -26,7 +26,8 @@ The application uses:
 - `GET /auth/me` to require `is_admin === true` before rendering protected routes;
 - `POST /auth/token/refresh` for one refresh/retry path;
 - `POST /auth/token/revoke` at logout; and
-- an allowlisted server-side proxy for verified, read-only `/admin/*` endpoints.
+- an allowlisted server-side proxy for verified `/admin/*` reads and supported
+  communications mutations.
 
 The proxy forwards `X-Total-Count` when the backend returns it, so a filtered users total is never inferred from the number of rows on the current page. Tokens are held only in HttpOnly cookies. The browser does not receive tokens, and no token is written to `localStorage` or `sessionStorage`.
 
@@ -35,7 +36,9 @@ The retrieved OpenAPI document leaves success schemas for all inspected admin en
 ## Notification surfaces
 
 - `/alerts` is a **derived operational view** over `/admin/ops-snapshot` and `/admin/health/services`. It shows severity, snapshot time and links, but no unread count or acknowledgement because the backend does not record alert state.
-- `/communications` is the production Service Communications workspace integrated with the BROKA backend service-communications domain. It provides draft CRUD, audience preview, concurrency guards (`expected_version`), scheduling, publication, cancellation, completion, recipient ledger inspection with retry queues, and worker diagnostics. It strictly separates FCM provider acceptance from confirmed hardware device receipts and in-app reads. Supported channels are `in_app` (required) and `push` (optional); SMS, email, app_release, and withdrawal endpoints are not implemented. A backend defect where incidents are automatically completed upon delivery completion is documented as a release blocker in [`docs/NOTIFICATION_CONTRACTS.md`](docs/NOTIFICATION_CONTRACTS.md).
+- `/communications` is the remediated Service Communications workspace for the BROKA backend service-communications domain. It provides draft CRUD, server-side title search and pagination, current-definition audience preview gating, timezone-safe expiry editing and clearing, scheduling, publication, cancellation, delivery-campaign completion, targeted retry of backend-eligible recipients, and worker diagnostics. FCM provider acceptance, in-app availability/read acknowledgements, and device evidence are kept distinct; device delivery is shown as unavailable because the backend's `confirmed_delivered` metric includes in-app-only rows. Supported channels are `in_app` (required) and `push` (optional); SMS, email, app_release, and withdrawal endpoints are not implemented.
+
+  Production approval for communications remains blocked by three backend gaps: draft creation has no server-side idempotency enforcement, `confirmed_delivered` is not device evidence, and the delivery worker marks published incidents completed without verifying incident resolution. The frontend reuses one request key for retries of the same logical draft payload, but does not claim server deduplication. See [`BACKEND_GAPS.md`](BACKEND_GAPS.md) and [`docs/NOTIFICATION_CONTRACTS.md`](docs/NOTIFICATION_CONTRACTS.md).
 
 The header's API badge only turns green after a validated `/health` response. `BROKA_API_URL` being present is not treated as proof of connectivity or endpoint availability.
 
@@ -45,7 +48,7 @@ The admin uses the Broka public product language: ink navy surfaces, violet prim
 
 ## GitHub Actions build
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. It installs with the frozen pnpm lockfile, runs contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. A successful push to `main` can also deploy the current commit to Railway through the protected `production` environment.
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. It installs with the frozen pnpm lockfile, runs unit and contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. A successful push to `main` can also deploy the current commit to Railway through the protected `production` environment.
 
 To enable the deployment job, add these GitHub **Actions secrets** under `Settings → Environments → production`:
 

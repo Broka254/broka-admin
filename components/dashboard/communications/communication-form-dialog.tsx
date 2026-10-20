@@ -1,17 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CircleDashed, Users, X } from "lucide-react";
-import { createCommunication, previewAudience, updateCommunication } from "@/lib/api/communications";
+import { createCommunication, updateCommunication } from "@/lib/api/communications";
+import { AdminRequestError } from "@/hooks/use-admin-resource";
+import { useAudiencePreview } from "@/hooks/use-audience-preview";
 import {
   type AudienceKind,
-  type AudiencePreviewOut,
   type CommunicationChannel,
   type CommunicationOut,
   type CommunicationSeverity,
   type CommunicationType,
   isValidDeepLink,
 } from "@/lib/api/schemas";
+import { normalizeAudienceDefinition, parseExplicitUserIds } from "@/lib/communications/audience";
+import { isoToLocalDateTimeInput, resolveExpiryForSave } from "@/lib/communications/datetime";
+import { IdempotencyKeyLedger, operationFingerprint, SingleFlight } from "@/lib/communications/idempotency";
 import { StatusBadge } from "@/components/ui/primitives";
 
 interface CommunicationFormDialogProps {
@@ -64,13 +68,13 @@ export function CommunicationFormDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Audience preview state
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewResult, setPreviewResult] = useState<AudiencePreviewOut | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const originalExpiryRef = useRef<{ input: string; iso: string } | null>(null);
+  const idempotencyLedger = useRef(new IdempotencyKeyLedger());
+  const submissionGuard = useRef(new SingleFlight());
 
   // Initialize or reset form
   useEffect(() => {
+    let expiryLoadError: string | null = null;
     if (communicationToEdit) {
       setTitle(communicationToEdit.title);
       setBody(communicationToEdit.body);
@@ -84,7 +88,20 @@ export function CommunicationFormDialog({
         : "";
       setUserIdsText(uIds);
       setDeepLink(communicationToEdit.deep_link ?? "");
-      setExpiresAt(communicationToEdit.expires_at ? communicationToEdit.expires_at.slice(0, 16) : "");
+      if (communicationToEdit.expires_at) {
+        try {
+          const localInput = isoToLocalDateTimeInput(communicationToEdit.expires_at);
+          setExpiresAt(localInput);
+          originalExpiryRef.current = { input: localInput, iso: communicationToEdit.expires_at };
+        } catch {
+          originalExpiryRef.current = null;
+          setExpiresAt("");
+          expiryLoadError = "The stored expiry timestamp is invalid. Enter a new expiry or clear the field before saving.";
+        }
+      } else {
+        originalExpiryRef.current = null;
+        setExpiresAt("");
+      }
     } else {
       setTitle("");
       setBody("");
@@ -95,10 +112,10 @@ export function CommunicationFormDialog({
       setUserIdsText("");
       setDeepLink("");
       setExpiresAt("");
+      originalExpiryRef.current = null;
     }
-    setError(null);
-    setPreviewResult(null);
-    setPreviewError(null);
+    idempotencyLedger.current.reset();
+    setError(expiryLoadError);
   }, [communicationToEdit, isOpen]);
 
   // Push byte size calculation
@@ -114,34 +131,17 @@ export function CommunicationFormDialog({
   // Parsed user IDs
   const parsedUserIds = useMemo(() => {
     if (audienceKind !== "user_ids") return [];
-    return userIdsText
-      .split(/[\n,]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+    return parseExplicitUserIds(userIdsText);
   }, [audienceKind, userIdsText]);
 
-  // Audience preview fetcher
-  async function handlePreviewAudience() {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      if (audienceKind === "user_ids" && parsedUserIds.length === 0) {
-        setPreviewError("Please enter at least one user ID to preview.");
-        setPreviewLoading(false);
-        return;
-      }
-      const res = await previewAudience({
-        kind: audienceKind,
-        user_ids: parsedUserIds,
-      });
-      setPreviewResult(res);
-    } catch (err: unknown) {
-      setPreviewError(err instanceof Error ? err.message : "Failed to preview audience count.");
-      setPreviewResult(null);
-    } finally {
-      setPreviewLoading(false);
-    }
-  }
+  const audiencePayload = useMemo(
+    () => normalizeAudienceDefinition(audienceKind, parsedUserIds),
+    [audienceKind, parsedUserIds],
+  );
+  const audiencePreview = useAudiencePreview(audiencePayload);
+  const previewResult = audiencePreview.result;
+  const previewLoading = audiencePreview.loading;
+  const previewError = audiencePreview.error;
 
   // Handle Channel Checkbox
   function toggleChannel(channel: CommunicationChannel) {
@@ -207,62 +207,59 @@ export function CommunicationFormDialog({
       return;
     }
 
-    let parsedExpiry: string | undefined = undefined;
-    if (expiresAt) {
-      const exp = new Date(expiresAt);
-      if (isNaN(exp.getTime()) || exp <= new Date()) {
-        setError("Expiry time must be in the future.");
-        return;
-      }
-      parsedExpiry = exp.toISOString();
+    const expiry = resolveExpiryForSave({
+      input: expiresAt,
+      originalInput: originalExpiryRef.current?.input,
+      originalIso: originalExpiryRef.current?.iso,
+    });
+    if (!expiry.ok) {
+      setError(expiry.message);
+      return;
     }
 
+    if (!submissionGuard.current.tryBegin()) return;
     setBusy(true);
-    const idempotencyKey = crypto.randomUUID();
 
     try {
-      const audiencePayload = {
-        kind: audienceKind,
-        user_ids: parsedUserIds,
+      const basePayload = {
+        title: trimmedTitle,
+        body: trimmedBody,
+        communication_type: communicationType,
+        severity,
+        audience: audiencePayload,
+        channels,
+        deep_link: deepLink.trim() || null,
+        expires_at: expiry.expiresAt,
       };
+      const updatePayload = isEditing && communicationToEdit
+        ? { ...basePayload, expected_version: communicationToEdit.version }
+        : null;
+      const fingerprint = operationFingerprint(
+        isEditing && communicationToEdit ? `update:${communicationToEdit.id}` : "create",
+        updatePayload ?? basePayload,
+      );
+      // Reuse this key only for the same logical payload. A network timeout or
+      // ambiguous response keeps it; changing any field starts a new operation.
+      const idempotencyKey = idempotencyLedger.current.keyFor(fingerprint);
 
       if (isEditing && communicationToEdit) {
-        await updateCommunication(
-          communicationToEdit.id,
-          {
-            expected_version: communicationToEdit.version,
-            title: trimmedTitle,
-            body: trimmedBody,
-            communication_type: communicationType,
-            severity,
-            audience: audiencePayload,
-            channels,
-            deep_link: deepLink.trim() || null,
-            expires_at: parsedExpiry,
-          },
-          idempotencyKey
-        );
+        await updateCommunication(communicationToEdit.id, updatePayload!, idempotencyKey);
       } else {
-        await createCommunication(
-          {
-            title: trimmedTitle,
-            body: trimmedBody,
-            communication_type: communicationType,
-            severity,
-            audience: audiencePayload,
-            channels,
-            deep_link: deepLink.trim() || null,
-            expires_at: parsedExpiry,
-          },
-          idempotencyKey
-        );
+        await createCommunication(basePayload, idempotencyKey);
       }
+      idempotencyLedger.current.reset();
       onSaved();
       onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save communication.";
-      setError(msg);
+      const ambiguous = !(err instanceof AdminRequestError) || err.status >= 500;
+      setError(
+        ambiguous
+          ? `${msg} The outcome may be unknown. Retrying without changing the form reuses the same idempotency key; draft creation is not currently deduplicated by the backend.`
+          : msg,
+      );
     } finally {
+      submissionGuard.current.end();
       setBusy(false);
     }
   }
@@ -442,7 +439,7 @@ export function CommunicationFormDialog({
               </label>
               <button
                 type="button"
-                onClick={handlePreviewAudience}
+                onClick={() => void audiencePreview.requestPreview()}
                 disabled={previewLoading}
                 className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/10 transition"
               >
@@ -484,16 +481,27 @@ export function CommunicationFormDialog({
               </div>
             )}
 
-            {/* Live Preview Display */}
+            {/* Audience preview is tied to the exact current audience definition. */}
             {previewResult && (
-              <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/5 p-3 flex items-center justify-between text-xs">
+              <div
+                className={`rounded-lg border p-3 flex items-center justify-between text-xs ${
+                  previewResult.allowed
+                    ? "border-emerald-400/20 bg-emerald-400/5"
+                    : "border-amber-400/30 bg-amber-400/10"
+                }`}
+              >
                 <div>
-                  <span className="text-emerald-300 font-semibold block">Audience Estimate Verified</span>
+                  <span className={`font-semibold block ${previewResult.allowed ? "text-emerald-300" : "text-amber-300"}`}>
+                    {previewResult.allowed ? "Current Audience Preview" : "Audience Exceeds Maximum"}
+                  </span>
                   <span className="text-slate-400 text-[11px]">
                     Kind: {previewResult.kind} &bull; Max allowed: {previewResult.max_audience.toLocaleString()}
                   </span>
+                  <span className="text-slate-500 text-[10px] block">
+                    Informational only. The backend revalidates this definition and its limits at publication.
+                  </span>
                 </div>
-                <StatusBadge tone="success">
+                <StatusBadge tone={previewResult.allowed ? "success" : "warning"}>
                   {previewResult.count.toLocaleString()} recipients
                 </StatusBadge>
               </div>

@@ -20,7 +20,14 @@ import {
 
 import { SectionEyebrow, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import { isEndpointMissing, useAdminCommunications } from "@/hooks/use-admin-resource";
-import type { CommunicationOut } from "@/lib/api/schemas";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type {
+  CommunicationOut,
+  CommunicationSeverity,
+  CommunicationStatus,
+  CommunicationType,
+} from "@/lib/api/schemas";
+import { buildCommunicationListParams } from "@/lib/communications/search";
 import { CommunicationFormDialog } from "@/components/dashboard/communications/communication-form-dialog";
 import { CommunicationDetailDialog } from "@/components/dashboard/communications/communication-detail-dialog";
 import { WorkerDiagnosticsDialog } from "@/components/dashboard/communications/worker-diagnostics-dialog";
@@ -28,11 +35,12 @@ import { WorkerDiagnosticsDialog } from "@/components/dashboard/communications/w
 export default function CommunicationsPage() {
   // Filters & Pagination
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [severityFilter, setSeverityFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<CommunicationStatus | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<CommunicationType | "all">("all");
+  const [severityFilter, setSeverityFilter] = useState<CommunicationSeverity | "all">("all");
   const [page, setPage] = useState(0);
   const pageSize = 15;
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
   // Dialog states
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -41,26 +49,19 @@ export default function CommunicationsPage() {
   const [commToEdit, setCommToEdit] = useState<CommunicationOut | null>(null);
 
   const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("limit", String(pageSize));
-    params.set("offset", String(page * pageSize));
-    if (statusFilter !== "all") params.set("status", statusFilter);
-    if (typeFilter !== "all") params.set("communication_type", typeFilter);
-    if (severityFilter !== "all") params.set("severity", severityFilter);
-    return params;
-  }, [page, statusFilter, typeFilter, severityFilter]);
+    return buildCommunicationListParams({
+      page,
+      pageSize,
+      search: debouncedSearch,
+      status: statusFilter,
+      communicationType: typeFilter,
+      severity: severityFilter,
+    });
+  }, [debouncedSearch, page, pageSize, severityFilter, statusFilter, typeFilter]);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useAdminCommunications(queryParams);
 
-  // Client-side search filtering by title/body
-  const filteredItems = useMemo(() => {
-    const items = data?.items ?? [];
-    if (!searchQuery.trim()) return items;
-    const q = searchQuery.toLowerCase();
-    return items.filter(
-      (item) => item.title.toLowerCase().includes(q) || item.body.toLowerCase().includes(q)
-    );
-  }, [data?.items, searchQuery]);
+  const items = data?.items ?? [];
 
   const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || severityFilter !== "all" || Boolean(searchQuery);
 
@@ -187,9 +188,14 @@ export default function CommunicationsPage() {
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
-              placeholder="Search communications..."
+              placeholder="Search titles across all pages..."
+              aria-label="Search communication titles"
+              maxLength={100}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
               className="w-full rounded-xl border border-white/10 bg-[#080a14] pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-[#8b75ff]"
             />
           </div>
@@ -198,7 +204,7 @@ export default function CommunicationsPage() {
           <select
             value={statusFilter}
             onChange={(e) => {
-              setStatusFilter(e.target.value);
+              setStatusFilter(e.target.value as CommunicationStatus | "all");
               setPage(0);
             }}
             className="rounded-xl border border-white/10 bg-[#080a14] px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-[#8b75ff]"
@@ -217,7 +223,7 @@ export default function CommunicationsPage() {
           <select
             value={typeFilter}
             onChange={(e) => {
-              setTypeFilter(e.target.value);
+              setTypeFilter(e.target.value as CommunicationType | "all");
               setPage(0);
             }}
             className="rounded-xl border border-white/10 bg-[#080a14] px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-[#8b75ff]"
@@ -233,7 +239,7 @@ export default function CommunicationsPage() {
           <select
             value={severityFilter}
             onChange={(e) => {
-              setSeverityFilter(e.target.value);
+              setSeverityFilter(e.target.value as CommunicationSeverity | "all");
               setPage(0);
             }}
             className="rounded-xl border border-white/10 bg-[#080a14] px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-[#8b75ff]"
@@ -288,7 +294,7 @@ export default function CommunicationsPage() {
             Try Again
           </button>
         </div>
-      ) : filteredItems.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-12 text-center text-xs">
           <Megaphone size={32} className="mx-auto text-slate-600 mb-3" />
           <h3 className="font-semibold text-slate-200 text-sm">No communications found</h3>
@@ -316,7 +322,7 @@ export default function CommunicationsPage() {
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3">
-            {filteredItems.map((item) => (
+            {items.map((item) => (
               <div
                 key={item.id}
                 onClick={() => setSelectedCommId(item.id)}
@@ -333,8 +339,10 @@ export default function CommunicationsPage() {
                       <StatusBadge tone={item.severity === "critical" ? "danger" : item.severity === "high" ? "warning" : "info"}>
                         {item.severity.toUpperCase()}
                       </StatusBadge>
-                      <StatusBadge tone={getStatusTone(item.status)}>
-                        {item.status.toUpperCase()}
+                      <StatusBadge tone={item.communication_type === "incident" && item.status === "completed" ? "warning" : getStatusTone(item.status)}>
+                        {item.communication_type === "incident" && item.status === "completed"
+                          ? "DELIVERY COMPLETE"
+                          : item.status.toUpperCase()}
                       </StatusBadge>
                       <span className="font-mono text-[11px] text-slate-500">v{item.version}</span>
                     </div>
@@ -379,7 +387,9 @@ export default function CommunicationsPage() {
                         <div className="text-emerald-300">Published: {new Date(item.published_at).toLocaleDateString()}</div>
                       )}
                       {item.completed_at && (
-                        <div className="text-slate-400">Completed: {new Date(item.completed_at).toLocaleDateString()}</div>
+                        <div className="text-slate-400">
+                          {item.communication_type === "incident" ? "Delivery completed" : "Completed"}: {new Date(item.completed_at).toLocaleDateString()}
+                        </div>
                       )}
                     </div>
 
@@ -402,7 +412,7 @@ export default function CommunicationsPage() {
           {/* Pagination Controls */}
           <div className="flex items-center justify-between border-t border-white/[0.07] pt-4 text-xs text-slate-400">
             <span>
-              Showing {filteredItems.length} of {data?.total ?? 0} communications
+              Showing {items.length} of {data?.total ?? 0} communications
             </span>
             <div className="flex items-center gap-2">
               <button

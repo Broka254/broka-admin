@@ -47,9 +47,9 @@ export function isEndpointMissing(error: unknown): boolean {
   return error instanceof AdminRequestError && error.status === 404;
 }
 
-async function fetchAdminPath<T>(path: string, query?: URLSearchParams): Promise<T> {
+async function fetchAdminPath<T>(path: string, query?: URLSearchParams, signal?: AbortSignal): Promise<T> {
   const suffix = query?.size ? `?${query.toString()}` : "";
-  const response = await fetch(`/api/broka/${path}${suffix}`, { credentials: "same-origin", cache: "no-store" });
+  const response = await fetch(`/api/broka/${path}${suffix}`, { credentials: "same-origin", cache: "no-store", signal });
   const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
   if (!response.ok) throw new AdminRequestError(payload.message ?? "Unable to load BROKA data.", response.status, payload.code);
   return payload as T;
@@ -59,7 +59,7 @@ export function useAdminResource<K extends StaticAdminResource>(resource: K, que
   return useQuery<AdminResourcePayloads[K]>({
     queryKey: ["broka-admin", resource, query?.toString() ?? ""],
     enabled,
-    queryFn: () => fetchAdminPath<AdminResourcePayloads[K]>(resourcePaths[resource], query),
+    queryFn: ({ signal }) => fetchAdminPath<AdminResourcePayloads[K]>(resourcePaths[resource], query, signal),
   });
 }
 
@@ -93,7 +93,7 @@ export function useAdminCommunications(query?: URLSearchParams, enabled = true) 
   return useQuery<AdminResourcePayloads["communications"]>({
     queryKey: ["broka-admin", "communications", query?.toString() ?? ""],
     enabled,
-    queryFn: () => fetchAdminPath<AdminResourcePayloads["communications"]>("admin/communications", query),
+    queryFn: ({ signal }) => fetchAdminPath<AdminResourcePayloads["communications"]>("admin/communications", query, signal),
   });
 }
 

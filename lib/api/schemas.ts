@@ -298,6 +298,25 @@ export const ZenoActivitySchema = z.object({
 
 // ── Service Communications contracts ──────────────────────────────────────────
 
+const communicationTimestamp = z.string().datetime({ offset: true });
+const nullableCommunicationTimestamp = communicationTimestamp.nullable();
+const communicationCount = z.number().int().nonnegative();
+
+function statusCountMap<T extends string>(allowed: readonly T[]) {
+  const allowedSet = new Set<string>(allowed);
+  return z.record(z.string(), communicationCount).superRefine((value, context) => {
+    for (const key of Object.keys(value)) {
+      if (!allowedSet.has(key)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `Unsupported status key: ${key}`,
+        });
+      }
+    }
+  });
+}
+
 export const AudienceKindSchema = z.enum(["all", "buyers", "sellers", "store_owners", "user_ids"]);
 export type AudienceKind = z.infer<typeof AudienceKindSchema>;
 
@@ -319,9 +338,9 @@ export const AudiencePreviewInSchema = z.object({
 export type AudiencePreviewIn = z.infer<typeof AudiencePreviewInSchema>;
 
 export const AudiencePreviewOutSchema = z.object({
-  kind: z.string(),
-  count: z.number().int().nonnegative(),
-  max_audience: z.number().int().nonnegative(),
+  kind: AudienceKindSchema,
+  count: communicationCount,
+  max_audience: communicationCount,
   allowed: z.boolean(),
 });
 export type AudiencePreviewOut = z.infer<typeof AudiencePreviewOutSchema>;
@@ -344,6 +363,24 @@ export const RecipientStatusSchema = z.enum([
   "queued", "sending", "provider_accepted", "delivered", "failed", "retry_scheduled",
 ]);
 export type RecipientStatus = z.infer<typeof RecipientStatusSchema>;
+
+export const FailureCategorySchema = z.enum([
+  "invalid_token",
+  "push_not_configured",
+  "provider_error",
+  "provider_transient",
+  "invalid_message",
+  "provider_timeout",
+  "provider_exception",
+  "lease_check_failed",
+  "claim_lost",
+  "no_device",
+  "retry_exhausted",
+  "partial_failure",
+  "communication_missing",
+  "communication_expired",
+]);
+export type FailureCategory = z.infer<typeof FailureCategorySchema>;
 
 export function isValidDeepLink(value: string | null | undefined): boolean {
   if (!value || value.trim() === "") return true;
@@ -382,7 +419,7 @@ export const CommunicationCreateInSchema = z.object({
     (val) => isValidDeepLink(val),
     { message: "deep_link must be an https://broka.co.ke or broka:// URL (app, store, listing, deal, communications)" }
   ),
-  expires_at: isoDate.optional(),
+  expires_at: communicationTimestamp.nullable().optional(),
 }).refine(
   (data) => {
     if (data.channels.includes("push")) {
@@ -412,7 +449,7 @@ export const CommunicationUpdateInSchema = z.object({
     (val) => isValidDeepLink(val),
     { message: "deep_link must be an https://broka.co.ke or broka:// URL" }
   ),
-  expires_at: isoDate.optional(),
+  expires_at: communicationTimestamp.nullable().optional(),
 }).refine(
   (data) => {
     const keys = Object.keys(data).filter((k) => k !== "expected_version" && data[k as keyof typeof data] !== undefined);
@@ -423,7 +460,7 @@ export const CommunicationUpdateInSchema = z.object({
 export type CommunicationUpdateIn = z.infer<typeof CommunicationUpdateInSchema>;
 
 export const ScheduleInSchema = z.object({
-  scheduled_at: z.string().min(1, "Scheduled timestamp is required"),
+  scheduled_at: communicationTimestamp,
 });
 export type ScheduleIn = z.infer<typeof ScheduleInSchema>;
 
@@ -441,23 +478,23 @@ export const CommunicationOutSchema = z.object({
   id: z.string(),
   title: z.string(),
   body: z.string(),
-  communication_type: z.string(),
-  severity: z.string(),
-  status: z.string(),
-  audience: z.record(z.string(), z.unknown()),
-  channels: z.array(z.string()),
+  communication_type: CommunicationTypeSchema,
+  severity: CommunicationSeveritySchema,
+  status: CommunicationStatusSchema,
+  audience: AudienceInSchema,
+  channels: z.array(CommunicationChannelSchema).min(1).max(2),
   audience_count: z.number().int().nonnegative().nullable(),
   deep_link: nullableString,
   created_by_id: z.string(),
   updated_by_id: nullableString,
   version: z.number().int().positive(),
-  created_at: z.string(),
-  updated_at: z.string(),
-  scheduled_at: nullableString,
-  published_at: nullableString,
-  completed_at: nullableString,
-  cancelled_at: nullableString,
-  expires_at: nullableString,
+  created_at: communicationTimestamp,
+  updated_at: communicationTimestamp,
+  scheduled_at: nullableCommunicationTimestamp,
+  published_at: nullableCommunicationTimestamp,
+  completed_at: nullableCommunicationTimestamp,
+  cancelled_at: nullableCommunicationTimestamp,
+  expires_at: nullableCommunicationTimestamp,
   push_available: z.boolean(),
   warnings: z.array(z.string()).default([]),
 });
@@ -465,22 +502,22 @@ export type CommunicationOut = z.infer<typeof CommunicationOutSchema>;
 
 export const CommunicationListSchema = z.object({
   items: z.array(CommunicationOutSchema),
-  total: z.number().int().nonnegative(),
-  limit: z.number().int().positive(),
-  offset: z.number().int().nonnegative(),
+  total: communicationCount,
+  limit: z.number().int().positive().max(200),
+  offset: communicationCount,
 });
 export type CommunicationList = z.infer<typeof CommunicationListSchema>;
 
 export const DeliverySummaryOutSchema = z.object({
-  total_recipients: z.number().int().nonnegative(),
-  read_count: z.number().int().nonnegative(),
-  by_status: z.record(z.string(), z.number().int().nonnegative()),
-  devices_by_status: z.record(z.string(), z.number().int().nonnegative()),
-  provider_accepted: z.number().int().nonnegative(),
-  confirmed_delivered: z.number().int().nonnegative(),
-  failed: z.number().int().nonnegative(),
-  retry_scheduled: z.number().int().nonnegative(),
-  pending: z.number().int().nonnegative(),
+  total_recipients: communicationCount,
+  read_count: communicationCount,
+  by_status: statusCountMap(RecipientStatusSchema.options),
+  devices_by_status: statusCountMap(RecipientStatusSchema.options),
+  provider_accepted: communicationCount,
+  confirmed_delivered: communicationCount,
+  failed: communicationCount,
+  retry_scheduled: communicationCount,
+  pending: communicationCount,
 });
 export type DeliverySummaryOut = z.infer<typeof DeliverySummaryOutSchema>;
 
@@ -493,54 +530,81 @@ export type CommunicationDetail = z.infer<typeof CommunicationDetailSchema>;
 export const RecipientOutSchema = z.object({
   id: z.string(),
   user_id: z.string(),
-  status: z.string(),
-  attempt_count: z.number().int().nonnegative(),
-  last_attempt_at: nullableString,
+  status: RecipientStatusSchema,
+  attempt_count: communicationCount,
+  last_attempt_at: nullableCommunicationTimestamp,
   provider_message_id: nullableString,
-  delivered_at: nullableString,
-  read_at: nullableString,
-  failure_category: nullableString,
+  delivered_at: nullableCommunicationTimestamp,
+  read_at: nullableCommunicationTimestamp,
+  failure_category: FailureCategorySchema.nullable(),
   retry_eligible: z.boolean(),
-  next_attempt_at: nullableString,
+  next_attempt_at: nullableCommunicationTimestamp,
 });
 export type RecipientOut = z.infer<typeof RecipientOutSchema>;
 
 export const RecipientPageSchema = z.object({
   items: z.array(RecipientOutSchema),
-  total: z.number().int().nonnegative(),
-  limit: z.number().int().positive(),
-  offset: z.number().int().nonnegative(),
+  total: communicationCount,
+  limit: z.number().int().positive().max(200),
+  offset: communicationCount,
 });
 export type RecipientPage = z.infer<typeof RecipientPageSchema>;
 
 export const CommunicationStatsSchema = z.object({
   communication_id: z.string(),
-  status: z.string(),
+  status: CommunicationStatusSchema,
   audience_count: z.number().int().nonnegative().nullable(),
   delivery: DeliverySummaryOutSchema,
-  generated_at: z.string(),
+  generated_at: communicationTimestamp,
 });
 export type CommunicationStats = z.infer<typeof CommunicationStatsSchema>;
 
 export const PublishOutSchema = z.object({
   communication: CommunicationOutSchema,
-  accepted: z.boolean().default(true),
+  accepted: z.boolean(),
 });
 export type PublishOut = z.infer<typeof PublishOutSchema>;
 
 export const RetryOutSchema = z.object({
-  retried: z.number().int().nonnegative(),
+  retried: communicationCount,
   message: z.string(),
 });
 export type RetryOut = z.infer<typeof RetryOutSchema>;
 
+const WorkerLastPassSchema = z.object({
+  last_pass_at: nullableCommunicationTimestamp,
+  last_pass_seconds: z.number().nonnegative(),
+  communications_claimed: communicationCount,
+  communications_published: communicationCount,
+  recipients_resolved: communicationCount,
+  recipients_claimed: communicationCount,
+  messages_attempted: communicationCount,
+  provider_accepted: communicationCount,
+  confirmed_delivered: communicationCount,
+  failures: communicationCount,
+  retries_scheduled: communicationCount,
+  retries_exhausted: communicationCount,
+});
+
+export const WorkerRuntimeSchema = z.object({
+  mode: z.literal("database_scheduled_loop"),
+  sweep_seconds: z.number().nonnegative(),
+  claim_seconds: z.number().nonnegative(),
+  recipient_batch: communicationCount,
+  provider_concurrency: communicationCount,
+  provider_timeout_seconds: z.number().nonnegative(),
+  retention_days: communicationCount,
+  last_pass: WorkerLastPassSchema,
+});
+export type WorkerRuntime = z.infer<typeof WorkerRuntimeSchema>;
+
 export const WorkerDiagnosticsSchema = z.object({
-  generated_at: z.string(),
-  worker: z.record(z.string(), z.unknown()),
+  generated_at: communicationTimestamp,
+  worker: WorkerRuntimeSchema,
   backlog: z.object({
-    communications: z.record(z.string(), z.number().int().nonnegative()),
-    recipients: z.record(z.string(), z.number().int().nonnegative()),
-    pending_recipients: z.number().int().nonnegative(),
+    communications: statusCountMap(CommunicationStatusSchema.options),
+    recipients: statusCountMap(RecipientStatusSchema.options),
+    pending_recipients: communicationCount,
   }),
 });
 export type WorkerDiagnostics = z.infer<typeof WorkerDiagnosticsSchema>;

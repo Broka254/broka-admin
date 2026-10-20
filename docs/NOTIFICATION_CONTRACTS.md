@@ -1,132 +1,173 @@
 # Notification and service-communication contracts
 
-**Status:** Updated with live backend integration for Service Communications. The admin Alert Centre remains a derived operational snapshot pending backend alert persistence.
-
-This document separates the two audiences and details the implemented and pending contracts.
+**Status:** The Service Communications admin frontend is remediated against the
+backend source at `Broka254/broka` commit `e79a364`. Production approval is still
+blocked by the backend gaps documented in [`BACKEND_GAPS.md`](../BACKEND_GAPS.md).
 
 ## 1. Admin Alert Centre
 
-The current `/alerts` page is a **derived operational view**: it renders the live queues in `/admin/ops-snapshot` and the validated checks in `/admin/health/services`. It is not a persisted alert feed. It deliberately shows no unread count, notification-delivery claim or acknowledgement control.
+The current `/alerts` page is a **derived operational view** over
+`/admin/ops-snapshot` and `/admin/health/services`. It is not a persisted alert
+feed and deliberately shows no unread count, delivery claim, or acknowledgement
+control.
 
-Required backend contract before the page can become a true Alert Centre:
+Required backend contract before it can become a true Alert Centre:
 
 ### `GET /admin/alerts`
 
-Query:
-
-- `status`: `open` | `acknowledged` | `resolved` | `all` (default `open`)
-- `severity`: `critical` | `warning` | `info` | `all` (optional)
-- `limit`, `offset`
-- `since` (ISO-8601, optional)
+Query: `status` (`open` | `acknowledged` | `resolved` | `all`), optional
+`severity`, `limit`, `offset`, and `since`.
 
 Response:
 
 ```json
 {
-  "items": [
-    {
-      "id": "string",
-      "severity": "critical|warning|info",
-      "title": "string",
-      "detail": "string",
-      "source": "string",
-      "resource_type": "string|null",
-      "resource_id": "string|null",
-      "occurred_at": "ISO-8601",
-      "acknowledged_at": "ISO-8601|null",
-      "acknowledged_by": "string|null",
-      "resolved_at": "ISO-8601|null",
-      "href": "string (admin-relative path)"
-    }
-  ],
+  "items": [{
+    "id": "string",
+    "severity": "critical|warning|info",
+    "title": "string",
+    "detail": "string",
+    "source": "string",
+    "resource_type": "string|null",
+    "resource_id": "string|null",
+    "occurred_at": "ISO-8601",
+    "acknowledged_at": "ISO-8601|null",
+    "acknowledged_by": "string|null",
+    "resolved_at": "ISO-8601|null",
+    "href": "admin-relative path"
+  }],
   "total": 0,
   "unread": 0,
   "generated_at": "ISO-8601"
 }
 ```
 
-Required headers: `X-Total-Count` may repeat `total`. The response must be permission-protected (`ADMIN_SUMMARY` or a dedicated `VIEW_ADMIN_ALERTS` permission), all timestamps must be server-generated, and `href` must be validated against the admin route manifest before rendering.
+The endpoint must be permission-protected, generate all timestamps server-side,
+and validate `href` against the admin route manifest.
 
 ### `POST /admin/alerts/{id}/acknowledge`
 
-Request: `{ "reason": "string (optional, 3-500 chars)" }` plus `X-Idempotency-Key`.
+Request: optional `reason` plus `X-Idempotency-Key`. Response:
+`{ok, changed, acknowledged_at, acknowledged_by}`. Replays are no-ops and audited.
+Resolution must be a separate explicit transition, not inferred from
+acknowledgement.
 
-Response: `{ "ok": true, "changed": true|false, "acknowledged_at": "ISO-8601", "acknowledged_by": "string" }`.
+## 2. Service Communications
 
-Behavior: authenticated admin only; repeat calls are no-ops (`changed: false`); an audit row records actor, alert id, reason, before/after and request id. Resolution, if supported, must be a separate endpoint or an explicit state transition, not inferred from acknowledgement.
+### Supported endpoint contract
 
-### Explicitly not available
-- Browser push, SMS or email delivery of admin alerts.
-- Unread counts derived from a browser-side read marker. Read state must be server-side and per-admin.
-- Alert creation from the frontend.
-
----
-
-## 2. Service Communications Workspace (Integrated)
-
-The service communications management workspace in `/communications` is integrated with the backend implementation (`Broka254/broka`, domain `service_communications`).
-
-### Verified Backend Endpoints
-
-| Operation | Method and path | Semantics & Verification |
+| Operation | Method and path | Contract |
 |---|---|---|
-| List communications | `GET /admin/communications` | Filters `status`, `communication_type`, `severity`, `limit`, `offset`. Returns `items` and `total`. |
-| Audience preview | `POST /admin/communications/audience/preview` | Validates target audience without side-effects. Returns `kind`, `count`, `max_audience`, `allowed`. |
-| Create draft | `POST /admin/communications` | Creates communication draft in `draft` status. Idempotency-guarded (`X-Idempotency-Key`) and audited. |
-| Read detail | `GET /admin/communications/{id}` | Returns communication entity and delivery summary (`total_recipients`, `read_count`, `provider_accepted`, `confirmed_delivered`, `pending`, `failed`, `retry_scheduled`). |
-| Update draft | `PATCH /admin/communications/{id}` | Edits draft content or targeting. Requires `expected_version` concurrency guard; returns 409 on version conflict. Disallowed once publishing. |
-| Schedule | `POST /admin/communications/{id}/schedule` | Validates future `scheduled_at` timestamp. Transitions status to `scheduled`. |
-| Publish now | `POST /admin/communications/{id}/publish` | Initiates immediate worker publication. Locks draft editing permanently. |
-| Cancel | `POST /admin/communications/{id}/cancel` | Cancels draft or scheduled communication with optional audit `reason`. |
-| Complete | `POST /admin/communications/{id}/complete` | Marks published communication complete. Validated only when all delivery attempts have settled. |
-| Recipient ledger | `GET /admin/communications/{id}/recipients` | Returns paginated per-recipient dispatch ledger (`status`, `attempt_count`, `last_attempt_at`, `read_at`, `failure_category`, `retry_eligible`). |
-| Retry recipients | `POST /admin/communications/{id}/recipients/retry` | Queues failed eligible recipients for retry with optional `recipient_ids` target list. |
-| Delivery stats | `GET /admin/communications/{id}/stats` | Summary statistics and device breakdowns. Formerly proposed as `GET /admin/communications/{id}/deliveries`. |
-| Worker diagnostics | `GET /admin/communications/diagnostics/worker` | Real-time worker engine telemetry: runtime mode, sweep intervals, claim lease times, provider concurrency, and queue backlogs. |
+| List | `GET /admin/communications` | `status`, `communication_type`, `severity`, `search`, `limit`, `offset`; returns `items`, `total`, `limit`, `offset`. `search` matches titles only and does not search message bodies. |
+| Preview audience | `POST /admin/communications/preview` | Request `{audience:{kind,user_ids}}`; returns `kind`, `count`, `max_audience`, `allowed`. The formerly documented `/admin/communications/audience/preview` route does not exist. |
+| Create draft | `POST /admin/communications` | Creates a `draft`. The client sends `X-Idempotency-Key`, but the inspected backend create handler does not enforce server-side creation idempotency. |
+| Read detail | `GET /admin/communications/{id}` | Returns `communication` and `delivery` summary. |
+| Update draft | `PATCH /admin/communications/{id}` | Edits draft content/targeting and checks optional `expected_version`. JSON `expires_at: null` clears an existing expiry. |
+| Schedule | `POST /admin/communications/{id}/schedule` | Requires future `scheduled_at`; transitions to `scheduled`. |
+| Publish now | `POST /admin/communications/{id}/publish` | Starts immediate publication and returns `{communication, accepted}`. Accepted means the campaign was accepted for processing, not that every recipient received it. |
+| Cancel | `POST /admin/communications/{id}/cancel` | Cancels a draft or scheduled communication with optional audit reason. |
+| Complete | `POST /admin/communications/{id}/complete` | Marks a published communication complete after delivery settles. This is delivery-campaign completion, **not** incident resolution. |
+| Recipient ledger | `GET /admin/communications/{id}/recipients` | Paginated recipient rows including `status`, `attempt_count`, timestamps, sanitized `failure_category`, and `retry_eligible`. |
+| Retry | `POST /admin/communications/{id}/recipients/retry` | Queues eligible recipients. Supports a targeted `recipient_ids` list; an explicit empty list is not a retry-all instruction. Returns the number accepted for retry queuing. |
+| Delivery stats | `GET /admin/communications/{id}/stats` | `communication_id`, `status`, nullable `audience_count`, delivery summary, `generated_at`. `/deliveries` is not supported. |
+| Worker diagnostics | `GET /admin/communications/diagnostics/worker` | Worker configuration, last-pass counters, and durable backlog counts. See the limitation below. |
 
-### Supported vs. Non-Supported Capabilities
+### Finite values
 
-#### Channels:
-- **`in_app`**: Supported and **required**. Delivered to the in-app notice inbox.
-- **`push`**: Supported and **optional**. Dispatched via Firebase Cloud Messaging (FCM). Requires backend FCM configuration.
-- **`sms` & `email`**: **NOT SUPPORTED**. The backend does not expose SMS or email delivery. The admin dashboard strictly forbids claiming SMS or email delivery.
+- Communication types: `announcement`, `maintenance`, `incident`, `product_update`.
+- Severities: `low`, `normal`, `high`, `critical`.
+- Communication statuses: `draft`, `scheduled`, `publishing`, `published`, `completed`, `cancelled`, `failed`.
+- Channels: `in_app` (required) and `push` (optional). SMS, email, app-release delivery, and post-publication withdrawal are not supported.
+- Audience kinds: `all`, `buyers`, `sellers`, `store_owners`, `user_ids` (maximum 5,000 explicit IDs).
+- Recipient statuses: `queued`, `sending`, `provider_accepted`, `delivered`, `failed`, `retry_scheduled`.
 
-#### Target Audiences:
-- Supported: `all`, `buyers`, `sellers`, `store_owners`, `user_ids` (explicit user ID list, limited to 5,000 IDs).
+### Delivery and lifecycle semantics
 
-#### Communication Types:
-- Supported: `announcement`, `maintenance`, `incident`, `product_update`.
-- Note: `app_release` is **NOT SUPPORTED** by the backend and is omitted from the UI.
+- **In-app availability**: The backend writes recipient status `delivered` for an
+  in-app-only communication. This proves the row is available in the authenticated
+  feed; it does **not** prove that the customer opened or saw it.
+- **In-app reads (`read_count`)**: Read acknowledgements recorded in the app. They
+  are not push or device-delivery evidence.
+- **Provider acceptance (`provider_accepted`)**: FCM accepted the request. This is
+  not proof that a device displayed the notification.
+- **Confirmed device delivery**: Unavailable. The backend's
+  `confirmed_delivered` field currently equals the count of rows with status
+  `delivered`, including in-app-only rows, so the dashboard must not present it as
+  device evidence.
+- **Retry acceptance**: A successful retry request means the recipients were
+  queued for another attempt, not that delivery succeeded. The detail and recipient
+  ledger are refreshed after acceptance.
+- **Completion**: A completed communication means the delivery campaign has no
+  pending recipient rows. It does not prove operational incident resolution.
 
-#### Withdrawal:
-- **`POST /admin/communications/{id}/withdraw` does NOT exist**. The backend supports cancellation (`cancel`) prior to/during scheduled state. Once published, notices cannot be withdrawn; they can only expire or be marked complete.
+### Expiry representation
 
-### Delivery-State Truthfulness & Telemetry Rules
+- API timestamps are ISO-8601 UTC instants.
+- The edit form converts a stored instant to the browser's local wall-clock value
+  for `datetime-local`.
+- An unchanged local value reuses the original instant exactly, avoiding shifts
+  from seconds truncation or daylight-saving ambiguity.
+- A changed local value is interpreted in the browser timezone and converted back
+  to UTC.
+- An invalid or nonexistent DST time is rejected before submission.
+- A cleared expiry sends JSON `expires_at: null`; the backend documents and accepts
+  `null` for clearing.
 
-The frontend enforces strict truthfulness distinctions across all metrics:
-- **FCM Provider Accepted (`provider_accepted`)**: Proves network submission and acceptance by the Firebase Cloud Messaging gateway. **Provider acceptance does NOT prove or confirm that the notification appeared on the user's physical device.**
-- **Confirmed Delivered (`confirmed_delivered`)**: Requires real hardware evidence and delivery confirmation telemetry from client applications. It is never fabricated or inferred from provider acceptance.
-- **In-App Reads (`read_count`)**: Verified user read timestamps recorded when an authenticated user opens or views the communication in-app.
-- **Pending (`pending`) & Retry Scheduled (`retry_scheduled`)**: Unsent or queued for subsequent worker sweeps.
+### Worker diagnostics limitation
 
-### Documented Release Blocker: Incident Auto-Complete Defect
+The diagnostics response exposes `sweep_seconds`, `claim_seconds`,
+`recipient_batch`, `provider_concurrency`, `provider_timeout_seconds`,
+`retention_days`, durable backlog counts, and a `last_pass` object. The `last_pass`
+counters are process-local and reset when the process restarts. They are useful
+for current worker visibility, not as a durable delivery history or cross-instance
+aggregate.
 
-> [!WARNING] **RELEASE BLOCKER: Backend Incident Auto-Completion Defect**
-> In `service.py:complete_published_communications()`, the background worker periodically executes:
-> ```python
-> stmt = (
->     select(ServiceCommunication)
->     .where(ServiceCommunication.status == "published")
->     ...
-> )
-> ```
-> As soon as delivery attempts settle (`~pending`), the worker automatically mutates `status = "completed"`.
-> For technical incidents (`communication_type == "incident"`), this causes the incident communication to be marked `completed` as soon as push delivery finishes, even when the underlying technical outage is actively ongoing!
->
-> The frontend exposes an explicit notice highlighting this defect and does not mask or simulate incident state. Resolving this defect in the backend (requiring manual operator completion for incidents) is tracked as a release blocker.
+### Backend release blockers
 
-## 3. Frontend Error & Unavailable Handling
+The following cannot be fixed in this frontend and remain production blockers:
 
-- When the backend communications endpoint returns a 404, the dashboard displays `UnavailablePanel` with `Backend Upgrade Required`.
-- Response contract drift fails closed at the server proxy with `502 contract_validation_failed`.
-- Mutating drafts or publishing enforces CSRF same-origin checking, payload size checks (max 512KB), and `X-Idempotency-Key` headers.
+1. `POST /admin/communications` does not enforce draft-creation idempotency.
+2. `confirmed_delivered` is not trustworthy device-delivery evidence.
+3. Delivery settlement automatically completes published incident communications
+   without verifying that the incident was resolved.
+
+See [`BACKEND_GAPS.md`](../BACKEND_GAPS.md) for evidence, required server behavior,
+and impact.
+
+## 3. Frontend handling and verification
+
+- The browser never calls the backend directly; all communications requests go
+  through the authenticated, same-origin, allowlisted server proxy.
+- Mutation bodies are read with a 512 KiB byte ceiling based on the actual stream,
+  not only the declared `Content-Length`.
+- Proxy request and response schemas reject unsupported finite values and malformed
+  counters.
+- Search is debounced, uses the server's `search` parameter, resets the offset on
+  query/filter changes, and relies on React Query query keys plus abort signals to
+  prevent a stale response from replacing newer results.
+- Audience preview is invalidated whenever the audience definition changes. A
+  preview is informational and must match the current definition before publish is
+  enabled; the backend still revalidates at publication time.
+- The dashboard never sends a real broadcast during automated tests.
+
+### Staging verification
+
+1. Install with the frozen pnpm lockfile and run unit, contract, typecheck, lint,
+   and production-build checks.
+2. Point `BROKA_API_URL` at the staging API and sign in with a restricted test
+   administrator.
+3. Verify list filtering/search across pages, empty results, and backend-unavailable
+   handling without publishing.
+4. Preview all audience kinds, including an empty and an over-limit explicit list.
+5. Create and edit a draft with expiry values in UTC, `Africa/Nairobi`, and another
+   DST-observing timezone; confirm clearing sends `null` and an unchanged value
+   preserves the instant.
+6. Verify targeted retry only exposes backend-eligible recipients and refreshes
+   detail, ledger, and totals after acceptance.
+7. Confirm the dashboard shows provider acceptance, in-app reads, and
+   “Device Delivery Evidence: Unavailable”; no screen may claim confirmed device
+   display.
+8. Confirm an incident delivery-complete state is labelled as delivery completion
+   and that no incident-resolution claim is rendered.
+9. Do not approve production until the three backend blockers are corrected and
+   their concurrency/idempotency/lifecycle behavior is verified in backend tests.

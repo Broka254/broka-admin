@@ -134,14 +134,17 @@ test("filter clearing updates all filters at once and lists have an empty state"
   assert.match(workspace, /state="empty"/);
 });
 
-test("notification surfaces are honest about missing backend contracts", async () => {
+test("notification surfaces are honest about backend contracts and delivery evidence", async () => {
   const alertCenter = await readFile(resolve(root, "components/dashboard/alert-center.tsx"), "utf8");
   assert.match(alertCenter, /derived from the live operations snapshot/);
   assert.match(alertCenter, /No bell badge or unread indicator is rendered/);
   const communications = await readFile(resolve(root, "app/(dashboard)/communications/page.tsx"), "utf8");
-  assert.match(communications, /Backend endpoint required/);
-  assert.match(communications, /does not prove a notification was sent/);
-  assert.doesNotMatch(communications, /<form|<input|<textarea/);
+  assert.match(communications, /Backend Upgrade Required/);
+  assert.match(communications, /useAdminCommunications/);
+  const detailDialog = await readFile(resolve(root, "components/dashboard/communications/communication-detail-dialog.tsx"), "utf8");
+  assert.match(detailDialog, /FCM Accepted/);
+  assert.match(detailDialog, /Confirmed Device/);
+  assert.match(detailDialog, /does NOT confirm/i);
   const manifest = JSON.parse(await readFile(resolve(root, "public/manus-routes.json"), "utf8"));
   for (const path of ["/alerts", "/communications"]) assert.ok(manifest.routes.some((route) => route.path === path), `missing ${path}`);
   const contracts = await readFile(resolve(root, "docs/NOTIFICATION_CONTRACTS.md"), "utf8");

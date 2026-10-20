@@ -24,7 +24,9 @@ The hardened backend working tree (`/tmp/opencode/broka/backend`) now implements
 | Zeno instrumentation | Provider/model usage, latency percentiles, token costs, STT/TTS outcomes are not persisted anywhere | `/admin/zeno/activity` lists them in `not_instrumented` instead of estimating |
 | Reports workflow | No reports/admin moderation endpoint exists | The Reports page remains explicitly unavailable |
 | Admin alert persistence | `/admin/ops-snapshot` exposes current queue counts, but no alert list, unread state, acknowledgement or per-alert timestamps exist | `/alerts` is a derived ops view only; it renders no unread count or acknowledge control. Required contract: `docs/NOTIFICATION_CONTRACTS.md` |
-| Service communications | No admin communications CRUD, scheduling, publication or per-channel delivery-receipt endpoint exists | `/communications` is read-only and states that publication and delivery are not instrumented. Required contract: `docs/NOTIFICATION_CONTRACTS.md` |
+| Incident auto-completion defect (Release Blocker) | service.py:complete_published_communications marks all published communications as completed once recipient rows reach terminal status | Technical incidents are auto-completed on delivery completion, regardless of technical resolution. Backend fix required before production release. |
+| Missing communication channels & operations | Backend does not implement SMS, email, app_release type, or withdrawal endpoint (`POST /admin/communications/{id}/withdraw`) | Frontend strictly restricts channels to `in_app` and `push`; withdrawal is not offered once published. |
+| Push notification FCM dependency | Push channel delivery requires valid Firebase Admin SDK credentials (`service_account.json`) on the backend | Push attempts fail gracefully when FCM is not configured; in-app announcements operate independently. |
 | Dispute resolution | Admin dispute queue is read-only; resolution stays with the existing engine and its fund guards | Deliberate: no unsafe decide/refund mutation was added |
 | Admin sub-roles | No storage for per-admin permission sets (schema change not allowed) | All admins remain full admins |
 | Live Redis idempotency tests | Local test environment has no Redis | The reservation path is tested with mocks only; CI (which runs Redis) still needs the backend branch |
@@ -37,7 +39,7 @@ The hardened backend working tree (`/tmp/opencode/broka/backend`) now implements
 - Payments, Finance Integrity, Service Health and Zeno Activity workspaces with real filters; Deals/Listings/Stores/Disputes queues with pagination and server-side counts.
 - User detail with reason-gated, confirmed, idempotent actions and backend action results rendered; fraud events resolvable from the queue.
 - `/alerts` derived from the ops snapshot and service health, with no fabricated unread/acknowledgement state; the header bell links to it without a fake badge.
-- `/communications` documents the future communications lifecycle while exposing no editor or publish control.
+- `/communications` workspace: complete production management workspace supporting draft creation, audience preview, editing with concurrency guards, scheduling, publishing, cancellation, completion, recipient ledger inspection with retry triggers, and live worker diagnostics. Truthfully separates FCM provider acceptance from confirmed device receipts and in-app reads.
 - The API badge turns green only after a validated `/health` response; the users total uses the upstream `X-Total-Count` instead of page length.
 
 No missing operation is simulated in the dashboard.

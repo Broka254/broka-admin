@@ -35,7 +35,7 @@ The retrieved OpenAPI document leaves success schemas for all inspected admin en
 ## Notification surfaces
 
 - `/alerts` is a **derived operational view** over `/admin/ops-snapshot` and `/admin/health/services`. It shows severity, snapshot time and links, but no unread count or acknowledgement because the backend does not record alert state.
-- `/communications` documents the planned Service Communications workspace and its lifecycle. It is read-only until the backend exposes the persistence, scheduling, publication and per-channel delivery contracts in [`docs/NOTIFICATION_CONTRACTS.md`](docs/NOTIFICATION_CONTRACTS.md). A published record is never presented as a delivered SMS, email or push notification.
+- `/communications` is the production Service Communications workspace integrated with the BROKA backend service-communications domain. It provides draft CRUD, audience preview, concurrency guards (`expected_version`), scheduling, publication, cancellation, completion, recipient ledger inspection with retry queues, and worker diagnostics. It strictly separates FCM provider acceptance from confirmed hardware device receipts and in-app reads. Supported channels are `in_app` (required) and `push` (optional); SMS, email, app_release, and withdrawal endpoints are not implemented. A backend defect where incidents are automatically completed upon delivery completion is documented as a release blocker in [`docs/NOTIFICATION_CONTRACTS.md`](docs/NOTIFICATION_CONTRACTS.md).
 
 The header's API badge only turns green after a validated `/health` response. `BROKA_API_URL` being present is not treated as proof of connectivity or endpoint availability.
 

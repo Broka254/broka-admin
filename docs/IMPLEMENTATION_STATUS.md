@@ -25,7 +25,7 @@
 | `/admin/ledger-integrity`, `/admin/ai-savings`, `/admin/workflow-versions`, `/admin/event-metrics`, `/admin/event-catalog`, `/admin/diagnostics/*` | Diagnostics/analytics surfaces | Process-local or diagnostic contracts, labelled as such | `ADMIN_SUMMARY` | Integrated |
 | `/health` | Overview handshake + header API badge | `{status:"healthy",version}` | Public | Integrated; only a validated response is shown as green |
 | Derived alerts | `/alerts` | `/admin/ops-snapshot` + `/admin/health/services` rendered as severity/link items, no unread or acknowledgement state | `ADMIN_SUMMARY` | Integrated as a derived view |
-| Service Communications | `/communications` | No backend contract; capability/state documentation only | N/A | Explicitly unavailable |
+| Service Communications | `/communications` | Draft CRUD, audience preview, schedule, publish, cancel, complete, recipient ledger, retry, worker diagnostics | `ADMIN_SUMMARY` / `MANAGE_USERS` | Integrated |
 
 ## Write surface
 
@@ -52,7 +52,7 @@ All mutations use granular `require_permission` dependencies. The frontend sends
 - Two integration bugs were found and fixed by this smoke run: the allowlist key normalization (proxy paths lack the leading slash that `ADMIN_ENDPOINTS` values carry) and `event-metrics.registered_handlers`, which is a subscriber-count map, not a number.
 - Compatibility with pre-upgrade backends: the three status-filtered summary counts are optional and missing endpoints (HTTP 404) render explicit "Backend upgrade required" states instead of red errors or estimated numbers. Verified against a stub serving the exact old summary payload and 404s for the new routes; the old payload parses and no counts are fabricated.
 - Users filtering: `/api/broka/[...path]` now forwards the upstream `X-Total-Count`; if the header is absent the UI shows "filtered total unavailable" and never substitutes the current page length.
-- Notification honesty: the header bell has no unread dot, `/alerts` is labelled as derived from live queue counts, and `/communications` exposes no editor/publish control until the contracts in `docs/NOTIFICATION_CONTRACTS.md` exist.
+- Notification honesty: the header bell has no unread dot, `/alerts` is labelled as derived from live queue counts, and `/communications` workspace truthfully separates FCM push provider acceptance from confirmed device receipts and in-app reads. Incident auto-completion defect in backend is documented as a release blocker.
 - Availability: Railway liveness uses `/api/live` (process-only), while `/api/health` remains the BROKA API readiness check. Middleware authorization probes are bounded at 5 seconds and fail closed.
 - Money semantics: external escrow is labelled as held externally rather than BROKA cash, and commission is labelled as recognised revenue rather than reconciled bank cash.
 

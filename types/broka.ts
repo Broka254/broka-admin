@@ -8,7 +8,13 @@ export type ApiResource =
   | "summary" | "users" | "aiSavings" | "ledgerIntegrity" | "auditLogs" | "fraudEvents" | "transactions"
   | "workflowVersions" | "eventMetrics" | "eventCatalog" | "econfirmDiagnostics" | "clientIpDiagnostics" | "health"
   | "opsSnapshot" | "deals" | "listings" | "stores" | "disputes" | "payments" | "financeIntegrity"
-  | "serviceHealth" | "zenoActivity" | "userDetail" | "dealDetail";
+  | "serviceHealth" | "zenoActivity" | "userDetail" | "dealDetail"
+  | "communications" | "workerDiagnostics" | "communicationDetail" | "communicationRecipients" | "communicationStats";
+
+export type StaticAdminResource = Exclude<
+  ApiResource,
+  "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats"
+>;
 
 export type AdminActionName = "flag" | "unflag" | "recompute-trust" | "promote-admin" | "resolve-fraud-event";
 

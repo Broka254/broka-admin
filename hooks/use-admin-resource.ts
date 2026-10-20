@@ -2,22 +2,41 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import type { ApiResource } from "@/types/broka";
+import type { StaticAdminResource } from "@/types/broka";
 import type { AdminResourcePayloads } from "@/lib/api/schemas";
 
-type StaticAdminResource = Exclude<ApiResource, "userDetail" | "dealDetail">;
-
 const resourcePaths: Record<StaticAdminResource, string> = {
-  summary: "admin/summary", users: "admin/users", aiSavings: "admin/ai-savings", ledgerIntegrity: "admin/ledger-integrity",
-  auditLogs: "admin/audit-logs", fraudEvents: "admin/fraud-events", transactions: "admin/transactions", workflowVersions: "admin/workflow-versions",
-  eventMetrics: "admin/event-metrics", eventCatalog: "admin/event-catalog", econfirmDiagnostics: "admin/diagnostics/econfirm", clientIpDiagnostics: "admin/diagnostics/client-ip", health: "health",
-  opsSnapshot: "admin/ops-snapshot", deals: "admin/deals", listings: "admin/listings", stores: "admin/stores",
-  disputes: "admin/disputes", payments: "admin/payments", financeIntegrity: "admin/finance-integrity",
-  serviceHealth: "admin/health/services", zenoActivity: "admin/zeno/activity",
+  summary: "admin/summary",
+  users: "admin/users",
+  aiSavings: "admin/ai-savings",
+  ledgerIntegrity: "admin/ledger-integrity",
+  auditLogs: "admin/audit-logs",
+  fraudEvents: "admin/fraud-events",
+  transactions: "admin/transactions",
+  workflowVersions: "admin/workflow-versions",
+  eventMetrics: "admin/event-metrics",
+  eventCatalog: "admin/event-catalog",
+  econfirmDiagnostics: "admin/diagnostics/econfirm",
+  clientIpDiagnostics: "admin/diagnostics/client-ip",
+  health: "health",
+  opsSnapshot: "admin/ops-snapshot",
+  deals: "admin/deals",
+  listings: "admin/listings",
+  stores: "admin/stores",
+  disputes: "admin/disputes",
+  payments: "admin/payments",
+  financeIntegrity: "admin/finance-integrity",
+  serviceHealth: "admin/health/services",
+  zenoActivity: "admin/zeno/activity",
+  communications: "admin/communications",
+  workerDiagnostics: "admin/communications/diagnostics/worker",
 };
 
 export class AdminRequestError extends Error {
-  constructor(message: string, public readonly status: number, public readonly code?: string) { super(message); this.name = "AdminRequestError"; }
+  constructor(message: string, public readonly status: number, public readonly code?: string) {
+    super(message);
+    this.name = "AdminRequestError";
+  }
 }
 
 // A 404 from a registered static admin endpoint means the deployed backend
@@ -38,14 +57,16 @@ async function fetchAdminPath<T>(path: string, query?: URLSearchParams): Promise
 
 export function useAdminResource<K extends StaticAdminResource>(resource: K, query?: URLSearchParams, enabled = true) {
   return useQuery<AdminResourcePayloads[K]>({
-    queryKey: ["broka-admin", resource, query?.toString() ?? ""], enabled,
+    queryKey: ["broka-admin", resource, query?.toString() ?? ""],
+    enabled,
     queryFn: () => fetchAdminPath<AdminResourcePayloads[K]>(resourcePaths[resource], query),
   });
 }
 
 export function useAdminUsers(query: URLSearchParams, enabled = true) {
   return useQuery<{ rows: AdminResourcePayloads["users"]; total: number | null }>({
-    queryKey: ["broka-admin", "users", query.toString()], enabled,
+    queryKey: ["broka-admin", "users", query.toString()],
+    enabled,
     queryFn: async () => {
       const response = await fetch(`/api/broka/admin/users?${query.toString()}`, { credentials: "same-origin", cache: "no-store" });
       const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
@@ -62,8 +83,48 @@ export function useAdminUsers(query: URLSearchParams, enabled = true) {
 export function useAdminDetail<K extends "userDetail" | "dealDetail">(resource: K, id: string, enabled = true) {
   const path = resource === "userDetail" ? `admin/users/${encodeURIComponent(id)}` : `admin/deals/${encodeURIComponent(id)}`;
   return useQuery<AdminResourcePayloads[K]>({
-    queryKey: ["broka-admin", resource, id], enabled: enabled && Boolean(id),
+    queryKey: ["broka-admin", resource, id],
+    enabled: enabled && Boolean(id),
     queryFn: () => fetchAdminPath<AdminResourcePayloads[K]>(path),
   });
 }
 
+export function useAdminCommunications(query?: URLSearchParams, enabled = true) {
+  return useQuery<AdminResourcePayloads["communications"]>({
+    queryKey: ["broka-admin", "communications", query?.toString() ?? ""],
+    enabled,
+    queryFn: () => fetchAdminPath<AdminResourcePayloads["communications"]>("admin/communications", query),
+  });
+}
+
+export function useAdminCommunicationDetail(id: string, enabled = true) {
+  return useQuery<AdminResourcePayloads["communicationDetail"]>({
+    queryKey: ["broka-admin", "communicationDetail", id],
+    enabled: enabled && Boolean(id),
+    queryFn: () => fetchAdminPath<AdminResourcePayloads["communicationDetail"]>(`admin/communications/${encodeURIComponent(id)}`),
+  });
+}
+
+export function useAdminCommunicationRecipients(id: string, query?: URLSearchParams, enabled = true) {
+  return useQuery<AdminResourcePayloads["communicationRecipients"]>({
+    queryKey: ["broka-admin", "communicationRecipients", id, query?.toString() ?? ""],
+    enabled: enabled && Boolean(id),
+    queryFn: () => fetchAdminPath<AdminResourcePayloads["communicationRecipients"]>(`admin/communications/${encodeURIComponent(id)}/recipients`, query),
+  });
+}
+
+export function useAdminCommunicationStats(id: string, enabled = true) {
+  return useQuery<AdminResourcePayloads["communicationStats"]>({
+    queryKey: ["broka-admin", "communicationStats", id],
+    enabled: enabled && Boolean(id),
+    queryFn: () => fetchAdminPath<AdminResourcePayloads["communicationStats"]>(`admin/communications/${encodeURIComponent(id)}/stats`),
+  });
+}
+
+export function useAdminWorkerDiagnostics(enabled = true) {
+  return useQuery<AdminResourcePayloads["workerDiagnostics"]>({
+    queryKey: ["broka-admin", "workerDiagnostics"],
+    enabled,
+    queryFn: () => fetchAdminPath<AdminResourcePayloads["workerDiagnostics"]>("admin/communications/diagnostics/worker"),
+  });
+}

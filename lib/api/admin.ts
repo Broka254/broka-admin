@@ -5,7 +5,7 @@ import { BrokaApiError, parseUnknownJson, publicErrorMessage, upstreamFetch } fr
 import { parseAdminResource, AdminActionResultSchema, type AdminActionResult, type AdminResourcePayloads } from "@/lib/api/schemas";
 import { ZodError } from "zod";
 
-export type StaticAdminResource = Exclude<ApiResource, "userDetail" | "dealDetail">;
+export type StaticAdminResource = Exclude<ApiResource, "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats">;
 
 export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   summary: "/admin/summary",
@@ -30,11 +30,16 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   financeIntegrity: "/admin/finance-integrity",
   serviceHealth: "/admin/health/services",
   zenoActivity: "/admin/zeno/activity",
+  communications: "/admin/communications",
+  workerDiagnostics: "/admin/communications/diagnostics/worker",
 };
 
-const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: "userDetail" | "dealDetail" }> = [
+const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   { pattern: /^admin\/users\/([^/]+)$/, resource: "userDetail" },
   { pattern: /^admin\/deals\/([^/]+)$/, resource: "dealDetail" },
+  { pattern: /^admin\/communications\/([^/]+)$/, resource: "communicationDetail" },
+  { pattern: /^admin\/communications\/([^/]+)\/recipients$/, resource: "communicationRecipients" },
+  { pattern: /^admin\/communications\/([^/]+)\/stats$/, resource: "communicationStats" },
 ];
 
 const RESOURCE_BY_PATH = new Map(Object.entries(ADMIN_ENDPOINTS).map(([resource, path]) => [path.slice(1), resource as ApiResource]));
@@ -132,4 +137,3 @@ export async function runVerifiedAdminAction(
   }
   return payload.data;
 }
-

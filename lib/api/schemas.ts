@@ -296,6 +296,257 @@ export const ZenoActivitySchema = z.object({
   not_instrumented: z.array(z.object({ metric: z.string(), reason: z.string() })),
 });
 
+// ── Service Communications contracts ──────────────────────────────────────────
+
+export const AudienceKindSchema = z.enum(["all", "buyers", "sellers", "store_owners", "user_ids"]);
+export type AudienceKind = z.infer<typeof AudienceKindSchema>;
+
+export const AudienceInSchema = z.object({
+  kind: AudienceKindSchema.default("all"),
+  user_ids: z.array(z.string().min(1).max(64)).max(5000).default([]),
+}).refine(
+  (data) => {
+    if (data.kind === "user_ids") return data.user_ids.length > 0;
+    return data.user_ids.length === 0;
+  },
+  { message: "user_ids audience requires at least one user id; other kinds must not specify user_ids" }
+);
+export type AudienceIn = z.infer<typeof AudienceInSchema>;
+
+export const AudiencePreviewInSchema = z.object({
+  audience: AudienceInSchema,
+});
+export type AudiencePreviewIn = z.infer<typeof AudiencePreviewInSchema>;
+
+export const AudiencePreviewOutSchema = z.object({
+  kind: z.string(),
+  count: z.number().int().nonnegative(),
+  max_audience: z.number().int().nonnegative(),
+  allowed: z.boolean(),
+});
+export type AudiencePreviewOut = z.infer<typeof AudiencePreviewOutSchema>;
+
+export const CommunicationTypeSchema = z.enum(["announcement", "maintenance", "incident", "product_update"]);
+export type CommunicationType = z.infer<typeof CommunicationTypeSchema>;
+
+export const CommunicationSeveritySchema = z.enum(["low", "normal", "high", "critical"]);
+export type CommunicationSeverity = z.infer<typeof CommunicationSeveritySchema>;
+
+export const CommunicationChannelSchema = z.enum(["in_app", "push"]);
+export type CommunicationChannel = z.infer<typeof CommunicationChannelSchema>;
+
+export const CommunicationStatusSchema = z.enum([
+  "draft", "scheduled", "publishing", "published", "completed", "cancelled", "failed",
+]);
+export type CommunicationStatus = z.infer<typeof CommunicationStatusSchema>;
+
+export const RecipientStatusSchema = z.enum([
+  "queued", "sending", "provider_accepted", "delivered", "failed", "retry_scheduled",
+]);
+export type RecipientStatus = z.infer<typeof RecipientStatusSchema>;
+
+export function isValidDeepLink(value: string | null | undefined): boolean {
+  if (!value || value.trim() === "") return true;
+  if (value.length > 512) return false;
+  try {
+    const url = new URL(value);
+    if (url.username || url.password) return false;
+    if (url.protocol === "https:") {
+      return url.hostname === "broka.co.ke" || url.hostname === "www.broka.co.ke";
+    }
+    if (url.protocol === "broka:") {
+      const host = (url.hostname || url.host).toLowerCase();
+      return ["app", "store", "listing", "deal", "communications"].includes(host);
+    }
+    return false;
+  } catch {
+    if (value.startsWith("broka://")) {
+      const rest = value.slice("broka://".length).split("/")[0].split("?")[0].toLowerCase();
+      return ["app", "store", "listing", "deal", "communications"].includes(rest);
+    }
+    return false;
+  }
+}
+
+export const CommunicationCreateInSchema = z.object({
+  title: z.string().trim().min(1, "Title is required").max(160, "Title must not exceed 160 characters"),
+  body: z.string().trim().min(1, "Body is required").max(10000, "Body must not exceed 10000 characters"),
+  communication_type: CommunicationTypeSchema,
+  severity: CommunicationSeveritySchema.default("normal"),
+  audience: AudienceInSchema,
+  channels: z.array(CommunicationChannelSchema).min(1, "At least one channel is required").max(2).refine(
+    (channels) => channels.includes("in_app"),
+    { message: "in_app channel is required; push is optional" }
+  ),
+  deep_link: z.string().max(512).nullable().optional().refine(
+    (val) => isValidDeepLink(val),
+    { message: "deep_link must be an https://broka.co.ke or broka:// URL (app, store, listing, deal, communications)" }
+  ),
+  expires_at: isoDate.optional(),
+}).refine(
+  (data) => {
+    if (data.channels.includes("push")) {
+      const encoder = new TextEncoder();
+      let size = encoder.encode(data.title).length + encoder.encode(data.body).length;
+      if (data.deep_link) size += encoder.encode(data.deep_link).length;
+      if (size > 3600) return false;
+    }
+    return true;
+  },
+  { message: "Push title, body and deep_link must fit within 3600 UTF-8 bytes; use in_app only for longer text" }
+);
+export type CommunicationCreateIn = z.infer<typeof CommunicationCreateInSchema>;
+
+export const CommunicationUpdateInSchema = z.object({
+  expected_version: z.number().int().min(1).optional(),
+  title: z.string().trim().min(1).max(160).optional(),
+  body: z.string().trim().min(1).max(10000).optional(),
+  communication_type: CommunicationTypeSchema.optional(),
+  severity: CommunicationSeveritySchema.optional(),
+  audience: AudienceInSchema.optional(),
+  channels: z.array(CommunicationChannelSchema).min(1).max(2).optional().refine(
+    (channels) => !channels || channels.includes("in_app"),
+    { message: "in_app channel is required; push is optional" }
+  ),
+  deep_link: z.string().max(512).nullable().optional().refine(
+    (val) => isValidDeepLink(val),
+    { message: "deep_link must be an https://broka.co.ke or broka:// URL" }
+  ),
+  expires_at: isoDate.optional(),
+}).refine(
+  (data) => {
+    const keys = Object.keys(data).filter((k) => k !== "expected_version" && data[k as keyof typeof data] !== undefined);
+    return keys.length > 0;
+  },
+  { message: "At least one editable field is required" }
+);
+export type CommunicationUpdateIn = z.infer<typeof CommunicationUpdateInSchema>;
+
+export const ScheduleInSchema = z.object({
+  scheduled_at: z.string().min(1, "Scheduled timestamp is required"),
+});
+export type ScheduleIn = z.infer<typeof ScheduleInSchema>;
+
+export const ReasonInSchema = z.object({
+  reason: z.string().max(500, "Reason must not exceed 500 characters").optional().nullable(),
+});
+export type ReasonIn = z.infer<typeof ReasonInSchema>;
+
+export const RetryInSchema = z.object({
+  recipient_ids: z.array(z.string().min(1)).min(1, "At least one recipient id is required").max(500).optional().nullable(),
+});
+export type RetryIn = z.infer<typeof RetryInSchema>;
+
+export const CommunicationOutSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  body: z.string(),
+  communication_type: z.string(),
+  severity: z.string(),
+  status: z.string(),
+  audience: z.record(z.string(), z.unknown()),
+  channels: z.array(z.string()),
+  audience_count: z.number().int().nonnegative().nullable(),
+  deep_link: nullableString,
+  created_by_id: z.string(),
+  updated_by_id: nullableString,
+  version: z.number().int().positive(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  scheduled_at: nullableString,
+  published_at: nullableString,
+  completed_at: nullableString,
+  cancelled_at: nullableString,
+  expires_at: nullableString,
+  push_available: z.boolean(),
+  warnings: z.array(z.string()).default([]),
+});
+export type CommunicationOut = z.infer<typeof CommunicationOutSchema>;
+
+export const CommunicationListSchema = z.object({
+  items: z.array(CommunicationOutSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+});
+export type CommunicationList = z.infer<typeof CommunicationListSchema>;
+
+export const DeliverySummaryOutSchema = z.object({
+  total_recipients: z.number().int().nonnegative(),
+  read_count: z.number().int().nonnegative(),
+  by_status: z.record(z.string(), z.number().int().nonnegative()),
+  devices_by_status: z.record(z.string(), z.number().int().nonnegative()),
+  provider_accepted: z.number().int().nonnegative(),
+  confirmed_delivered: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  retry_scheduled: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+});
+export type DeliverySummaryOut = z.infer<typeof DeliverySummaryOutSchema>;
+
+export const CommunicationDetailSchema = z.object({
+  communication: CommunicationOutSchema,
+  delivery: DeliverySummaryOutSchema,
+});
+export type CommunicationDetail = z.infer<typeof CommunicationDetailSchema>;
+
+export const RecipientOutSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  status: z.string(),
+  attempt_count: z.number().int().nonnegative(),
+  last_attempt_at: nullableString,
+  provider_message_id: nullableString,
+  delivered_at: nullableString,
+  read_at: nullableString,
+  failure_category: nullableString,
+  retry_eligible: z.boolean(),
+  next_attempt_at: nullableString,
+});
+export type RecipientOut = z.infer<typeof RecipientOutSchema>;
+
+export const RecipientPageSchema = z.object({
+  items: z.array(RecipientOutSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+});
+export type RecipientPage = z.infer<typeof RecipientPageSchema>;
+
+export const CommunicationStatsSchema = z.object({
+  communication_id: z.string(),
+  status: z.string(),
+  audience_count: z.number().int().nonnegative().nullable(),
+  delivery: DeliverySummaryOutSchema,
+  generated_at: z.string(),
+});
+export type CommunicationStats = z.infer<typeof CommunicationStatsSchema>;
+
+export const PublishOutSchema = z.object({
+  communication: CommunicationOutSchema,
+  accepted: z.boolean().default(true),
+});
+export type PublishOut = z.infer<typeof PublishOutSchema>;
+
+export const RetryOutSchema = z.object({
+  retried: z.number().int().nonnegative(),
+  message: z.string(),
+});
+export type RetryOut = z.infer<typeof RetryOutSchema>;
+
+export const WorkerDiagnosticsSchema = z.object({
+  generated_at: z.string(),
+  worker: z.record(z.string(), z.unknown()),
+  backlog: z.object({
+    communications: z.record(z.string(), z.number().int().nonnegative()),
+    recipients: z.record(z.string(), z.number().int().nonnegative()),
+    pending_recipients: z.number().int().nonnegative(),
+  }),
+});
+export type WorkerDiagnostics = z.infer<typeof WorkerDiagnosticsSchema>;
+
+// ── Resource schema registry ──────────────────────────────────────────────────
+
 export const AdminResourceSchemas = {
   summary: AdminSummarySchema, users: AdminUsersSchema, aiSavings: AiSavingsSchema, ledgerIntegrity: LedgerIntegritySchema,
   auditLogs: AuditLogsSchema, fraudEvents: FraudEventsSchema, transactions: TransactionsSchema, workflowVersions: WorkflowVersionsSchema,
@@ -303,6 +554,8 @@ export const AdminResourceSchemas = {
   opsSnapshot: OpsSnapshotSchema, deals: AdminDealsSchema, listings: AdminListingsSchema, stores: AdminStoresSchema,
   disputes: AdminDisputesSchema, payments: AdminPaymentsSchema, financeIntegrity: FinanceIntegritySchema,
   serviceHealth: ServiceHealthSchema, zenoActivity: ZenoActivitySchema, userDetail: AdminUserDetailSchema, dealDetail: AdminDealDetailSchema,
+  communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
+  communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
 } as const;
 
 export type AdminResourcePayloads = { [K in keyof typeof AdminResourceSchemas]: z.infer<(typeof AdminResourceSchemas)[K]> };

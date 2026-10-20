@@ -45,7 +45,17 @@ The live OpenAPI document still advertises empty success schemas for these respo
 
 No admin alert-retrieval or acknowledgement endpoint exists. `/alerts` is therefore a derived view over `/admin/ops-snapshot` and `/admin/health/services`; it renders severity, snapshot time and links, but no unread count, notification delivery or acknowledgement state.
 
-No service-communications CRUD, scheduling, publication or delivery-receipt endpoint exists. `/communications` is a read-only capability/contract page. The required endpoints and lifecycle semantics are specified in [`NOTIFICATION_CONTRACTS.md`](NOTIFICATION_CONTRACTS.md). Publishing a record must never be equated with an SMS, email or push delivery.
+The service-communications workspace (`/communications`) is fully integrated with the backend implementation (`Broka254/broka`, domain `service_communications`).
+It supports:
+- CRUD on communication drafts (`GET /admin/communications`, `POST /admin/communications`, `PATCH /admin/communications/{id}`)
+- Concurrency control via `expected_version`
+- Non-side-effecting audience preview (`POST /admin/communications/audience/preview`)
+- Lifecycle actions: `POST /admin/communications/{id}/schedule`, `POST /admin/communications/{id}/publish`, `POST /admin/communications/{id}/cancel`, `POST /admin/communications/{id}/complete`
+- Per-recipient delivery ledger and retry: `GET /admin/communications/{id}/recipients`, `POST /admin/communications/{id}/recipients/retry`
+- Durable worker telemetry: `GET /admin/communications/diagnostics/worker`
+- Delivery telemetry truthfulness: FCM provider acceptance is strictly separated from confirmed device receipts and in-app reads.
+- Channels supported: `in_app` (required) and `push` (optional, requires backend FCM configuration). SMS, email, app_release, and withdrawal endpoints do not exist in the backend and are not exposed.
+- Known release blocker: `service.py:complete_published_communications` automatically marks published incidents as complete once recipient delivery attempts settle, regardless of incident resolution.
 
 ## Known operational notes
 

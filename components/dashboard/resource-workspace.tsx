@@ -5,12 +5,11 @@ import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AdminRequestError, useAdminResource, useAdminUsers } from "@/hooks/use-admin-resource";
-import type { ApiResource } from "@/types/broka";
 import { ResourceState, SectionEyebrow, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import { UsersTable } from "@/components/dashboard/users-table";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
 
-type StaticAdminResource = Exclude<ApiResource, "userDetail" | "dealDetail">;
+import type { StaticAdminResource } from "@/types/broka";
 type WsFilter =
   | { kind: "search"; param: string; placeholder: string }
   | { kind: "select"; param: string; label: string; options: Array<{ value: string; label: string }> };

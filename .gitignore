@@ -8,3 +8,12 @@ coverage/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+
+android-wrapper/.gradle/
+android-wrapper/build/
+android-wrapper/app/build/
+android-wrapper/local.properties
+android-wrapper/captures/
+android-wrapper/.idea/
+*.keystore
+.gradle/

@@ -1,0 +1,178 @@
+name: BROKA Admin Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: "debug builds a CI-signed debug APK; release requires the BROKA Admin signing secrets"
+        required: true
+        default: "debug"
+        type: choice
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: broka-admin-android-apk-${{ inputs.build_mode }}
+  cancel-in-progress: false
+
+jobs:
+  require-main:
+    name: Require main branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Reject builds from a non-main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Android APK builds are restricted to refs/heads/main; got ${GITHUB_REF}."
+          exit 1
+
+  build-apk:
+    name: Build BROKA Admin APK (${{ inputs.build_mode }})
+    needs: require-main
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out the requested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Record source commit
+        id: source
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Building APK from commit $sha"
+
+      - name: Validate release signing prerequisites
+        if: inputs.build_mode == 'release'
+        env:
+          BROKA_ADMIN_KEYSTORE_B64: ${{ secrets.BROKA_ADMIN_KEYSTORE_B64 }}
+          BROKA_ADMIN_KEYSTORE_PASSWORD: ${{ secrets.BROKA_ADMIN_KEYSTORE_PASSWORD }}
+          BROKA_ADMIN_KEY_ALIAS: ${{ secrets.BROKA_ADMIN_KEY_ALIAS }}
+          BROKA_ADMIN_KEY_PASSWORD: ${{ secrets.BROKA_ADMIN_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for secret in BROKA_ADMIN_KEYSTORE_B64 BROKA_ADMIN_KEYSTORE_PASSWORD BROKA_ADMIN_KEY_ALIAS BROKA_ADMIN_KEY_PASSWORD; do
+            if [ -z "${!secret}" ]; then
+              echo "::error title=Release signing not configured::$secret is missing from repository secrets."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Add the BROKA Admin signing secrets described in docs/ANDROID_ADMIN_APP.md, then rerun this workflow with build_mode=release."
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dashboard dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate dashboard pipeline before packaging (release mode)
+        if: inputs.build_mode == 'release'
+        env:
+          BROKA_API_URL: https://api.broka.co.ke
+          BROKA_COOKIE_SECURE: "false"
+        run: |
+          pnpm test
+          pnpm typecheck
+          pnpm lint
+          pnpm build
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Prepare Android SDK
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: |
+          echo "sdkmanager: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Verify pinned Gradle wrapper
+        run: >
+          android-wrapper/gradlew --version --stacktrace
+
+      - name: Assemble debug APK
+        if: inputs.build_mode == 'debug'
+        run: >
+          android-wrapper/gradlew :app:assembleDebug --stacktrace
+
+      - name: Assemble release APK
+        if: inputs.build_mode == 'release'
+        run: |
+          mkdir -p "$RUNNER_TEMP/broka-admin-signing"
+          printf '%s' "$BROKA_ADMIN_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/broka-admin-signing/broka-admin.keystore"
+          android-wrapper/gradlew :app:assembleRelease --stacktrace
+        env:
+          BROKA_ADMIN_KEYSTORE_B64: ${{ secrets.BROKA_ADMIN_KEYSTORE_B64 }}
+          BROKA_ADMIN_KEYSTORE_PATH: ${{ runner.temp }}/broka-admin-signing/broka-admin.keystore
+          BROKA_ADMIN_KEYSTORE_PASSWORD: ${{ secrets.BROKA_ADMIN_KEYSTORE_PASSWORD }}
+          BROKA_ADMIN_KEY_ALIAS: ${{ secrets.BROKA_ADMIN_KEY_ALIAS }}
+          BROKA_ADMIN_KEY_PASSWORD: ${{ secrets.BROKA_ADMIN_KEY_PASSWORD }}
+
+      - name: Verify APK
+        env:
+          BUILD_MODE: ${{ inputs.build_mode }}
+          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          if [ "$BUILD_MODE" = "release" ]; then
+            APK="android-wrapper/app/build/outputs/apk/release/app-release.apk"
+          else
+            APK="android-wrapper/app/build/outputs/apk/debug/app-debug.apk"
+          fi
+          if [ ! -s "$APK" ]; then
+            echo "::error::Expected APK is missing or empty: $APK"
+            exit 1
+          fi
+          package=$("$BT/aapt2" dump badging "$APK" | head -1 | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+          if [ "$package" != "com.broka.admin" ]; then
+            echo "::error::Unexpected application id: $package (expected com.broka.admin)"
+            exit 1
+          fi
+          "$BT/apksigner" verify --verbose "$APK" | head -20
+          version=$("$BT/aapt2" dump badging "$APK" | head -1 | sed -n "s/^package:[^']*versionName='\([^']*\)'.*/\1/p")
+          size=$(du -h "$APK" | cut -f1)
+          echo "APK verified: package=$package versionName=$version size=$size mode=$BUILD_MODE"
+
+      - name: Name the distributable artifact
+        run: cp "android-wrapper/app/build/outputs/apk/${{ inputs.build_mode }}/app-${{ inputs.build_mode }}.apk" broka-admin.apk
+
+      - name: Remove temporary signing files
+        if: always() && inputs.build_mode == 'release'
+        run: rm -rf "$RUNNER_TEMP/broka-admin-signing"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: broka-admin-apk-${{ inputs.build_mode }}-${{ steps.source.outputs.sha }}
+          path: broka-admin.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report
+        run: |
+          echo "- Artifact: \`broka-admin.apk\` (mode: ${{ inputs.build_mode }})"
+          echo "- Source commit: $(git rev-parse HEAD)"

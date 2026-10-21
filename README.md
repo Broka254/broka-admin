@@ -46,6 +46,10 @@ The header's API badge only turns green after a validated `/health` response. `B
 
 The admin uses the Broka public product language: ink navy surfaces, violet primary actions, cyan system signals, restrained amber commerce cues, and a compact Montserrat/Inter-style hierarchy. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md). The public Broka site and connected repositories were used as read-only references; this repository is the only implementation target.
 
+## Android admin app
+
+`android-wrapper/` contains a dedicated Android APK (`com.broka.admin`) that opens this hosted dashboard in a restricted HTTPS-only WebView. It changes nothing in the Next.js app, the API proxy, or the authentication flow. Building, signing, and installing are documented in [`docs/ANDROID_ADMIN_APP.md`](docs/ANDROID_ADMIN_APP.md). The APK workflow `.github/workflows/build-admin-apk.yml` is manual-only and independent of `ci.yml` and `deploy-railway.yml`.
+
 ## GitHub Actions build
 
 `.github/workflows/ci.yml` is a **validation-only** workflow. It runs on pull requests, pushes to `main`, and manual dispatch, and it only: installs with the frozen pnpm lockfile, runs unit and contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. It contains no deployment job, no Railway command, and no deployment credentials, so an ordinary push or pull request can never deploy the admin application.

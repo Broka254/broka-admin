@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BROKA Admin</string>
+    <string name="error_title">Cannot reach BROKA Admin</string>
+    <string name="error_body">The BROKA Admin dashboard could not be loaded. Check your connection and try again.</string>
+    <string name="error_retry">Retry</string>
+    <string name="error_network_detail">Network error: %1$s</string>
+    <string name="error_http_detail">The dashboard server returned HTTP %1$d.</string>
+    <string name="error_ssl_detail">The secure (HTTPS) connection to the BROKA Admin dashboard was rejected.</string>
+    <string name="no_browser">No browser is available to open this link.</string>
+    <string name="blocked_link">Blocked unapproved link: %1$s</string>
+    <string name="download_unsupported">Downloads are not supported in this app.</string>
+    <string name="webview_description">BROKA Admin dashboard</string>
+</resources>

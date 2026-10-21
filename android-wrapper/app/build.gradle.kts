@@ -1,9 +1,45 @@
+import org.gradle.api.GradleException
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
 
+val approvedDashboardHost = "broka-admin-production.up.railway.app"
 val dashboardUrl: String = (properties["brokaAdminDashboardUrl"] as String?)?.trim().orEmpty()
+
+fun dashboardUrlRejectionReason(): String {
+    if (dashboardUrl.isEmpty()) {
+        return "brokaAdminDashboardUrl is empty. It must be an HTTPS URL on the approved host https://$approvedDashboardHost/; pass -PbrokaAdminDashboardUrl=... or set it in android-wrapper/gradle.properties."
+    }
+    return try {
+        val uri = URI(dashboardUrl)
+        val host = uri.host?.lowercase()
+        when {
+            uri.scheme?.lowercase() != "https" || host.isNullOrEmpty() ->
+                "brokaAdminDashboardUrl must be an absolute HTTPS URL, but was \"$dashboardUrl\"."
+            host != approvedDashboardHost ->
+                "brokaAdminDashboardUrl host \"$host\" is not the approved dashboard host https://$approvedDashboardHost/."
+            else -> ""
+        }
+    } catch (e: IllegalArgumentException) {
+        "brokaAdminDashboardUrl is not a parseable URL: \"$dashboardUrl\" (${e.cause?.message ?: e.message})."
+    }
+}
+
+tasks.register("validateDashboardUrl") {
+    doLast {
+        val rejection = dashboardUrlRejectionReason()
+        if (rejection.isNotEmpty()) {
+            throw GradleException(rejection)
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("validateDashboardUrl")
+}
 
 android {
     namespace = "com.broka.admin"

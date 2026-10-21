@@ -19,6 +19,10 @@ concurrency:
   group: broka-admin-android-apk-${{ inputs.build_mode }}
   cancel-in-progress: false
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  BROKA_ADMIN_DASHBOARD_URL: https://broka-admin-production.up.railway.app/
+
 jobs:
   require-main:
     name: Require main branch
@@ -39,7 +43,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Check out the requested revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
@@ -49,6 +53,24 @@ jobs:
           sha="$(git rev-parse HEAD)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Building APK from commit $sha"
+
+      - name: Validate dashboard URL (build-time, fail fast)
+        env:
+          EXPECTED_HOST: broka-admin-production.up.railway.app
+        run: |
+          set -euo pipefail
+          url="$BROKA_ADMIN_DASHBOARD_URL"
+          ok=false
+          if [ -n "$url" ]; then
+            case "$url" in
+              "https://$EXPECTED_HOST" | "https://$EXPECTED_HOST"/*) ok=true ;;
+            esac
+          fi
+          if [ "$ok" != "true" ]; then
+            echo "::error title=Dashboard URL rejected::BROKA_ADMIN_DASHBOARD_URL must be a non-empty HTTPS URL on https://${EXPECTED_HOST}/; got '${url}'."
+            exit 1
+          fi
+          echo "Dashboard URL accepted: $url"
 
       - name: Validate release signing prerequisites
         if: inputs.build_mode == 'release'
@@ -71,17 +93,20 @@ jobs:
           fi
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        if: inputs.build_mode == 'release'
+        uses: pnpm/action-setup@v6
         with:
           version: 11.25.0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        if: inputs.build_mode == 'release'
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dashboard dependencies
+        if: inputs.build_mode == 'release'
         run: pnpm install --frozen-lockfile
 
       - name: Validate dashboard pipeline before packaging (release mode)
@@ -96,34 +121,35 @@ jobs:
           pnpm build
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
           cache: gradle
 
       - name: Prepare Android SDK
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
           echo "sdkmanager: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       - name: Verify pinned Gradle wrapper
-        run: >
-          android-wrapper/gradlew --version --stacktrace
+        working-directory: android-wrapper
+        run: |
+          ./gradlew --version --stacktrace
 
       - name: Assemble debug APK
         if: inputs.build_mode == 'debug'
-        run: >
-          android-wrapper/gradlew :app:assembleDebug --stacktrace
+        working-directory: android-wrapper
+        run: |
+          ./gradlew :app:assembleDebug --stacktrace -PbrokaAdminDashboardUrl="$BROKA_ADMIN_DASHBOARD_URL"
 
       - name: Assemble release APK
         if: inputs.build_mode == 'release'
+        working-directory: android-wrapper
         run: |
           mkdir -p "$RUNNER_TEMP/broka-admin-signing"
           printf '%s' "$BROKA_ADMIN_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/broka-admin-signing/broka-admin.keystore"
-          android-wrapper/gradlew :app:assembleRelease --stacktrace
+          ./gradlew :app:assembleRelease --stacktrace -PbrokaAdminDashboardUrl="$BROKA_ADMIN_DASHBOARD_URL"
         env:
           BROKA_ADMIN_KEYSTORE_B64: ${{ secrets.BROKA_ADMIN_KEYSTORE_B64 }}
           BROKA_ADMIN_KEYSTORE_PATH: ${{ runner.temp }}/broka-admin-signing/broka-admin.keystore
@@ -134,7 +160,6 @@ jobs:
       - name: Verify APK
         env:
           BUILD_MODE: ${{ inputs.build_mode }}
-          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/35.0.0"
@@ -147,15 +172,26 @@ jobs:
             echo "::error::Expected APK is missing or empty: $APK"
             exit 1
           fi
-          package=$("$BT/aapt2" dump badging "$APK" | head -1 | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+          package=$("$BT/aapt2" dump badging "$APK" | grep -o "package: name='[^']*'" | cut -d"'" -f2)
           if [ "$package" != "com.broka.admin" ]; then
             echo "::error::Unexpected application id: $package (expected com.broka.admin)"
             exit 1
           fi
           "$BT/apksigner" verify --verbose "$APK" | head -20
-          version=$("$BT/aapt2" dump badging "$APK" | head -1 | sed -n "s/^package:[^']*versionName='\([^']*\)'.*/\1/p")
+          dashboard=""
+          for dex in $(unzip -Z1 "$APK" | grep -E 'classes[0-9]*\.dex$' || true); do
+            if unzip -p "$APK" "$dex" | strings -a | grep -qF "$BROKA_ADMIN_DASHBOARD_URL"; then
+              dashboard="$BROKA_ADMIN_DASHBOARD_URL"
+              break
+            fi
+          done
+          if [ -z "$dashboard" ]; then
+            echo "::error::DASHBOARD_URL is empty or missing from the APK; expected '$BROKA_ADMIN_DASHBOARD_URL' to be compiled in."
+            exit 1
+          fi
+          version=$("$BT/aapt2" dump badging "$APK" | grep -o "versionName='[^']*'" | cut -d"'" -f2)
           size=$(du -h "$APK" | cut -f1)
-          echo "APK verified: package=$package versionName=$version size=$size mode=$BUILD_MODE"
+          echo "APK verified: package=$package versionName=$version size=$size mode=$BUILD_MODE dashboardUrl=$dashboard"
 
       - name: Name the distributable artifact
         run: cp "android-wrapper/app/build/outputs/apk/${{ inputs.build_mode }}/app-${{ inputs.build_mode }}.apk" broka-admin.apk

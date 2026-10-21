@@ -334,7 +334,7 @@ export type AudienceIn = z.infer<typeof AudienceInSchema>;
 
 export const AudiencePreviewInSchema = z.object({
   audience: AudienceInSchema,
-});
+}).strict();
 export type AudiencePreviewIn = z.infer<typeof AudiencePreviewInSchema>;
 
 export const AudiencePreviewOutSchema = z.object({
@@ -420,7 +420,7 @@ export const CommunicationCreateInSchema = z.object({
     { message: "deep_link must be an https://broka.co.ke or broka:// URL (app, store, listing, deal, communications)" }
   ),
   expires_at: communicationTimestamp.nullable().optional(),
-}).refine(
+}).strict().refine(
   (data) => {
     if (data.channels.includes("push")) {
       const encoder = new TextEncoder();
@@ -450,7 +450,7 @@ export const CommunicationUpdateInSchema = z.object({
     { message: "deep_link must be an https://broka.co.ke or broka:// URL" }
   ),
   expires_at: communicationTimestamp.nullable().optional(),
-}).refine(
+}).strict().refine(
   (data) => {
     const keys = Object.keys(data).filter((k) => k !== "expected_version" && data[k as keyof typeof data] !== undefined);
     return keys.length > 0;
@@ -461,17 +461,17 @@ export type CommunicationUpdateIn = z.infer<typeof CommunicationUpdateInSchema>;
 
 export const ScheduleInSchema = z.object({
   scheduled_at: communicationTimestamp,
-});
+}).strict();
 export type ScheduleIn = z.infer<typeof ScheduleInSchema>;
 
 export const ReasonInSchema = z.object({
   reason: z.string().max(500, "Reason must not exceed 500 characters").optional().nullable(),
-});
+}).strict();
 export type ReasonIn = z.infer<typeof ReasonInSchema>;
 
 export const RetryInSchema = z.object({
   recipient_ids: z.array(z.string().min(1)).min(1, "At least one recipient id is required").max(500).optional().nullable(),
-});
+}).strict();
 export type RetryIn = z.infer<typeof RetryInSchema>;
 
 export const CommunicationOutSchema = z.object({

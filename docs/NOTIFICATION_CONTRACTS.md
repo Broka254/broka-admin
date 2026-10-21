@@ -97,8 +97,22 @@ acknowledgement.
 - **Retry acceptance**: A successful retry request means the recipients were
   queued for another attempt, not that delivery succeeded. The detail and recipient
   ledger are refreshed after acceptance.
+- **Targeted retry only**: The backend treats an **omitted** `recipient_ids` list as
+  "retry every eligible recipient" (`service.py:retry_eligible_recipients`), while an
+  explicit empty list is a no-op. The admin client therefore refuses to send a retry
+  without an explicit, non-empty selection, and the confirmation dialog rejects an
+  empty selection before any request is made.
+- **Publication idempotency**: The backend guards publication with
+  `X-Idempotency-Key` (`router.py:publish_communication` plus `idempotency_guard`).
+  The detail dialog therefore reuses one key for a retry of the same lifecycle
+  action and starts a new key for a different action or a completed one, so an
+  ambiguous publication attempt cannot silently start a second campaign.
 - **Completion**: A completed communication means the delivery campaign has no
   pending recipient rows. It does not prove operational incident resolution.
+- **Schedule does not re-validate the audience**: `POST /admin/communications/{id}/schedule`
+  validates only the draft status, the future timestamp, and the expiry ordering.
+  Scheduling is therefore gated on the same current, allowed audience preview as
+  publication in the admin UI.
 
 ### Expiry representation
 
@@ -141,13 +155,19 @@ and impact.
 - Mutation bodies are read with a 512 KiB byte ceiling based on the actual stream,
   not only the declared `Content-Length`.
 - Proxy request and response schemas reject unsupported finite values and malformed
-  counters.
+  counters. Request schemas are strict: an unsupported field is rejected with
+  `422 validation_failed` instead of being silently dropped. A 5xx upstream body is
+  never relayed to the browser, and a 404 upstream is reported as
+  `endpoint_unavailable` instead of a generic failure.
 - Search is debounced, uses the server's `search` parameter, resets the offset on
   query/filter changes, and relies on React Query query keys plus abort signals to
   prevent a stale response from replacing newer results.
 - Audience preview is invalidated whenever the audience definition changes. A
-  preview is informational and must match the current definition before publish is
-  enabled; the backend still revalidates at publication time.
+  preview is informational and must match the current definition before publish or
+  schedule is enabled; the backend still revalidates at publication time.
+- Publication and other lifecycle actions reuse one idempotency key per logical
+  action so a retry after an ambiguous failure is replayed by the backend guard
+  rather than starting a second operation.
 - The dashboard never sends a real broadcast during automated tests.
 
 ### Staging verification
@@ -163,11 +183,15 @@ and impact.
    DST-observing timezone; confirm clearing sends `null` and an unchanged value
    preserves the instant.
 6. Verify targeted retry only exposes backend-eligible recipients and refreshes
-   detail, ledger, and totals after acceptance.
+   detail, ledger, and totals after acceptance. Confirm that the retry request
+   always carries an explicit non-empty `recipient_ids` list, and that an empty
+   selection is refused in the UI rather than sent.
 7. Confirm the dashboard shows provider acceptance, in-app reads, and
    “Device Delivery Evidence: Unavailable”; no screen may claim confirmed device
    display.
 8. Confirm an incident delivery-complete state is labelled as delivery completion
    and that no incident-resolution claim is rendered.
-9. Do not approve production until the three backend blockers are corrected and
-   their concurrency/idempotency/lifecycle behavior is verified in backend tests.
+9. Confirm that scheduling and publication are both refused until the current
+   audience definition has an allowed preview.
+10. Do not approve production until the three backend blockers are corrected and
+    their concurrency/idempotency/lifecycle behavior is verified in backend tests.

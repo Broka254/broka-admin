@@ -1,9 +1,33 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { resolve, join } from "node:path";
+import { load as loadYaml } from "js-yaml";
 
 const root = resolve(import.meta.dirname, "..");
+
+async function readWorkflow(name) {
+  const source = await readFile(resolve(root, ".github/workflows", name), "utf8");
+  return { source, workflow: loadYaml(source) };
+}
+
+function stepRuns(job) {
+  return (job.steps ?? []).flatMap((step) => (typeof step.run === "string" ? [step.run] : []));
+}
+
+async function collectSourceFiles(directory) {
+  const entries = await readdir(resolve(root, directory), { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const relative = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectSourceFiles(relative)));
+    } else if (/\.(ts|tsx)$/.test(entry.name)) {
+      files.push(relative);
+    }
+  }
+  return files;
+}
 
 test("route manifest is valid and unique", async () => {
   const manifest = JSON.parse(await readFile(resolve(root, "public/manus-routes.json"), "utf8"));
@@ -79,12 +103,72 @@ test("new ops response contracts are registered", async () => {
   }
 });
 
-test("production workflow uploads a build artifact without deployment side effects", async () => {
-  const workflow = await readFile(resolve(root, ".github/workflows/ci.yml"), "utf8");
-  assert.match(workflow, /pnpm install --frozen-lockfile/);
-  assert.match(workflow, /pnpm build/);
-  assert.match(workflow, /actions\/upload-artifact@v4/);
-  assert.match(workflow, /broka-admin-next-build-/);
+test("CI validates and uploads an artifact with no deployment job or command", async () => {
+  const { source, workflow } = await readWorkflow("ci.yml");
+  assert.deepEqual(Object.keys(workflow.jobs), ["validate"]);
+
+  const validate = workflow.jobs.validate;
+  const runs = stepRuns(validate);
+  const requiredCommands = [
+    "pnpm install --frozen-lockfile",
+    "pnpm test",
+    "pnpm typecheck",
+    "pnpm lint",
+    "pnpm build",
+  ];
+  for (const command of requiredCommands) {
+    assert.ok(runs.includes(command), `CI must run ${command} as a complete step command`);
+  }
+  const commandOrder = requiredCommands.map((command) => runs.indexOf(command));
+  assert.deepEqual(commandOrder, [...commandOrder].sort((left, right) => left - right), "CI validation commands must run in the declared order");
+
+  const uploadIndex = validate.steps.findIndex(
+    (step) => step.uses === "actions/upload-artifact@v4" && step.with?.name === "broka-admin-next-build-${{ github.sha }}",
+  );
+  assert.ok(uploadIndex > validate.steps.findIndex((step) => step.run === "pnpm build"), "build artifact upload must follow the production build");
+  assert.deepEqual(validate.steps[uploadIndex].with.path.split("\n").map((entry) => entry.trim()).filter(Boolean), [
+    ".next", "public", "package.json", "pnpm-lock.yaml", "next.config.ts", "railway.toml",
+  ]);
+
+  assert.doesNotMatch(source, /railway\s+up/i, "CI must not run a Railway deployment command");
+  assert.doesNotMatch(source, /deploy-railway/i, "CI must not reference a deployment job");
+  assert.doesNotMatch(source, /secrets\.RAILWAY_/i, "CI must not receive Railway credentials");
+  assert.ok(validate.steps.every((step) => step.environment === undefined), "validation must not use a deployment environment");
+});
+
+test("Railway deployment is isolated in a manual-only main-branch workflow", async () => {
+  const { source, workflow } = await readWorkflow("deploy-railway.yml");
+  assert.deepEqual(Object.keys(workflow.on), ["workflow_dispatch"], "deployment must only be manually triggered");
+  assert.equal(workflow.on.push, undefined);
+  assert.equal(workflow.on.pull_request, undefined);
+  assert.equal(workflow.on.workflow_run, undefined);
+
+  assert.deepEqual(Object.keys(workflow.jobs), ["require-main", "deploy-railway"]);
+  const guard = workflow.jobs["require-main"];
+  const guardStep = guard.steps.find((step) => step.if === "github.ref != 'refs/heads/main'");
+  assert.ok(guardStep, "deployment workflow must explicitly reject non-main manual runs");
+  assert.match(guardStep.run, /exit 1/);
+
+  const deploy = workflow.jobs["deploy-railway"];
+  const deployNeeds = Array.isArray(deploy.needs) ? deploy.needs : [deploy.needs];
+  assert.deepEqual(deployNeeds, ["require-main"]);
+  assert.equal(deploy.if, "github.ref == 'refs/heads/main'");
+  assert.equal(deploy.environment?.name, "production", "deployment job must use the protected production environment");
+  assert.ok(Object.prototype.hasOwnProperty.call(workflow, "on"), "workflow trigger map must be parsed as YAML structure");
+
+  const deployRuns = stepRuns(deploy);
+  assert.ok(deployRuns.some((run) => /railway up --service "\$RAILWAY_SERVICE_ID" --ci/.test(run)));
+
+  for (const step of deploy.steps) {
+    if (!step.env) continue;
+    if (step.env.RAILWAY_TOKEN !== undefined) {
+      assert.equal(step.env.RAILWAY_TOKEN, "${{ secrets.RAILWAY_TOKEN }}");
+    }
+    if (step.env.RAILWAY_SERVICE_ID !== undefined) {
+      assert.equal(step.env.RAILWAY_SERVICE_ID, "${{ secrets.RAILWAY_SERVICE_ID }}");
+    }
+  }
+  assert.match(source, /environment secrets on the\s+production environment/, "workflow must document environment-secret configuration");
 });
 
 test("Broka design system keeps the public-site visual anchors", async () => {
@@ -169,4 +253,49 @@ test("Railway liveness does not depend on the BROKA API", async () => {
   assert.match(railway, /healthcheckPath = "\/api\/live"/);
   const readiness = await readFile(resolve(root, "app/api/health/route.ts"), "utf8");
   assert.match(readiness, /status: response\.ok \? "operational" : "degraded"/);
+});
+
+test("browser code never calls the protected backend directly", async () => {
+  const browserFiles = [
+    ...(await collectSourceFiles("components")),
+    ...(await collectSourceFiles("hooks")),
+  ];
+  for (const file of browserFiles) {
+    const source = await readFile(resolve(root, file), "utf8");
+    assert.doesNotMatch(source, /process\.env\./, `${file} must not read server environment values`);
+    assert.doesNotMatch(source, /Authorization\s*:/, `${file} must not attach an Authorization header`);
+    assert.doesNotMatch(source, /NEXT_PUBLIC_[A-Z_]*API/, `${file} must not read a published API credential`);
+  }
+
+  const communications = await readFile(resolve(root, "lib/api/communications.ts"), "utf8");
+  assert.match(communications, /\/api\/broka\//, "communications client must use the same-origin proxy");
+  assert.doesNotMatch(communications, /https?:\/\//, "communications client must not contain an upstream URL");
+});
+
+test("session tokens stay in server-managed cookies", async () => {
+  const cookies = await readFile(resolve(root, "lib/auth/cookies.ts"), "utf8");
+  assert.match(cookies, /httpOnly: true/);
+  assert.match(cookies, /sameSite/);
+  assert.match(cookies, /secure/);
+
+  const login = await readFile(resolve(root, "app/api/auth/login/route.ts"), "utf8");
+  assert.match(login, /response\.cookies\.set\(ACCESS_COOKIE/);
+  assert.match(login, /response\.cookies\.set\(REFRESH_COOKIE/);
+  assert.doesNotMatch(login, /NextResponse\.json\(\{\s*tokens/, "login must not return tokens to the browser");
+
+  for (const file of [...(await collectSourceFiles("components")), ...(await collectSourceFiles("hooks"))]) {
+    const source = await readFile(resolve(root, file), "utf8");
+    assert.doesNotMatch(source, /localStorage|sessionStorage|document\.cookie/, `${file} must not store credentials in the browser`);
+  }
+});
+
+test("communications client keeps targeted retries explicit and the proxy rejects unsupported fields", async () => {
+  const communications = await readFile(resolve(root, "lib/api/communications.ts"), "utf8");
+  assert.match(communications, /recipientIds\.length === 0/, "retry client must refuse an empty selection");
+  assert.match(communications, /empty_retry_selection/);
+
+  const schemas = await readFile(resolve(root, "lib/api/schemas.ts"), "utf8");
+  assert.match(schemas, /CommunicationCreateInSchema[\s\S]{0,1400}?\}\)\.strict\(\)/, "create request schema must reject unknown fields");
+  assert.match(schemas, /CommunicationUpdateInSchema[\s\S]{0,1400}?\}\)\.strict\(\)/, "update request schema must reject unknown fields");
+  assert.match(schemas, /RetryInSchema[\s\S]{0,400}?\}\)\.strict\(\)/, "retry request schema must reject unknown fields");
 });

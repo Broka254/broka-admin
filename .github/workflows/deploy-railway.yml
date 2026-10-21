@@ -1,0 +1,79 @@
+name: BROKA Admin Railway Deploy
+
+# Manual production deployment only. Never add push, pull_request, or
+# workflow_run triggers: validation lives in ci.yml and must not deploy.
+#
+# Required repository settings (not enforceable from this YAML file):
+# - Create the "production" environment with required reviewers and any
+#   desired deployment protection rules.
+# - Store RAILWAY_TOKEN and RAILWAY_SERVICE_ID as environment secrets on the production environment.
+#   Do not put credentials in this file or any other source file.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: broka-admin-production-deploy
+  cancel-in-progress: false
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  require-main:
+    name: Require main branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Reject manual deployment from a non-main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Railway deployment is restricted to refs/heads/main; got ${GITHUB_REF}."
+          exit 1
+
+  deploy-railway:
+    name: Deploy to Railway
+    needs: require-main
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: production
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Verify Railway deployment configuration
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: |
+          missing=0
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error title=Railway deploy misconfigured::RAILWAY_TOKEN is missing from the production environment secrets."
+            missing=1
+          fi
+          if [ -z "$RAILWAY_SERVICE_ID" ]; then
+            echo "::error title=Railway deploy misconfigured::RAILWAY_SERVICE_ID is missing from the production environment secrets."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          railway --version
+
+      - name: Deploy current main commit to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: railway up --service "$RAILWAY_SERVICE_ID" --ci

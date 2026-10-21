@@ -66,11 +66,44 @@ It supports:
 - Channels supported: `in_app` (required) and `push` (optional, requires backend FCM configuration). SMS, email, app_release, and withdrawal endpoints do not exist in the backend and are not exposed.
 - Expiry updates accept ISO UTC timestamps and JSON `null` to clear an existing expiry.
 - Known release blockers: draft creation has no server-side idempotency guarantee; `confirmed_delivered` is not device evidence; and `service.py:complete_published_communications` automatically marks published incidents as complete once recipient delivery attempts settle, regardless of incident resolution.
+- Target semantics verified in the inspected backend: publication is guarded by `X-Idempotency-Key` (`router.py:publish_communication`), scheduling validates only status/timestamp/expiry ordering, and `retry_eligible_recipients` treats an omitted `recipient_ids` list as "retry every eligible recipient". The admin client accordingly reuses one key per logical lifecycle action, gates scheduling and publication on a current allowed audience preview, and refuses a retry without an explicit non-empty selection.
 
 The client reuses an idempotency key for retries of the same logical draft payload
 and prevents duplicate in-flight submissions. This is request identity only, not a
 substitute for persisted server-side deduplication. See
 [`BACKEND_GAPS.md`](../BACKEND_GAPS.md).
+
+## Proxy request and error handling
+
+The same-origin proxy (`app/api/broka/[...path]/route.ts`) is the only path from the
+browser to the protected API:
+
+- Communications endpoints are explicitly allowlisted for both reads and mutations;
+  an unlisted path or method is rejected before any upstream call.
+- Mutations require a same-origin `Origin`/`Referer` check and an authenticated
+  server-side session cookie; access and refresh tokens stay in HttpOnly cookies.
+- Request bodies are read with a 512 KiB ceiling that is enforced against the
+  actual byte stream, so a missing or misleading `Content-Length` cannot bypass it.
+- Communications request schemas are strict. An unsupported field is rejected with
+  `422 validation_failed` instead of being forwarded or silently dropped.
+- A 5xx upstream body is never relayed to the browser (it may contain a stack trace
+  or an internal payload); a 4xx detail is relayed after being length-capped; a 404
+  upstream is reported as `endpoint_unavailable`.
+- Responses are validated against the registered response contract. Contract drift
+  returns `502 contract_validation_failed` and is logged as a structured event.
+- Every proxy response is sent with `Cache-Control: no-store`, and the route is
+  `force-dynamic`.
+
+## Deployment automation
+
+`.github/workflows/ci.yml` performs validation only (install, test, typecheck,
+lint, production build, artifact upload) and can never deploy. Production
+deployment is isolated in `.github/workflows/deploy-railway.yml`, which is
+`workflow_dispatch`-only, fails a `require-main` guard when dispatched from a
+branch other than `main`, and runs the deployment in the `production` environment
+with Railway credentials taken from that environment's secrets. Required reviewers
+and deployment protection rules are GitHub repository settings and must be
+configured and verified manually.
 
 ## Known operational notes
 

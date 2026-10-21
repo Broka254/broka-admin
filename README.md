@@ -38,7 +38,7 @@ The retrieved OpenAPI document leaves success schemas for all inspected admin en
 - `/alerts` is a **derived operational view** over `/admin/ops-snapshot` and `/admin/health/services`. It shows severity, snapshot time and links, but no unread count or acknowledgement because the backend does not record alert state.
 - `/communications` is the remediated Service Communications workspace for the BROKA backend service-communications domain. It provides draft CRUD, server-side title search and pagination, current-definition audience preview gating, timezone-safe expiry editing and clearing, scheduling, publication, cancellation, delivery-campaign completion, targeted retry of backend-eligible recipients, and worker diagnostics. FCM provider acceptance, in-app availability/read acknowledgements, and device evidence are kept distinct; device delivery is shown as unavailable because the backend's `confirmed_delivered` metric includes in-app-only rows. Supported channels are `in_app` (required) and `push` (optional); SMS, email, app_release, and withdrawal endpoints are not implemented.
 
-  Production approval for communications remains blocked by three backend gaps: draft creation has no server-side idempotency enforcement, `confirmed_delivered` is not device evidence, and the delivery worker marks published incidents completed without verifying incident resolution. The frontend reuses one request key for retries of the same logical draft payload, but does not claim server deduplication. See [`BACKEND_GAPS.md`](BACKEND_GAPS.md) and [`docs/NOTIFICATION_CONTRACTS.md`](docs/NOTIFICATION_CONTRACTS.md).
+  Production approval for communications remains blocked by three backend gaps: draft creation has no server-side idempotency enforcement, `confirmed_delivered` is not device evidence, and the delivery worker marks published incidents completed without verifying incident resolution. The frontend reuses one request key for retries of the same logical draft payload, but does not claim server deduplication. Publication and scheduling both require a current, allowed audience preview; targeted retry always sends an explicit non-empty list of backend-eligible recipients, because the backend treats an omitted list as "retry every eligible recipient". See [`BACKEND_GAPS.md`](BACKEND_GAPS.md) and [`docs/NOTIFICATION_CONTRACTS.md`](docs/NOTIFICATION_CONTRACTS.md).
 
 The header's API badge only turns green after a validated `/health` response. `BROKA_API_URL` being present is not treated as proof of connectivity or endpoint availability.
 
@@ -48,14 +48,22 @@ The admin uses the Broka public product language: ink navy surfaces, violet prim
 
 ## GitHub Actions build
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. It installs with the frozen pnpm lockfile, runs unit and contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. A successful push to `main` can also deploy the current commit to Railway through the protected `production` environment.
+`.github/workflows/ci.yml` is a **validation-only** workflow. It runs on pull requests, pushes to `main`, and manual dispatch, and it only: installs with the frozen pnpm lockfile, runs unit and contract tests, typechecks, lints, builds the production Next.js app, and uploads a 14-day `broka-admin-next-build-<sha>` artifact. It contains no deployment job, no Railway command, and no deployment credentials, so an ordinary push or pull request can never deploy the admin application.
 
-To enable the deployment job, add these GitHub **Actions secrets** under `Settings → Environments → production`:
+Deployment lives in the separate, **manual-only** `.github/workflows/deploy-railway.yml`:
+
+- The only trigger is `workflow_dispatch`; there is no `push` or `pull_request` trigger.
+- A `require-main` guard job fails the run when the workflow is dispatched from a branch other than `main`, and the deploy job also carries a `github.ref == 'refs/heads/main'` condition.
+- The deploy job runs in the protected `production` environment and reads `RAILWAY_TOKEN` and `RAILWAY_SERVICE_ID` from that environment's secrets.
+
+To enable the deployment job, add these GitHub **environment secrets** under `Settings → Environments → production`:
 
 - `RAILWAY_TOKEN`: a Railway project token; never commit or paste it into source.
 - `RAILWAY_SERVICE_ID`: the service ID for the `broka-admin` Railway service. This is an identifier, not a secret, but keeping it in the environment keeps the workflow portable.
 
-The Railway service variables remain managed by Railway (`BROKA_API_URL`, `BROKA_API_TIMEOUT`, and `BROKA_COOKIE_SECURE`). The workflow only deploys after validation passes.
+**Manual verification still required:** the YAML can require the `production` environment, but it cannot create required reviewers or deployment protection rules. Configure those in `Settings → Environments → production` and confirm the approval gate before the first manual deployment. The workflow was not run and no `railway up` was executed while these changes were made.
+
+The Railway service variables remain managed by Railway (`BROKA_API_URL`, `BROKA_API_TIMEOUT`, and `BROKA_COOKIE_SECURE`).
 
 ## Railway deployment
 

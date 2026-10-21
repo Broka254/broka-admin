@@ -290,12 +290,20 @@ async function handleMutation(
     }
 
     if (!upstream.ok) {
+      // Only a client-error body is relayed to the browser, and only after it
+      // is length-capped. A 5xx body can contain an upstream stack trace or
+      // internal payload, so it is replaced with a generic message.
       let upstreamErrDetail: string | undefined;
-      try {
-        const errJson = (await upstream.json()) as { detail?: string; message?: string };
-        upstreamErrDetail = errJson.detail || errJson.message;
-      } catch {
-        upstreamErrDetail = undefined;
+      if (upstream.status < 500) {
+        try {
+          const errJson = (await upstream.json()) as { detail?: string; message?: string };
+          const detail = errJson.detail || errJson.message;
+          if (typeof detail === "string" && detail.trim() !== "") {
+            upstreamErrDetail = detail.trim().slice(0, 300);
+          }
+        } catch {
+          upstreamErrDetail = undefined;
+        }
       }
       const code =
         upstream.status === 409
@@ -306,8 +314,13 @@ async function handleMutation(
           ? "forbidden"
           : upstream.status === 401
           ? "unauthorized"
+          : upstream.status === 404
+          ? "endpoint_unavailable"
           : "upstream_error";
-      const message = upstreamErrDetail || publicErrorMessage(upstream);
+      const message =
+        upstream.status === 404
+          ? "The BROKA API does not serve this endpoint. It may require a backend upgrade."
+          : upstreamErrDetail || publicErrorMessage(upstream);
 
       const response = NextResponse.json(
         { code, message, request_id: id },

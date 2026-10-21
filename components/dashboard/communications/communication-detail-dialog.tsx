@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -33,6 +33,7 @@ import {
 import { StatusBadge } from "@/components/ui/primitives";
 import type { CommunicationOut, RecipientOut } from "@/lib/api/schemas";
 import { eligibleRecipientIds, recipientStatusLabel, toggleRetrySelection } from "@/lib/communications/recipients";
+import { IdempotencyKeyLedger, operationFingerprint } from "@/lib/communications/idempotency";
 import { ConsequentialActionDialog, type ConsequentialActionType } from "./consequential-action-dialog";
 import { DeliveryEvidenceGrid } from "./delivery-evidence";
 import { IncidentLifecycleNotice } from "./incident-lifecycle-notice";
@@ -63,6 +64,10 @@ export function CommunicationDetailDialog({
 
   // Action dialog state
   const [activeAction, setActiveAction] = useState<ConsequentialActionType | null>(null);
+  // One key per logical lifecycle mutation. A retry of the same action on the
+  // same communication reuses the key so the backend's idempotency guard can
+  // replay the original outcome instead of starting a second publication.
+  const idempotencyLedger = useRef(new IdempotencyKeyLedger());
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -99,24 +104,43 @@ export function CommunicationDetailDialog({
 
   async function handleConfirmAction(payload: { scheduledAt?: string; reason?: string; recipientIds?: string[] }) {
     if (!comm || !activeAction) return;
-    const idempotencyKey = crypto.randomUUID();
+    const action = activeAction;
+    const idempotencyKey = idempotencyLedger.current.keyFor(
+      operationFingerprint(`${action}:${comm.id}`, payload),
+    );
 
-    if (activeAction === "schedule" && payload.scheduledAt) {
+    if (action === "schedule" && payload.scheduledAt) {
       await scheduleCommunication(comm.id, payload.scheduledAt, idempotencyKey);
-    } else if (activeAction === "publish") {
-      await publishCommunication(comm.id, idempotencyKey);
-    } else if (activeAction === "cancel") {
+    } else if (action === "publish") {
+      const result = await publishCommunication(comm.id, idempotencyKey);
+      if (result?.accepted !== true) {
+        await refreshAfterMutation();
+        throw new Error(
+          "The BROKA API did not accept the publication request. The communication was not published.",
+        );
+      }
+    } else if (action === "cancel") {
       await cancelCommunication(comm.id, payload.reason, idempotencyKey);
-    } else if (activeAction === "complete") {
+    } else if (action === "complete") {
       await completeCommunication(comm.id, payload.reason, idempotencyKey);
-    } else if (activeAction === "retry") {
-      const result = await retryRecipients(comm.id, payload.recipientIds, idempotencyKey);
+    } else if (action === "retry") {
+      const recipientIds = payload.recipientIds ?? [];
+      if (recipientIds.length === 0) {
+        throw new Error("Select at least one retry-eligible recipient from the ledger.");
+      }
+      const result = await retryRecipients(comm.id, recipientIds, idempotencyKey);
       setRetryNotice(
         `${result.retried} eligible recipient${result.retried === 1 ? "" : "s"} accepted for retry queuing. Retry acceptance is not delivery success; the ledger and statistics will refresh when the worker settles them.`,
       );
       setSelectedRecipientIds([]);
     }
 
+    await refreshAfterMutation();
+    // The mutation succeeded; the next attempt is a new logical operation.
+    idempotencyLedger.current.reset();
+  }
+
+  async function refreshAfterMutation() {
     await refetchDetail();
     await refetchRecipients();
     onRefreshOverview();

@@ -115,7 +115,9 @@ and verified.
 | Types and severities | `announcement`, `maintenance`, `incident`, `product_update`; `low`, `normal`, `high`, `critical`. |
 | Channels | `in_app` (required) and `push` (optional). SMS and email are not implemented. |
 | Audience kinds | `all`, `buyers`, `sellers`, `store_owners`, `user_ids`, with at most 5,000 explicit user IDs. |
-| Recipient retry | Recipient responses include `retry_eligible`. Retry accepts an optional `recipient_ids` list; an explicit empty selection must not be treated as “retry all”. |
+| Recipient retry | Recipient responses include `retry_eligible`. Retry accepts an optional `recipient_ids` list; an explicit empty selection must not be treated as “retry all”. `service.py:retry_eligible_recipients` confirms that an **omitted** list means every eligible recipient, so the admin client only ever sends an explicit, non-empty selection. |
+| Publication idempotency | `POST /admin/communications/{id}/publish` is guarded by `idempotency_guard` and by a per-communication `publish_idempotency_key` (`router.py:publish_communication`). The admin client therefore reuses one key for a retry of the same lifecycle action. This guard does **not** cover draft creation. |
+| Schedule validation | `POST /admin/communications/{id}/schedule` validates only the draft status, a future `scheduled_at`, and that `scheduled_at` precedes `expires_at`. It does not re-validate the audience, so the admin UI requires a current, allowed audience preview before scheduling. |
 | Provider acceptance | `provider_accepted` means FCM accepted the request. It is not device-display proof. |
 | In-app reads | `read_count` counts in-app read acknowledgements. It is not push or device-delivery evidence. |
 | Worker diagnostics | The response documents sweep/claim timing, batch/concurrency configuration, process-local counters for the last pass, and durable backlog counts. The `last_pass` counters are process-local and reset on process restart; they are not a durable delivery history. |
@@ -128,6 +130,7 @@ and verified.
 | No persisted admin Alert Centre | `/alerts` remains a derived view over ops/health responses; there is no unread state or acknowledgement endpoint. |
 | No post-publication withdrawal | Published notices can expire or be marked delivery-complete, but cannot be recalled through a supported endpoint. |
 | FCM configuration dependency | Push attempts require backend Firebase credentials. In-app publication remains available when push is not configured. |
+| Production environment protection not verifiable from the repository | The manual deploy workflow requires the `production` environment and reads Railway credentials from its environment secrets, but required reviewers and deployment protection rules are GitHub repository settings that must be configured and verified manually. |
 
 ## Production decision
 

@@ -96,6 +96,14 @@ describe("communications page states", () => {
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 
+  it("advertises a title-only search because the backend does not search bodies", () => {
+    communicationsMock.mockReturnValue(result());
+    render(<CommunicationsPage />);
+    const search = screen.getByRole("textbox", { name: /search communication titles/i });
+    expect(search).toHaveAttribute("placeholder", expect.stringMatching(/titles/i));
+    expect(screen.queryByText(/search message bodies/i)).not.toBeInTheDocument();
+  });
+
   it("labels a completed incident delivery campaign without claiming incident resolution", () => {
     const incident: CommunicationOut = {
       ...communication,

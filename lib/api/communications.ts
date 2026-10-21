@@ -70,6 +70,19 @@ export async function completeCommunication(id: string, reason?: string, idempot
   return postMutation<CommunicationOut>(`admin/communications/${encodeURIComponent(id)}/complete`, { reason }, idempotencyKey, "POST");
 }
 
-export async function retryRecipients(id: string, recipientIds?: string[], idempotencyKey?: string): Promise<RetryOut> {
+/**
+ * Queues an explicit set of recipients for another delivery attempt. The
+ * backend treats an omitted `recipient_ids` list as "retry every eligible
+ * recipient", so this helper refuses to send a request without an explicit,
+ * non-empty selection.
+ */
+export async function retryRecipients(id: string, recipientIds: string[], idempotencyKey?: string): Promise<RetryOut> {
+  if (!Array.isArray(recipientIds) || recipientIds.length === 0) {
+    throw new AdminRequestError(
+      "A targeted retry requires an explicit list of retry-eligible recipients.",
+      400,
+      "empty_retry_selection",
+    );
+  }
   return postMutation<RetryOut>(`admin/communications/${encodeURIComponent(id)}/recipients/retry`, { recipient_ids: recipientIds }, idempotencyKey, "POST");
 }

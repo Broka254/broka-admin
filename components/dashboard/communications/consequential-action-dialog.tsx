@@ -36,15 +36,19 @@ export function ConsequentialActionDialog({
   });
 
   useEffect(() => {
-    if (isOpen && action === "publish") {
+    if (isOpen && (action === "publish" || action === "schedule")) {
       void audiencePreview.requestPreview();
     }
   }, [action, audiencePreview.definitionKey, isOpen, audiencePreview.requestPreview]);
 
-  const publishPreviewReady = canPublishWithPreview(
+  // A publication or a scheduled publication both resolve the audience when
+  // the communication is delivered, so the current definition must have a
+  // valid, permitted preview before either action is submitted.
+  const audiencePreviewReady = canPublishWithPreview(
     audiencePreview.preview,
     audiencePreview.definitionKey,
   );
+  const requiresAudiencePreview = action === "publish" || action === "schedule";
 
   if (!isOpen) return null;
 
@@ -72,9 +76,14 @@ export function ConsequentialActionDialog({
             return;
           }
         }
+        if (!audiencePreviewReady) {
+          setError("A current, allowed audience preview is required before scheduling. The backend revalidates the audience when the communication publishes.");
+          setBusy(false);
+          return;
+        }
         await onConfirm({ scheduledAt: scheduleDate.toISOString() });
       } else if (action === "publish") {
-        if (!publishPreviewReady) {
+        if (!audiencePreviewReady) {
           setError("A current, allowed audience preview is required before publication. The backend still revalidates the audience at publish time.");
           setBusy(false);
           return;
@@ -167,7 +176,7 @@ export function ConsequentialActionDialog({
 
         <p className="mt-4 text-xs leading-5 text-slate-300">{config.description}</p>
 
-        {action === "publish" && (
+        {requiresAudiencePreview && (
           <div className="mt-4 space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 text-xs">
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Target Audience</span>
@@ -200,8 +209,8 @@ export function ConsequentialActionDialog({
                   Current preview: {audiencePreview.result.count.toLocaleString()} recipients
                   (maximum {audiencePreview.result.max_audience.toLocaleString()}).{" "}
                   {audiencePreview.result.allowed
-                    ? "Preview is informational; the backend revalidates the audience and limits at publication."
-                    : "This audience exceeds the configured maximum and cannot be published."}
+                    ? "Preview is informational; the backend revalidates the audience and its limits when the communication publishes."
+                    : "This audience exceeds the configured maximum and cannot be published or scheduled."}
                 </>
               ) : (
                 audiencePreview.error ?? "No current audience preview is available."
@@ -277,7 +286,7 @@ export function ConsequentialActionDialog({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={busy || (action === "publish" && !publishPreviewReady)}
+            disabled={busy || (requiresAudiencePreview && !audiencePreviewReady)}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition ${config.confirmStyle} disabled:opacity-50`}
           >
             {busy && <CircleDashed size={14} className="animate-spin" />}

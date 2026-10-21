@@ -1,6 +1,6 @@
 # BROKA Admin implementation status
 
-**Status:** The Service Communications frontend remediation is complete and locally verified. Production approval remains blocked by three backend guarantees: draft-creation idempotency, trustworthy device-delivery evidence, and separation of delivery completion from incident resolution. Deployment and seeded non-production validation are still required.
+**Status:** The Service Communications frontend remediation is complete and locally verified. CI validation and production deployment are separated: validation can never deploy, and deployment is a manual, `main`-only workflow behind the `production` environment. Production approval remains blocked by three backend guarantees: draft-creation idempotency, trustworthy device-delivery evidence, and separation of delivery completion from incident resolution. A seeded non-production verification is still required.
 **Reference:** `Broka254/broka` at `e79a364`, including `backend/api/domains/service_communications/{router,service}.py` and the admin hardening domain; frontend contracts live in `lib/api/`.
 
 ## Read surface
@@ -37,13 +37,20 @@
 | `POST /admin/users/{id}/promote-admin` | Reason required; audited |
 | `POST /admin/fraud-events/{id}/resolve` | Records reviewer + audit; repeat calls report `changed: false` |
 | `POST /admin/media/backfill` | Audited |
+| `POST /admin/communications` (create draft) | Creates a `draft`; the inspected handler reads no idempotency key, so the client key is request identity only |
+| `PATCH /admin/communications/{id}` | Draft-only; `expected_version` mismatch is a `409`; `expires_at: null` clears the expiry |
+| `POST /admin/communications/{id}/schedule` | Draft-only; future `scheduled_at`; `scheduled_at` must precede `expires_at`; the audience is not re-validated here |
+| `POST /admin/communications/{id}/publish` | Guarded by `X-Idempotency-Key`; returns `{communication, accepted}`; `accepted` means the campaign was accepted for processing |
+| `POST /admin/communications/{id}/cancel` | Draft or scheduled only; optional audit reason; no post-publication withdrawal exists |
+| `POST /admin/communications/{id}/complete` | Published only and only when no recipient row is queued/sending/retry-scheduled; delivery completion, not incident resolution |
+| `POST /admin/communications/{id}/recipients/retry` | Queues eligible recipients; an omitted list means every eligible recipient, so the client always sends an explicit non-empty `recipient_ids` list |
 
 The user/fraud mutations above use granular `require_permission` dependencies. The frontend sends `X-Idempotency-Key` and a `reason` body where required. Communications draft creation sends the header but the inspected backend does not enforce it; the client-side retry identity is not server deduplication.
 
 ## Verification evidence
 
 - Backend: `tests/test_admin_ops.py` — 19 tests covering authorization, summary accuracy, flag-once semantics, audit contents, idempotency replay, finance-integrity transitions, payments normalization, dispute counts, health probes, Zeno durability labels. Full backend suite in this environment: **2072 passed, 92 skipped**.
-- Frontend local verification: `pnpm test` passed 13 Vitest files with 63 tests plus both legacy Node contract-test files; `pnpm typecheck`, `pnpm lint`, and `pnpm build` passed. Frozen installation with the repository lockfile also passed.
+- Frontend local verification: `pnpm test` passed 14 Vitest files with 79 tests plus both Node contract-test files (46 tests); `pnpm typecheck`, `pnpm lint`, and `pnpm build` passed. Frozen installation with the repository lockfile also passed.
 - Route registration verified with unauthenticated ASGI requests (401) for every new admin route.
 - Live end-to-end smoke: local backend (SQLite, no Redis) + production build of this dashboard, admin login through `/api/auth/login`, then every read endpoint proxied and contract-validated (20/20 HTTP 200), including dynamic `/admin/users/{id}` and `/admin/deals/{id}` detail routes.
 - Mutations through the dashboard proxy: flag (`changed: true`, trust 100 → 70, audit row with before/after), replay with the same key and repeat with a fresh key both stay at 70 (`already_flagged`) — no repeated penalty; missing reason → 422 `reason_required`; missing/short idempotency key → 400 `idempotency_key_required`; promote, unflag, recompute, and fraud resolve (verified `resolved: true`, `reviewed_by_admin: true`) all return audited results.
@@ -53,13 +60,16 @@ The user/fraud mutations above use granular `require_permission` dependencies. T
 - Compatibility with pre-upgrade backends: the three status-filtered summary counts are optional and missing endpoints (HTTP 404) render explicit "Backend upgrade required" states instead of red errors or estimated numbers. Verified against a stub serving the exact old summary payload and 404s for the new routes; the old payload parses and no counts are fabricated.
 - Users filtering: `/api/broka/[...path]` now forwards the upstream `X-Total-Count`; if the header is absent the UI shows "filtered total unavailable" and never substitutes the current page length.
 - Notification honesty: the header bell has no unread dot, `/alerts` is labelled as derived from live queue counts, and `/communications` keeps FCM provider acceptance, in-app reads, and device evidence distinct. Device delivery is shown as unavailable because the backend's `confirmed_delivered` field includes in-app-only rows. Completed incidents are labelled as delivery-campaign completion and never as incident resolution.
-- Communications verification: executable tests cover UTC/local expiry conversion (including DST), clearing with JSON `null`, Zod contract parsing, bounded proxy bodies, allowlisting/CSRF/auth, server search/debounce/stale responses, preview invalidation and gating, duplicate draft submission and key reuse, retry eligibility/pagination/refresh, receipt evidence labels, and incident lifecycle wording.
+- Communications verification: executable tests cover UTC/local expiry conversion (including DST), clearing with JSON `null`, Zod contract parsing, bounded proxy bodies, allowlisting/CSRF/auth, strict request-field rejection, non-relayed 5xx upstream bodies, server search/debounce/stale responses, preview invalidation and gating for both publish and schedule, duplicate draft submission and key reuse, stale-edit version checks, publication-acceptance handling, lifecycle idempotency key reuse, recipient eligibility/pagination/refresh, explicit targeted-retry selection, receipt evidence labels, and incident lifecycle wording.
+- Deployment separation: `.github/workflows/ci.yml` contains only validation steps and no deployment job, Railway command, or deployment secret. `.github/workflows/deploy-railway.yml` is `workflow_dispatch`-only, rejects a non-`main` dispatch through a `require-main` guard job, and deploys inside the `production` environment using environment secrets. The workflow was not executed and no `railway up` was run. Required reviewers and deployment protection rules remain a manual GitHub repository-settings step.
 - Availability: Railway liveness uses `/api/live` (process-only), while `/api/health` remains the BROKA API readiness check. Middleware authorization probes are bounded at 5 seconds and fail closed.
 - Money semantics: external escrow is labelled as held externally rather than BROKA cash, and commission is labelled as recognised revenue rather than reconciled bank cash.
 
 ## Still required before production claim
 
-- Push/redeploy the backend changes (the working tree is not the deployed API) and configure the Railway deploy secrets.
+- Push/redeploy the backend changes (the working tree is not the deployed API).
+- Configure the `production` GitHub environment: `RAILWAY_TOKEN` and `RAILWAY_SERVICE_ID` as environment secrets, plus required reviewers and deployment protection rules. Those settings cannot be created from repository files and must be verified manually.
+- Run the manual `deploy-railway` workflow once against a non-production Railway service, then run the full GitHub Actions pipeline on the pushed branch.
 - Add real Redis to the local test environment to exercise the idempotency reservation/replay path against a live store (the flag-once database guard was verified live; literal response replay needs Redis).
 - Seed a non-production environment with realistic data and validate the dashboard end-to-end against it (the smoke run used a minimal SQLite database).
 - Publish regenerated OpenAPI/contract artifacts so frontend schemas can be generated rather than mirrored.
@@ -67,4 +77,4 @@ The user/fraud mutations above use granular `require_permission` dependencies. T
 - Enforce durable, actor/operation-scoped idempotency for `POST /admin/communications`, including payload conflict rejection and concurrent replay.
 - Replace misleading `confirmed_delivered` semantics with distinct in-app availability, provider acceptance, read acknowledgement, and actual device-receipt evidence.
 - Separate delivery-campaign completion from explicit authorized incident resolution in the backend lifecycle and audit trail.
-- Run the updated GitHub Actions workflow and a browser-level staging verification after the backend blockers are resolved. No GitHub Actions run or real broadcast was performed here.
+- Run the updated GitHub Actions workflow and a browser-level staging verification after the backend blockers are resolved. No GitHub Actions run, Railway deployment, or real broadcast was performed here.

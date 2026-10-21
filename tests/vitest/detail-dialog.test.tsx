@@ -14,18 +14,22 @@ vi.mock("@/lib/api/communications", () => ({
   publishCommunication: vi.fn(),
   retryRecipients: vi.fn(),
   scheduleCommunication: vi.fn(),
+  previewAudience: vi.fn(),
 }));
 
 import {
   useAdminCommunicationDetail,
   useAdminCommunicationRecipients,
 } from "@/hooks/use-admin-resource";
-import { retryRecipients } from "@/lib/api/communications";
+import { previewAudience, publishCommunication, retryRecipients, cancelCommunication } from "@/lib/api/communications";
 import { CommunicationDetailDialog } from "@/components/dashboard/communications/communication-detail-dialog";
 
 const detailMock = vi.mocked(useAdminCommunicationDetail);
 const recipientsMock = vi.mocked(useAdminCommunicationRecipients);
 const retryMock = vi.mocked(retryRecipients);
+const publishMock = vi.mocked(publishCommunication);
+const cancelMock = vi.mocked(cancelCommunication);
+const previewMock = vi.mocked(previewAudience);
 
 const communication: CommunicationOut = {
   id: "comm-1",
@@ -64,6 +68,14 @@ const delivery: DeliverySummaryOut = {
   pending: 0,
 };
 
+const draftCommunication: CommunicationOut = {
+  ...communication,
+  status: "draft",
+  published_at: null,
+  completed_at: null,
+  scheduled_at: null,
+};
+
 function recipient(id: string, retryEligible: boolean): RecipientOut {
   return {
     id,
@@ -80,9 +92,9 @@ function recipient(id: string, retryEligible: boolean): RecipientOut {
   };
 }
 
-function mockDetail(refetchDetail = vi.fn().mockResolvedValue(undefined)) {
+function mockDetail(refetchDetail = vi.fn().mockResolvedValue(undefined), record: CommunicationOut = communication) {
   detailMock.mockReturnValue({
-    data: { communication, delivery },
+    data: { communication: record, delivery },
     isLoading: false,
     isError: false,
     error: null,
@@ -126,10 +138,21 @@ function openRetryDialog() {
   return within(dialogs[dialogs.length - 1]);
 }
 
+async function openActionDialog(name: RegExp) {
+  fireEvent.click(screen.getByRole("button", { name }));
+  const dialog = openRetryDialog();
+  await waitFor(() => expect(dialog.getByRole("button", { name })).toBeInTheDocument());
+  return dialog;
+}
+
 beforeEach(() => {
   detailMock.mockReset();
   recipientsMock.mockReset();
   retryMock.mockReset();
+  publishMock.mockReset();
+  cancelMock.mockReset();
+  previewMock.mockReset();
+  previewMock.mockResolvedValue({ kind: "all", count: 40, max_audience: 1000, allowed: true });
 });
 
 describe("recipient retry workflow", () => {
@@ -194,5 +217,69 @@ describe("recipient retry workflow", () => {
     expect(refetchRecipients).not.toHaveBeenCalled();
     expect(onRefreshOverview).not.toHaveBeenCalled();
     expect(screen.queryByText(/accepted for retry queuing/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("publication lifecycle", () => {
+  it("reuses one idempotency key when an ambiguous publish is retried", async () => {
+    mockDetail(vi.fn().mockResolvedValue(undefined), draftCommunication);
+    mockRecipients();
+    publishMock
+      .mockRejectedValueOnce(new TypeError("Network timeout"))
+      .mockResolvedValueOnce({ communication: draftCommunication, accepted: true });
+
+    renderDetail();
+    const dialog = await openActionDialog(/publish now/i);
+    const confirm = dialog.getByRole("button", { name: /publish now/i });
+    await waitFor(() => expect(confirm).toBeEnabled());
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(publishMock).toHaveBeenCalledTimes(1));
+    const firstKey = publishMock.mock.calls[0][1];
+    await waitFor(() => expect(screen.getByText(/network timeout/i)).toBeInTheDocument());
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(publishMock).toHaveBeenCalledTimes(2));
+    expect(publishMock.mock.calls[1][1]).toBe(firstKey);
+  });
+
+  it("does not claim publication success when the backend does not accept it", async () => {
+    const refetchDetail = mockDetail(vi.fn().mockResolvedValue(undefined), draftCommunication);
+    mockRecipients();
+    publishMock.mockResolvedValue({ communication: draftCommunication, accepted: false });
+
+    renderDetail();
+    const dialog = await openActionDialog(/publish now/i);
+    const confirm = dialog.getByRole("button", { name: /publish now/i });
+    await waitFor(() => expect(confirm).toBeEnabled());
+
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(screen.getByText(/did not accept the publication request/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/published successfully/i)).not.toBeInTheDocument();
+    expect(refetchDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a new idempotency key for a different lifecycle action", async () => {
+    mockDetail(vi.fn().mockResolvedValue(undefined), draftCommunication);
+    mockRecipients();
+    publishMock.mockRejectedValue(new TypeError("Network timeout"));
+    cancelMock.mockResolvedValue({ ...draftCommunication, status: "cancelled" });
+
+    renderDetail();
+    const publishDialog = await openActionDialog(/publish now/i);
+    const publishConfirm = publishDialog.getByRole("button", { name: /publish now/i });
+    await waitFor(() => expect(publishConfirm).toBeEnabled());
+    fireEvent.click(publishConfirm);
+    await waitFor(() => expect(publishMock).toHaveBeenCalledTimes(1));
+    const publishKey = publishMock.mock.calls[0][1];
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^cancel$/i })[0]);
+    const cancelDialog = openRetryDialog();
+    fireEvent.click(cancelDialog.getByRole("button", { name: /cancel communication/i }));
+
+    await waitFor(() => expect(cancelMock).toHaveBeenCalledTimes(1));
+    expect(cancelMock.mock.calls[0][2]).not.toBe(publishKey);
   });
 });

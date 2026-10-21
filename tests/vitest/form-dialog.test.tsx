@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CommunicationFormDialog } from "@/components/dashboard/communications/communication-form-dialog";
+import { AdminRequestError } from "@/hooks/use-admin-resource";
 import type { CommunicationOut } from "@/lib/api/schemas";
 import { isoToLocalDateTimeInput } from "@/lib/communications/datetime";
 
@@ -116,5 +117,49 @@ describe("communication draft submission", () => {
 
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
     expect(updateMock.mock.calls[0][1]).toMatchObject({ expires_at: null });
+  });
+
+  it("sends the backend version so a stale edit is detected server-side", async () => {
+    updateMock.mockResolvedValue({ ...saved, version: 2 });
+    render(
+      <CommunicationFormDialog
+        isOpen
+        communicationToEdit={saved}
+        onClose={() => undefined}
+        onSaved={() => undefined}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Updated maintenance" } });
+    fireEvent.click(screen.getByRole("button", { name: /save draft changes/i }));
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+    expect(updateMock.mock.calls[0][1]).toMatchObject({
+      expected_version: saved.version,
+      title: "Updated maintenance",
+    });
+  });
+
+  it("reports a version conflict without claiming the draft was saved", async () => {
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+    updateMock.mockRejectedValue(
+      new AdminRequestError("Communication version has changed", 409, "conflict"),
+    );
+    render(
+      <CommunicationFormDialog
+        isOpen
+        communicationToEdit={saved}
+        onClose={onClose}
+        onSaved={onSaved}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save draft changes/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/version has changed/i)).toBeInTheDocument(),
+    );
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByText(/outcome may be unknown/i)).not.toBeInTheDocument();
   });
 });

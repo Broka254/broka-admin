@@ -164,4 +164,53 @@ describe("admin proxy security boundaries", () => {
     expect(route).not.toHaveProperty("DELETE");
     expect(route).not.toHaveProperty("PUT");
   });
+
+  it("rejects unsupported request fields instead of forwarding them", async () => {
+    const response = await POST(
+      mutationRequest(
+        JSON.stringify({ audience: { kind: "all" }, send_sms: true, admin_id: "someone-else" }),
+        { contentType: "application/json" },
+      ),
+      context("admin", "communications", "preview"),
+    );
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: "validation_failed" });
+    expect(state.upstreamCalls).toHaveLength(0);
+  });
+
+  it("does not relay an upstream server error body to the browser", async () => {
+    state.upstreamResponse = new Response(
+      JSON.stringify({ detail: "Traceback: sqlite3.OperationalError at /srv/api/secret.py" }),
+      { status: 500, headers: { "content-type": "application/json" } },
+    );
+    const response = await POST(
+      mutationRequest(JSON.stringify({ audience: { kind: "all" } }), {
+        contentType: "application/json",
+      }),
+      context("admin", "communications", "preview"),
+    );
+    expect(response.status).toBe(500);
+    const payload = (await response.json()) as { code: string; message: string };
+    expect(payload.code).toBe("upstream_error");
+    expect(payload.message).not.toMatch(/traceback|sqlite|secret\.py/i);
+    expect(payload.message).toMatch(/temporarily unavailable/i);
+  });
+
+  it("reports an endpoint the backend does not serve as unavailable", async () => {
+    state.upstreamResponse = new Response(
+      JSON.stringify({ detail: "Not Found" }),
+      { status: 404, headers: { "content-type": "application/json" } },
+    );
+    const response = await POST(
+      mutationRequest(JSON.stringify({ audience: { kind: "all" } }), {
+        contentType: "application/json",
+      }),
+      context("admin", "communications", "preview"),
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      code: "endpoint_unavailable",
+      message: expect.stringMatching(/does not serve this endpoint/i),
+    });
+  });
 });

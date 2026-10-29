@@ -609,6 +609,106 @@ export const WorkerDiagnosticsSchema = z.object({
 });
 export type WorkerDiagnostics = z.infer<typeof WorkerDiagnosticsSchema>;
 
+// ── Admin Alert Centre contracts ────────────────────────────────────────────
+
+export const AlertSeveritySchema = z.enum(["critical", "high", "medium", "low", "info"]);
+export type AlertSeverity = z.infer<typeof AlertSeveritySchema>;
+
+export const AlertStatusSchema = z.enum(["open", "acknowledged", "resolved"]);
+export type AlertStatus = z.infer<typeof AlertStatusSchema>;
+export const AlertSchema = z.object({
+  id: z.number().int(),
+  kind: z.string(),
+  severity: AlertSeveritySchema,
+  title: z.string(),
+  body: z.string().nullable().optional(),
+  href: z.string().nullable().optional(),
+  status: AlertStatusSchema,
+  created_at: z.string().nullable(),
+  acknowledged_at: z.string().nullable().optional(),
+  acknowledged_by: z.string().nullable().optional(),
+  resolved_at: z.string().nullable().optional(),
+  meta: z.record(z.string(), z.unknown()).nullable().optional(),
+});
+export type AdminAlert = z.infer<typeof AlertSchema>;
+
+export const AlertListResponseSchema = z.object({
+  items: z.array(AlertSchema),
+  total: z.number().int().nonnegative(),
+  unread: z.number().int().nonnegative(),
+});
+export type AlertListResponse = z.infer<typeof AlertListResponseSchema>;
+
+export const AlertAcknowledgeInSchema = z.object({
+  reason: z.string().max(500, "Reason must not exceed 500 characters").optional().nullable(),
+}).strict();
+export type AlertAcknowledgeIn = z.infer<typeof AlertAcknowledgeInSchema>;
+
+export const AlertCreateInSchema = z.object({
+  kind: z.string().trim().min(1, "Kind is required").max(120),
+  severity: AlertSeveritySchema,
+  title: z.string().trim().min(1, "Title is required").max(200),
+  body: z.string().trim().max(10000).optional().nullable(),
+  href: z.string().max(512).optional().nullable(),
+}).strict();
+export type AlertCreateIn = z.infer<typeof AlertCreateInSchema>;
+
+export const AlertStatsSchema = z.object({ unread: z.number().int().nonnegative() });
+export type AlertStats = z.infer<typeof AlertStatsSchema>;
+
+// ── Revenue / timeseries contracts (shared proxy registration) ──────────────
+// The parallel revenue agent owns lib/api/revenue.ts as the UI-facing copy;
+// these registrations are the proxy-validated source of truth so the server
+// boundary validates the same shapes.
+
+const RevenueBucketSchema = z.enum(["day", "week", "month"]);
+export type RevenueBucket = z.infer<typeof RevenueBucketSchema>;
+
+export const RevenueResponseSchema = z.object({
+  currency: z.string().default("KES"),
+  from: z.string(),
+  to: z.string(),
+  bucket: RevenueBucketSchema,
+  income: z.object({
+    total_minor: z.number(),
+    streams: z.array(z.object({
+      key: z.string(), label: z.string(), amount_minor: z.number(), count: z.number(),
+    })),
+  }),
+  costs: z.object({
+    total_minor: z.number(),
+    estimated_minor: z.number(),
+    kinds: z.array(z.object({
+      key: z.string(), label: z.string(), amount_minor: z.number(), count: z.number(), estimated: z.boolean(),
+    })),
+  }),
+  profit_minor: z.number(),
+  margin_pct: z.number(),
+  series: z.array(z.object({
+    bucket_start: z.string(), income_minor: z.number(), costs_minor: z.number(), profit_minor: z.number(),
+  })),
+  notes: z.array(z.string()),
+});
+export type RevenueResponse = z.infer<typeof RevenueResponseSchema>;
+
+export const TimeseriesResponseSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  bucket: z.string(),
+  series: z.record(z.string(), z.array(z.object({ t: z.string(), v: z.number() }))),
+});
+export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
+
+// ── Loose single-object detail contracts ────────────────────────────────────
+// Listing/dispute/store detail mirrors the list-item shape plus backend-owned
+// extra fields. Validate loosely so minor backend drift does not 502 the page.
+
+const looseRecord = z.record(z.string(), z.unknown());
+
+export const AdminListingDetailSchema = looseRecord;
+export const AdminDisputeDetailSchema = looseRecord;
+export const AdminStoreDetailSchema = looseRecord;
+
 // ── Resource schema registry ──────────────────────────────────────────────────
 
 export const AdminResourceSchemas = {
@@ -620,6 +720,8 @@ export const AdminResourceSchemas = {
   serviceHealth: ServiceHealthSchema, zenoActivity: ZenoActivitySchema, userDetail: AdminUserDetailSchema, dealDetail: AdminDealDetailSchema,
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
+  alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
+  listingDetail: AdminListingDetailSchema, disputeDetail: AdminDisputeDetailSchema, storeDetail: AdminStoreDetailSchema,
 } as const;
 
 export type AdminResourcePayloads = { [K in keyof typeof AdminResourceSchemas]: z.infer<(typeof AdminResourceSchemas)[K]> };

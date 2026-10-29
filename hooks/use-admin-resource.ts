@@ -30,6 +30,9 @@ const resourcePaths: Record<StaticAdminResource, string> = {
   zenoActivity: "admin/zeno/activity",
   communications: "admin/communications",
   workerDiagnostics: "admin/communications/diagnostics/worker",
+  alerts: "admin/alerts",
+  revenue: "admin/revenue",
+  timeseries: "admin/analytics/timeseries",
 };
 
 export class AdminRequestError extends Error {
@@ -55,11 +58,18 @@ async function fetchAdminPath<T>(path: string, query?: URLSearchParams, signal?:
   return payload as T;
 }
 
+// Queries that back always-visible operational chrome (health badge, command
+// center, ops snapshot) poll every 30s while the tab is focused.
+const SUMMARY_RESOURCES: ReadonlySet<string> = new Set(["summary", "opsSnapshot", "health"]);
+
 export function useAdminResource<K extends StaticAdminResource>(resource: K, query?: URLSearchParams, enabled = true) {
   return useQuery<AdminResourcePayloads[K]>({
     queryKey: ["broka-admin", resource, query?.toString() ?? ""],
     enabled,
     queryFn: ({ signal }) => fetchAdminPath<AdminResourcePayloads[K]>(resourcePaths[resource], query, signal),
+    ...(SUMMARY_RESOURCES.has(resource as string)
+      ? { refetchInterval: 30_000, refetchIntervalInBackground: false }
+      : {}),
   });
 }
 
@@ -67,8 +77,8 @@ export function useAdminUsers(query: URLSearchParams, enabled = true) {
   return useQuery<{ rows: AdminResourcePayloads["users"]; total: number | null }>({
     queryKey: ["broka-admin", "users", query.toString()],
     enabled,
-    queryFn: async () => {
-      const response = await fetch(`/api/broka/admin/users?${query.toString()}`, { credentials: "same-origin", cache: "no-store" });
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/broka/admin/users?${query.toString()}`, { credentials: "same-origin", cache: "no-store", signal });
       const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
       if (!response.ok) throw new AdminRequestError(payload.message ?? "Unable to load BROKA data.", response.status, payload.code);
       const rows = payload as AdminResourcePayloads["users"];
@@ -80,12 +90,20 @@ export function useAdminUsers(query: URLSearchParams, enabled = true) {
   });
 }
 
-export function useAdminDetail<K extends "userDetail" | "dealDetail">(resource: K, id: string, enabled = true) {
-  const path = resource === "userDetail" ? `admin/users/${encodeURIComponent(id)}` : `admin/deals/${encodeURIComponent(id)}`;
+const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail", string> = {
+  userDetail: "admin/users",
+  dealDetail: "admin/deals",
+  listingDetail: "admin/listings",
+  disputeDetail: "admin/disputes",
+  storeDetail: "admin/stores",
+};
+
+export function useAdminDetail<K extends keyof typeof DETAIL_PATHS>(resource: K, id: string, enabled = true) {
+  const path = `${DETAIL_PATHS[resource]}/${encodeURIComponent(id)}`;
   return useQuery<AdminResourcePayloads[K]>({
     queryKey: ["broka-admin", resource, id],
     enabled: enabled && Boolean(id),
-    queryFn: () => fetchAdminPath<AdminResourcePayloads[K]>(path),
+    queryFn: ({ signal }) => fetchAdminPath<AdminResourcePayloads[K]>(path, undefined, signal),
   });
 }
 

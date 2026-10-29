@@ -11,10 +11,11 @@ import { ValidatedResourceView } from "@/components/dashboard/validated-resource
 import { formatRouteLabel } from "@/lib/utils";
 
 const copy = {
-  listings: { title: "Listing detail", description: "The backend exposes listing enumeration only; a per-listing admin detail contract does not exist.", action: "Admin detail endpoint required", actions: [] as string[], sections: ["Listing information", "Moderation history"] },
+  listings: { title: "Listing detail", description: "Read-only listing record from GET /admin/listings/{id}.", action: "Read-only record", actions: [] as string[], sections: [] as string[] },
   users: { title: "User profile", description: "Identity, marketplace activity and trust history from GET /admin/users/{id}. Administrative actions are audited and idempotent.", actions: ["flag", "unflag", "recompute-trust", "promote-admin"] as string[], sections: [] as string[] },
-  disputes: { title: "Dispute detail", description: "Dispute cases are fully enumerated in the admin queue; a separate detail endpoint does not exist.", action: "Admin detail endpoint required", actions: [] as string[], sections: ["Case information", "Evidence & messages"] },
+  disputes: { title: "Dispute detail", description: "Read-only dispute case from GET /admin/disputes/{id}.", action: "Read-only record", actions: [] as string[], sections: [] as string[] },
   deals: { title: "Deal detail", description: "Deal state with its ledger entries, escrow payments and dispute cases. Read-only: money movement stays with the escrow engine.", actions: [] as string[], sections: [] as string[] },
+  stores: { title: "Store detail", description: "Read-only store record from GET /admin/stores/{id}.", action: "Read-only record", actions: [] as string[], sections: [] as string[] },
 };
 
 type DetailResource = keyof typeof copy;
@@ -22,6 +23,16 @@ type UserAction = "flag" | "unflag" | "recompute-trust" | "promote-admin";
 
 const ACTION_LABELS: Record<UserAction, string> = { flag: "Flag user", unflag: "Clear flag", "recompute-trust": "Recompute trust", "promote-admin": "Promote to admin" };
 const REASON_REQUIRED: Record<UserAction, boolean> = { flag: true, unflag: false, "recompute-trust": false, "promote-admin": true };
+
+function LooseDetail({ resource, resourceId }: { resource: "listings" | "disputes" | "stores"; resourceId: string }) {
+  const detailResource = resource === "listings" ? "listingDetail" : resource === "disputes" ? "disputeDetail" : "storeDetail";
+  const detail = useAdminDetail(detailResource, resourceId, true);
+  if (detail.isLoading) return <div className="data-panel p-5"><ResourceState state="loading" message={`Loading ${resource.slice(0, -1)} detail`} /></div>;
+  if (detail.isError) return <div className="data-panel p-5"><ResourceState state={detail.error && "status" in detail.error && (detail.error as { status: number }).status === 404 ? "empty" : "error"} message={detail.error instanceof Error ? detail.error.message : `Unable to load this ${resource.slice(0, -1)}.`} /></div>;
+  if (!detail.data) return null;
+  const entries = Object.entries(detail.data as Record<string, unknown>);
+  return <section className="data-panel p-5"><p className="text-sm font-semibold text-slate-200">Record fields ({entries.length})</p><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">{entries.map(([key, value]) => <div key={key} className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><dt className="text-[10px] uppercase tracking-[0.1em] text-slate-600">{key.replaceAll("_", " ")}</dt><dd className="mt-1 break-words font-mono text-xs text-slate-200">{typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : value === null || value === undefined ? "—" : JSON.stringify(value)}</dd></div>)}</dl></section>;
+}
 
 export function RecordDetail({ resource, resourceId }: { resource: DetailResource; resourceId: string }) {
   const [open, setOpen] = useState(false);
@@ -118,7 +129,7 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
 
     {resource === "deals" ? <>{dealDetail.isLoading ? <div className="data-panel p-5"><ResourceState state="loading" message="Loading deal detail" /></div> : dealDetail.isError ? <div className="data-panel p-5"><ResourceState state={dealDetail.error && "status" in dealDetail.error && dealDetail.error.status === 404 ? "empty" : "error"} message={dealDetail.error instanceof Error ? dealDetail.error.message : "Unable to load this deal."} /></div> : dealDetail.data ? <section className="data-panel overflow-hidden"><ValidatedResourceView resource="dealDetail" data={dealDetail.data} /></section> : null}</> : null}
 
-    {resource !== "users" && resource !== "deals" ? <div className="grid gap-4 lg:grid-cols-2">{config.sections.map((section) => <section key={section} className="data-panel p-5"><p className="text-sm font-semibold text-slate-200">{section}</p><div className="mt-4"><ResourceState state="unavailable" message="This information has no admin-scoped backend contract. Use the list view for the verified fields." /></div></section>)}</div> : null}
+    {resource === "listings" || resource === "disputes" || resource === "stores" ? <LooseDetail resource={resource} resourceId={resourceId} /> : null}
 
     {hasApiAction ? <section className="data-panel border-rose-400/15 p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

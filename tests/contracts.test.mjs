@@ -220,8 +220,11 @@ test("filter clearing updates all filters at once and lists have an empty state"
 
 test("notification surfaces are honest about backend contracts and delivery evidence", async () => {
   const alertCenter = await readFile(resolve(root, "components/dashboard/alert-center.tsx"), "utf8");
-  assert.match(alertCenter, /derived from the live operations snapshot/);
-  assert.match(alertCenter, /No bell badge or unread indicator is rendered/);
+  assert.match(alertCenter, /useAdminAlerts/);
+  assert.match(alertCenter, /useAlertsStream/);
+  assert.match(alertCenter, /unread/);
+  const shell = await readFile(resolve(root, "components/layout/admin-shell.tsx"), "utf8");
+  assert.match(shell, /useUnreadAlerts/);
   const communications = await readFile(resolve(root, "app/(dashboard)/communications/page.tsx"), "utf8");
   assert.match(communications, /Backend Upgrade Required/);
   assert.match(communications, /useAdminCommunications/);

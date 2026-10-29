@@ -3,12 +3,15 @@ import { cookies } from "next/headers";
 import type { ZodType } from "zod";
 
 import { refreshAccessToken } from "@/lib/api/auth";
-import { isSafeAdminPath, resourceForPath, validateAdminResource } from "@/lib/api/admin";
-import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE, parseUnknownJson, publicErrorMessage, upstreamFetch } from "@/lib/api/client";
+import { isSafeAdminPath, isStreamPath, resourceForPath, validateAdminResource } from "@/lib/api/admin";
+import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE, parseUnknownJson, publicErrorMessage, upstreamFetch, upstreamStream } from "@/lib/api/client";
 import { sessionCookieOptions } from "@/lib/auth/cookies";
 import { readBoundedJsonBody } from "@/lib/http/bounded-body";
 import { requireSameOrigin } from "@/lib/security/csrf";
 import {
+  AlertAcknowledgeInSchema,
+  AlertCreateInSchema,
+  AlertSchema,
   AudiencePreviewInSchema,
   AudiencePreviewOutSchema,
   CommunicationCreateInSchema,
@@ -58,6 +61,27 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/communications\/preview$/,
     requestSchema: AudiencePreviewInSchema,
     responseSchema: AudiencePreviewOutSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/alerts$/,
+    requestSchema: AlertCreateInSchema,
+    responseSchema: AlertSchema,
+    requiresIdempotencyKey: false,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/alerts\/([A-Za-z0-9._-]+)\/acknowledge$/,
+    requestSchema: AlertAcknowledgeInSchema,
+    responseSchema: AlertSchema,
+    requiresIdempotencyKey: true,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/alerts\/([A-Za-z0-9._-]+)\/resolve$/,
+    requestSchema: null,
+    responseSchema: AlertSchema,
+    requiresIdempotencyKey: true,
   },
   {
     method: "POST",
@@ -118,6 +142,51 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
       { code: "path_not_allowlisted", message: "This admin endpoint is not allowlisted by the dashboard.", request_id: id },
       { status: 404, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
     );
+  }
+  // SSE streams pass the upstream body through unbuffered as
+  // text/event-stream. Never JSON-parse or buffer it here.
+  if (isStreamPath(requestedPath.slice(1))) {
+    const tokenStore = await cookies();
+    const accessToken = tokenStore.get(ACCESS_COOKIE)?.value;
+    if (!accessToken) {
+      return NextResponse.json(
+        { code: "unauthorized", message: "Authentication required.", request_id: id },
+        { status: 401, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
+      );
+    }
+    const sourceUrl = new URL(request.url);
+    const upstreamPath = `${requestedPath}${sourceUrl.search}`;
+    const forwardHeaders: Record<string, string> = { "X-Request-ID": id };
+    const lastEventId = request.headers.get("last-event-id")?.trim();
+    if (lastEventId && lastEventId.length <= 256) forwardHeaders["Last-Event-ID"] = lastEventId;
+    try {
+      const upstream = await upstreamStream(upstreamPath, { headers: forwardHeaders }, accessToken);
+      if (!upstream.ok || !upstream.body) {
+        return NextResponse.json(
+          {
+            code: upstream.status === 401 ? "unauthorized" : "upstream_error",
+            message: publicErrorMessage(upstream),
+            request_id: id,
+          },
+          { status: upstream.status, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
+        );
+      }
+      return new Response(upstream.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-store",
+          Connection: "keep-alive",
+          "X-Request-ID": id,
+          "X-Accel-Buffering": "no",
+        },
+      });
+    } catch (error) {
+      const status = error instanceof BrokaApiError && error.status ? error.status : 503;
+      const message = error instanceof BrokaApiError ? error.message : "The BROKA API could not be reached.";
+      console.error(JSON.stringify({ event: "admin_proxy_stream_failure", request_id: id, path: requestedPath, status }));
+      return NextResponse.json({ code: "backend_unavailable", message, request_id: id }, { status, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } });
+    }
   }
   const resource = resourceForPath(requestedPath);
   if (!resource) {

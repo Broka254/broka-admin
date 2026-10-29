@@ -47,8 +47,8 @@ function Delta({ current, previous, label }: { current: number; previous: number
 export function CommandCenter({ snapshot, health, snapshotState, healthState }: {
   snapshot?: Snapshot;
   health?: Health;
-  snapshotState: "loading" | "error" | "not-deployed" | "unavailable";
-  healthState: "loading" | "error" | "not-deployed" | "unavailable";
+  snapshotState: "loading" | "ready" | "error" | "not-deployed" | "unavailable";
+  healthState: "loading" | "ready" | "error" | "not-deployed" | "unavailable";
 }) {
   if (!snapshot) {
     const detail = snapshotState === "loading" ? "Loading live queue data from /admin/ops-snapshot…"

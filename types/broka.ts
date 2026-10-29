@@ -9,11 +9,13 @@ export type ApiResource =
   | "workflowVersions" | "eventMetrics" | "eventCatalog" | "econfirmDiagnostics" | "clientIpDiagnostics" | "health"
   | "opsSnapshot" | "deals" | "listings" | "stores" | "disputes" | "payments" | "financeIntegrity"
   | "serviceHealth" | "zenoActivity" | "userDetail" | "dealDetail"
-  | "communications" | "workerDiagnostics" | "communicationDetail" | "communicationRecipients" | "communicationStats";
+  | "communications" | "workerDiagnostics" | "communicationDetail" | "communicationRecipients" | "communicationStats"
+  | "alerts" | "revenue" | "timeseries" | "listingDetail" | "disputeDetail" | "storeDetail";
 
 export type StaticAdminResource = Exclude<
   ApiResource,
   "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats"
+  | "listingDetail" | "disputeDetail" | "storeDetail"
 >;
 
 export type AdminActionName = "flag" | "unflag" | "recompute-trust" | "promote-admin" | "resolve-fraud-event";

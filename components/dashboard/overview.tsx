@@ -13,12 +13,12 @@ import { SectionEyebrow, StatusBadge } from "@/components/ui/primitives";
 
 export function Overview({ admin }: { admin: AdminIdentity }) {
   const summary = useAdminResource("summary");
-  const summaryState = summary.isLoading ? "loading" : summary.isError ? "error" : "schema-unavailable" as const;
+  const summaryState = summary.isLoading ? "loading" : summary.isError ? "error" : summary.data ? "ready" : "schema-unavailable" as const;
   const snapshot = useAdminResource("opsSnapshot");
   const snapshotMissing = isEndpointMissing(snapshot.error);
-  const snapshotState = snapshot.isLoading ? "loading" : snapshotMissing ? "not-deployed" : snapshot.isError ? "error" : "unavailable" as const;
+  const snapshotState = snapshot.isLoading ? "loading" : snapshotMissing ? "not-deployed" : snapshot.isError ? "error" : snapshot.data ? "ready" : "unavailable" as const;
   const health = useAdminResource("serviceHealth");
-  const healthState = health.isLoading ? "loading" : isEndpointMissing(health.error) ? "not-deployed" : health.isError ? "error" : "unavailable" as const;
+  const healthState = health.isLoading ? "loading" : isEndpointMissing(health.error) ? "not-deployed" : health.isError ? "error" : health.data ? "ready" : "unavailable" as const;
   const someData = Boolean(summary.data || snapshot.data);
   const badgeTone = summary.isError ? "danger" : snapshot.isError ? "warning" : someData ? "success" : "warning";
   const badgeText = summary.isError ? "Backend unavailable" : snapshot.isError ? (snapshotMissing ? "Backend upgrade required" : "Ops snapshot unavailable") : someData ? "Live backend data" : "Loading operations data";

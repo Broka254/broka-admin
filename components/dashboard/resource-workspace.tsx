@@ -1,13 +1,16 @@
 "use client";
 
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AdminRequestError, useAdminResource, useAdminUsers } from "@/hooks/use-admin-resource";
 import { ResourceState, SectionEyebrow, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import { UsersTable } from "@/components/dashboard/users-table";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
+import { MarketplaceAnalytics } from "@/components/dashboard/analytics/marketplace-analytics";
+import { UsersAnalytics } from "@/components/dashboard/analytics/users-analytics";
 
 import type { StaticAdminResource } from "@/types/broka";
 type WsFilter =
@@ -17,6 +20,9 @@ type WorkspaceDefinition = {
   title: string; eyebrow: string; description: string; missing: string;
   resource?: StaticAdminResource; endpoint?: string;
   filters?: WsFilter[]; pageSize?: number; defaults?: Record<string, string>;
+  // Self-fetching chart sections (timeseries analytics) render instead of
+  // the generic resource table; they own their own loading/error states.
+  custom?: "marketplaceAnalytics" | "usersAnalytics";
 };
 
 const ALL = { value: "all", label: "All" };
@@ -123,8 +129,8 @@ const workspaces: Record<string, WorkspaceDefinition> = {
   escrow: { title: "Escrow", eyebrow: "Financial operations", description: "Escrow state is read-only here: finance integrity and deal detail expose balances, while money movement stays with the escrow engine.", missing: "Use Finance Integrity and Deal Detail for escrow visibility." },
   commissions: { title: "Commissions", eyebrow: "Financial operations", description: "Recognised commission is on the Command Center and Finance Integrity pages. No time-series commission analytics endpoint exists.", missing: "Use Finance Integrity for commission reconciliation." },
   "zeno/negotiations": { title: "Zeno Negotiations", eyebrow: "BROKA intelligence", description: "Negotiation message counts are on the Zeno Activity page from durable tables.", missing: "Per-negotiation admin detail is not exposed by the backend." },
-  "analytics/marketplace": { title: "Marketplace Analytics", eyebrow: "Analytics", description: "Marketplace window comparisons live on the Command Center from the ops snapshot.", missing: "No marketplace time-series analytics endpoint exists." },
-  "analytics/users": { title: "User Analytics", eyebrow: "Analytics", description: "User window comparisons live on the Command Center from the ops snapshot.", missing: "No user time-series analytics endpoint exists." },
+  "analytics/marketplace": { title: "Marketplace Analytics", eyebrow: "Analytics", description: "GMV, deals, listings and disputes as durable time-series from the admin analytics endpoint.", missing: "No marketplace time-series analytics endpoint exists.", endpoint: "/admin/analytics/timeseries", custom: "marketplaceAnalytics" },
+  "analytics/users": { title: "User Analytics", eyebrow: "Analytics", description: "Signups and user activity as durable time-series from the admin analytics endpoint.", missing: "No user time-series analytics endpoint exists.", endpoint: "/admin/analytics/timeseries", custom: "usersAnalytics" },
   settings: { title: "Settings", eyebrow: "Control center", description: "Deployment settings remain server-owned and never reveal API keys or secret values.", missing: "This deployment intentionally exposes no browser-side secret or direct backend setting mutation." },
 };
 
@@ -144,15 +150,26 @@ function buildQuery(params: URLSearchParams, definition: WorkspaceDefinition, pa
   return query;
 }
 
+function DebouncedSearchInput({ placeholder, initialValue, onCommit }: { placeholder: string; initialValue: string; onCommit: (value: string | null) => void }) {
+  const [value, setValue] = useState(initialValue);
+  const debounced = useDebouncedValue(value, 300);
+  const committed = useMemo(() => debounced.trim() || null, [debounced]);
+  useEffect(() => {
+    if ((initialValue ?? "") !== (committed ?? "")) onCommit(committed);
+  }, [committed]);
+  useEffect(() => { setValue(initialValue); }, [initialValue]);
+  return <div className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden="true" /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} aria-label={placeholder} className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-600" /></div>;
+}
+
 function FilterToolbar({ definition, params, onSet, onSetMany }: { definition: WorkspaceDefinition; params: URLSearchParams; onSet: (param: string, value: string | null) => void; onSetMany: (updates: Record<string, string | null>) => void }) {
   const active = (definition.filters ?? []).filter((filter) => params.get(filter.param) && params.get(filter.param) !== "all");
   if (!definition.filters?.length) return null;
   const source = params.get("source");
   return <section className="data-panel p-4">
-    <form key={params.toString()} className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("searchInput") as HTMLInputElement | null; if (input) onSet("search", input.value.trim() || null); }}>
+    <form key={params.toString()} className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => event.preventDefault()}>
       {(definition.filters ?? []).map((filter) => {
         if (filter.kind === "search" && filter.param === "search") {
-          return <div key={filter.param} className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden="true" /><input name="searchInput" defaultValue={params.get(filter.param) ?? ""} placeholder={filter.placeholder} aria-label={filter.placeholder} className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-600" /></div>;
+          return <DebouncedSearchInput key={filter.param} placeholder={filter.placeholder} initialValue={params.get(filter.param) ?? ""} onCommit={(value) => onSet("search", value)} />;
         }
         return null;
       })}
@@ -195,6 +212,13 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
 
   function setParam(param: string, value: string | null) {
     setParams({ [param]: value });
+  }
+
+  if (definition.custom) {
+    return <div className="space-y-6">
+      <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between"><div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p></div><StatusBadge tone="neutral">Time-series surface</StatusBadge></section>
+      {definition.custom === "marketplaceAnalytics" ? <MarketplaceAnalytics /> : <UsersAnalytics />}
+    </div>;
   }
 
   if (!definition.resource) {

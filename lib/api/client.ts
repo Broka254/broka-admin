@@ -77,6 +77,32 @@ export async function upstreamFetch(
   }
 }
 
+// Unbuffered SSE passthrough for GET /admin/alerts/stream. No timeout signal:
+// the upstream stream is long-lived and the browser owns cancellation.
+export async function upstreamStream(
+  path: string,
+  init: { headers?: Record<string, string>; signal?: AbortSignal } = {},
+  accessToken?: string,
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "text/event-stream");
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  try {
+    return await fetch(`${apiBaseUrl()}${path}`, {
+      headers,
+      cache: "no-store",
+      signal: init.signal,
+    });
+  } catch (error) {
+    if (error instanceof BrokaApiError) throw error;
+    throw new BrokaApiError(
+      "The BROKA API could not be reached. Please retry shortly.",
+      undefined,
+      "network",
+    );
+  }
+}
+
 export async function parseUnknownJson(response: Response): Promise<unknown> {
   try {
     return await response.json();

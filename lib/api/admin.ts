@@ -1,11 +1,12 @@
 import "server-only";
 
-import type { ApiResource } from "@/types/broka";
+import type { ApiResource, StaticAdminResource } from "@/types/broka";
 import { BrokaApiError, parseUnknownJson, publicErrorMessage, upstreamFetch } from "@/lib/api/client";
 import { parseAdminResource, AdminActionResultSchema, type AdminActionResult, type AdminResourcePayloads } from "@/lib/api/schemas";
 import { ZodError } from "zod";
 
-export type StaticAdminResource = Exclude<ApiResource, "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats">;
+export type { StaticAdminResource };
+export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats">;
 
 export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   summary: "/admin/summary",
@@ -32,15 +33,25 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   zenoActivity: "/admin/zeno/activity",
   communications: "/admin/communications",
   workerDiagnostics: "/admin/communications/diagnostics/worker",
+  alerts: "/admin/alerts",
+  revenue: "/admin/revenue",
+  timeseries: "/admin/analytics/timeseries",
 };
 
 const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   { pattern: /^admin\/users\/([^/]+)$/, resource: "userDetail" },
   { pattern: /^admin\/deals\/([^/]+)$/, resource: "dealDetail" },
+  { pattern: /^admin\/listings\/([^/]+)$/, resource: "listingDetail" },
+  { pattern: /^admin\/disputes\/([^/]+)$/, resource: "disputeDetail" },
+  { pattern: /^admin\/stores\/([^/]+)$/, resource: "storeDetail" },
   { pattern: /^admin\/communications\/([^/]+)$/, resource: "communicationDetail" },
   { pattern: /^admin\/communications\/([^/]+)\/recipients$/, resource: "communicationRecipients" },
   { pattern: /^admin\/communications\/([^/]+)\/stats$/, resource: "communicationStats" },
 ];
+
+// The SSE stream is a text/event-stream passthrough, not a JSON resource, so
+// it is allowlisted here but has no entry in AdminResourceSchemas.
+const STREAM_PATHS = new Set(["admin/alerts/stream"]);
 
 const RESOURCE_BY_PATH = new Map(Object.entries(ADMIN_ENDPOINTS).map(([resource, path]) => [path.slice(1), resource as ApiResource]));
 
@@ -48,6 +59,10 @@ const RESOURCE_BY_PATH = new Map(Object.entries(ADMIN_ENDPOINTS).map(([resource,
 // pass the request path keep it. Normalise here so both work.
 function normalizePath(path: string): string {
   return path.startsWith("/") ? path.slice(1) : path;
+}
+
+export function isStreamPath(path: string): boolean {
+  return STREAM_PATHS.has(normalizePath(path).split("?")[0]);
 }
 
 export function resourceForPath(path: string): ApiResource | null {
@@ -59,7 +74,10 @@ export function resourceForPath(path: string): ApiResource | null {
 
 export function isSafeAdminPath(path: string): boolean {
   const normalized = normalizePath(path);
-  return RESOURCE_BY_PATH.has(normalized) || DETAIL_PATTERNS.some((entry) => entry.pattern.test(normalized));
+  // Query strings never reach this check (the proxy strips them before
+  // allowlisting), but tolerate them here for direct callers.
+  const bare = normalized.split("?")[0];
+  return RESOURCE_BY_PATH.has(bare) || STREAM_PATHS.has(bare) || DETAIL_PATTERNS.some((entry) => entry.pattern.test(bare));
 }
 
 export function validateAdminResource(resource: ApiResource, payload: unknown): AdminResourcePayloads[typeof resource] {

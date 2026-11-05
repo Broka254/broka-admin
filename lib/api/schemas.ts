@@ -713,7 +713,7 @@ export type ProductionCostBasis = z.infer<typeof ProductionCostBasisSchema>;
 
 const productionCostCurrency = z.string().regex(/^[A-Z]{3}$/);
 const productionCostDateOnly = z.string()
-  .regex(/^\\d{4}-\\d{2}-\\d{2}$/)
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine((value) => {
     const parsed = new Date(value + "T00:00:00.000Z");
     return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
@@ -772,7 +772,7 @@ export const ProductionCostManualEntryInSchema = z.object({
   service_key: z.string().trim().min(1).max(80),
   amount_minor: z.number().int().positive(),
   currency: productionCostCurrency,
-  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  occurred_on: productionCostDateOnly,
   description: z.string().trim().min(3).max(500),
   reference: z.string().trim().max(120).nullable().optional(),
 }).strict();
@@ -794,8 +794,8 @@ export type ProductionCostManualEntry = z.infer<typeof ProductionCostManualEntry
 
 export const ProductionCostsResponseSchema = z.object({
   generated_at: z.string().datetime({ offset: true }),
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  from: productionCostDateOnly,
+  to: productionCostDateOnly,
   services: z.array(ProductionCostServiceSchema),
   manual_entries: z.array(ProductionCostManualEntrySchema),
   capabilities: z.object({

@@ -36,10 +36,11 @@ function context(...segments: string[]) {
   return { params: Promise.resolve({ path: segments }) };
 }
 
-function mutationRequest(body: string, options: { origin?: string | null; contentType?: string; path?: string[] } = {}) {
+function mutationRequest(body: string, options: { origin?: string | null; contentType?: string; path?: string[]; idempotencyKey?: string } = {}) {
   const headers: Record<string, string> = {};
   if (options.origin !== null) headers.origin = options.origin ?? "http://localhost";
   if (options.contentType !== undefined) headers["content-type"] = options.contentType;
+  if (options.idempotencyKey) headers["x-idempotency-key"] = options.idempotencyKey;
   return new Request(`http://localhost/api/broka/${(options.path ?? ["admin", "communications", "preview"]).join("/")}`, {
     method: "POST",
     headers,
@@ -176,6 +177,74 @@ describe("admin proxy security boundaries", () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toMatchObject({ code: "validation_failed" });
     expect(state.upstreamCalls).toHaveLength(0);
+  });
+
+  it("rejects manual financial entries without an idempotency key before forwarding", async () => {
+    const response = await POST(
+      mutationRequest(JSON.stringify({
+        service_key: "sms_gateway",
+        description: "October SMS invoice",
+        period_start: "2026-10-01",
+        period_end: "2026-11-01",
+        amount_minor: 2900,
+        currency: "KES",
+        note: null,
+      }), {
+        contentType: "application/json",
+        path: ["admin", "revenue", "costs", "entries"],
+      }),
+      context("admin", "revenue", "costs", "entries"),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "idempotency_key_required" });
+    expect(state.upstreamCalls).toHaveLength(0);
+  });
+
+  it("forwards an idempotency key and validates manual cost-entry responses", async () => {
+    state.upstreamResponse = new Response(JSON.stringify({
+      entry: {
+        id: "cost-1",
+        service_key: "sms_gateway",
+        service_name: "SMS gateway",
+        description: "October SMS invoice",
+        period_start: "2026-10-01",
+        period_end: "2026-11-01",
+        amount_minor: 2900,
+        currency: "KES",
+        source: "manual",
+        note: null,
+        recorded_by: "Admin",
+        created_at: "2026-11-05T10:00:00Z",
+      },
+    }), { status: 201, headers: { "content-type": "application/json" } });
+
+    const response = await POST(
+      mutationRequest(JSON.stringify({
+        service_key: "sms_gateway",
+        description: "October SMS invoice",
+        period_start: "2026-10-01",
+        period_end: "2026-11-01",
+        amount_minor: 2900,
+        currency: "KES",
+        note: null,
+      }), {
+        contentType: "application/json",
+        idempotencyKey: "manual-cost-entry-0001",
+        path: ["admin", "revenue", "costs", "entries"],
+      }),
+      context("admin", "revenue", "costs", "entries"),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ entry: { id: "cost-1", source: "manual" } });
+    expect(state.upstreamCalls).toHaveLength(1);
+    const forwarded = new Headers(state.upstreamCalls[0].headers);
+    expect(forwarded.get("x-idempotency-key")).toBe("manual-cost-entry-0001");
+    expect(state.upstreamCalls[0]).toMatchObject({
+      path: "/admin/revenue/costs/entries",
+      method: "POST",
+      token: "access-token",
+    });
   });
 
   it("does not relay an upstream server error body to the browser", async () => {

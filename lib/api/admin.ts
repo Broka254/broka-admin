@@ -35,6 +35,7 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   workerDiagnostics: "/admin/communications/diagnostics/worker",
   alerts: "/admin/alerts",
   revenue: "/admin/revenue",
+  serviceCosts: "/admin/revenue/costs",
   timeseries: "/admin/analytics/timeseries",
 };
 

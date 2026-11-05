@@ -39,72 +39,66 @@ header mismatch is fixed. This statement does **not** extend to Service
 Communications draft creation, whose inspected handler has no creation-idempotency
 enforcement.
 
-## Production cost tracking (backend PR #5; deployment pending)
+## Production cost tracking (backend PR #5 pending review)
 
-The Production Costs workspace is aligned to the implementation in
-[backend PR #5](https://github.com/Broka254/broka/pull/5). That PR is currently
-draft and unmerged. The dashboard will continue to show an explicit unavailable
-state until the API change is merged, deployed, and verified; it never substitutes
-sample values or infers spend from unrelated counters.
+The admin app includes a Production Costs workspace. Its API paths and response
+contract have now been checked against backend PR
+[Broka254/broka#5](https://github.com/Broka254/broka/pull/5), branch
+`feat/admin-production-cost-ledger`, head
+`64cb48faa4a9be6a03db086d4ebba03d4ed65df2`.
 
-The implemented read contract is:
+**The contracts match, but the backend is not released yet.** PR #5 is still a
+draft and has not been merged into the backend default branch or deployed.
+Consequently, the live API may continue returning 404 until that release is
+completed. The dashboard intentionally displays an unavailable state in that
+case; it does not invent figures or substitute unrelated counters.
 
-- `GET /admin/production-costs?from=YYYY-MM-DD&to=YYYY-MM-DD`; `from` is
-  inclusive and `to` is exclusive. The date picker selects an inclusive end
-  date, and the dashboard sends the following day as the API's exclusive `to`.
-- The response includes `generated_at`, the requested reporting window,
-  service rows, manual-entry history, capability flags, and reporting notes.
-- Each service row includes usage and request counts, currency, provider-reported
-  cost, usage estimate, estimated maximum, manual cost, selected amount/basis,
-  source label, last sync time, and notes. Service keys are scoped by currency
-  (for example, `sms:KES`).
-- `selected_cost_basis` is `provider_reported`, `usage_estimate`,
-  `manual_entry`, or `unavailable`. The dashboard sums only
-  `selected_cost_minor`; source comparison columns are not added to that total.
-- Amounts are integer minor units. Totals remain grouped by ISO 4217 currency.
-  A null amount means unavailable/unpriced; it is not presented as zero spend.
-- No maximum estimate is currently supplied by the backend; the API returns
-  `estimated_max_minor: null` rather than inventing a ceiling.
+Verified backend PR contract:
 
-The implemented manual-entry contract is:
-
+- `GET /admin/production-costs?from=YYYY-MM-DD&to=YYYY-MM-DD` — inclusive
+  start date and exclusive end date. Returns `generated_at`, `from`, `to`,
+  `services`, `manual_entries`, `capabilities`, and explanatory `notes`.
+- Service rows match the frontend Zod schema: service key/label/category,
+  usage and request counts, currency, provider-reported and estimated amounts,
+  estimated maximum, manual amount, selected amount/basis, source/pricing
+  metadata, last sync timestamp, and notes.
+- Cost basis is one of `provider_reported`, `usage_estimate`,
+  `manual_entry`, or `unavailable`. The UI counts only the selected basis
+  in the selected total and keeps source comparisons separate.
+- Amounts are integer minor units and totals remain grouped by ISO currency.
+  An unavailable or unpriced amount is `null`, not a fabricated zero.
 - `POST /admin/production-costs/manual-entries` accepts
   `service_key`, positive `amount_minor`, `currency`, `occurred_on`,
-  `description`, and optional `reference`; it requires
-  `X-Idempotency-Key`.
-- The dashboard sends the selected service/currency key and inherits that
-  service row's currency, preventing the operator from accidentally entering
-  a cost in a different currency.
-- The backend stores the admin actor, creation time, invoice/reference, and an
-  audit-log event. Reusing a key with the same payload replays the entry; a
-  different payload with the same key is rejected.
-- Manual entries are grouped by service and currency for the chosen date range.
-  When present, the aggregate manual amount becomes the selected basis for that
-  service/currency row; provider and estimate values remain visible separately.
-- `capabilities.manual_entries` controls whether the form is enabled.
-  `capabilities.provider_sync` is currently false.
+  `description`, and optional `reference`. It requires
+  `X-Idempotency-Key`. The response includes the persisted ID, service,
+  amount, currency, date, description, reference, creator label, and
+  timestamp. The frontend proxy validates the request and response and
+  forwards the key.
+- The backend route uses `VIEW_PRODUCTION_COSTS` for reads and
+  `MANAGE_PRODUCTION_COSTS` for writes. In the current backend permission
+  model all `is_admin` accounts receive both permissions; these names do not
+  yet establish different admin sub-roles.
 
-Current implementation coverage and limits in backend PR #5:
+Current PR implementation limits that must remain visible in the UI:
 
-- Existing ledger records provide SMS cost/usage and AI cost estimates/known
-  token usage. AI estimates use configured backend rate assumptions; a pricing
-  version is not currently returned.
-- Payment-provider fees are derived from the existing revenue calculator and
-  reported as estimates, not as provider invoices. Escrow principal and GMV are
-  excluded.
-- Successful email and image-generation usage is counted but remains unpriced
-  until provider rates are configured.
-- Database, storage, Redis/cache, and push-notification instrumentation is not
-  connected yet. Hosting and other invoices can be entered manually; provider
-  invoice synchronisation is not implemented.
-- Current permission flags are explicit at the route boundary, but the backend
-  presently grants both cost permissions to every `is_admin` account; they do
-  not yet provide restricted administrator sub-roles.
+- Existing SMS and AI `PlatformCost` rows feed the report. Payment fees are
+  derived from the existing revenue calculator's tariff assumptions, so they
+  are estimates rather than provider invoices.
+- Successful Resend email and Hugging Face image-generation events are
+  counted as unpriced usage until verified rates are configured. They must not
+  be described as free or assigned an assumed cost.
+- Database, storage, Redis, push, and other provider billing integrations are
+  not yet connected. Provider sync is reported as unavailable, and estimated
+  maximums are `null` where no defensible ceiling exists.
+- Manual entries are stored separately, attributed to the administrator, and
+  audited. They do not mutate the original `PlatformCost` evidence.
 
-The backend PR includes tests for admin authorization, source separation,
-exclusive date boundaries, manual-entry audit attribution, idempotent replay,
-and conflicting-key rejection. PostgreSQL/staging and deployed-endpoint
-verification remain separate release checks.
+The dashboard contract is therefore integrated with the **draft source
+contract**, not proof that the production API already serves it. After PR #5
+is merged, its schema/database change is deployed, and the live endpoint is
+verified in staging, recheck the end-to-end dashboard against the deployed
+response before enabling production use.
+
 ## Authorization
 
 The admin router now attaches granular dependencies from `api/core/permissions.py`: `ADMIN_SUMMARY`, `MANAGE_USERS`, `PROMOTE_ADMIN`, `VIEW_TRANSACTIONS`, `VIEW_ALL_DISPUTES`, `OVERRIDE_ESCROW`. All current admins hold every flag, so behavior is backward compatible; defining restricted admin sub-roles would require schema storage and is intentionally not done.

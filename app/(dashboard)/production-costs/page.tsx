@@ -89,8 +89,14 @@ type SummaryAmountField =
   | "estimatedMinor"
   | "estimatedMaxMinor"
   | "manualMinor";
+type SummaryCountField =
+  | "pricedServices"
+  | "providerReportedServices"
+  | "estimatedServices"
+  | "estimatedMaxServices"
+  | "manualServices";
 
-const SUMMARY_COUNT_FIELD: Record<SummaryAmountField, keyof ReturnType<typeof summarizeProductionCosts>[number]> = {
+const SUMMARY_COUNT_FIELD: Record<SummaryAmountField, SummaryCountField> = {
   selectedMinor: "pricedServices",
   providerReportedMinor: "providerReportedServices",
   estimatedMinor: "estimatedServices",

@@ -50,16 +50,33 @@ export function summarizeProductionCosts(services: ProductionCostService[]): Cur
   return Array.from(grouped.values()).sort((a, b) => a.currency.localeCompare(b.currency));
 }
 
+export function currencyMinorUnitDigits(currency: string): number {
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+    }).resolvedOptions().maximumFractionDigits;
+  } catch {
+    return 2;
+  }
+}
+
+export function toMinorUnits(amount: number, currency: string): number {
+  return Math.round(amount * (10 ** currencyMinorUnitDigits(currency)));
+}
+
 export function formatMinorCurrency(amountMinor: number | null, currency: string): string {
   if (amountMinor === null) return "Not available";
+  const digits = currencyMinorUnitDigits(currency);
   try {
     return new Intl.NumberFormat("en-KE", {
       style: "currency",
       currency,
-      maximumFractionDigits: 2,
-    }).format(amountMinor / 100);
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(amountMinor / (10 ** digits));
   } catch {
-    return currency + " " + (amountMinor / 100).toFixed(2);
+    return currency + " " + (amountMinor / (10 ** digits)).toFixed(digits);
   }
 }
 

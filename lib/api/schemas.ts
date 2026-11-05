@@ -784,7 +784,7 @@ export const ProductionCostManualEntrySchema = z.object({
   service_label: z.string().min(1),
   amount_minor: z.number().int().positive(),
   currency: productionCostCurrency,
-  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  occurred_on: productionCostDateOnly,
   description: z.string(),
   reference: z.string().nullable(),
   created_at: z.string().datetime({ offset: true }),

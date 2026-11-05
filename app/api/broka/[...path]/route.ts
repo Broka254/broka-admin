@@ -23,6 +23,7 @@ import {
   PublishOutSchema,
   RetryOutSchema,
 } from "@/lib/api/schemas";
+import { ServiceCostEntryCreateInSchema, ServiceCostEntryCreateResponseSchema } from "@/lib/api/service-costs-contract";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,6 +57,13 @@ type MutationOperation = {
 };
 
 const MUTATION_OPERATIONS: MutationOperation[] = [
+  {
+    method: "POST",
+    pattern: /^admin\\/revenue\\/costs\\/entries$/,
+    requestSchema: ServiceCostEntryCreateInSchema,
+    responseSchema: ServiceCostEntryCreateResponseSchema,
+    requiresIdempotencyKey: true,
+  },
   {
     method: "POST",
     pattern: /^admin\/communications\/preview$/,
@@ -284,6 +292,12 @@ async function handleMutation(
       );
     }
     idempotencyKey = rawIdempotency;
+  }
+  if (operation.requiresIdempotencyKey && !idempotencyKey) {
+    return NextResponse.json(
+      { code: "idempotency_key_required", message: "This financial mutation requires an X-Idempotency-Key header.", request_id: id },
+      { status: 400, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
+    );
   }
 
   // Validate incoming request body if required

@@ -729,6 +729,8 @@ export const ProductionCostServiceSchema = z.object({
   selected_cost_minor: nullableMinorAmount,
   selected_cost_basis: ProductionCostBasisSchema,
   source_label: z.string().max(120).nullable(),
+  estimate_method: z.string().max(200).nullable().optional(),
+  pricing_version: z.string().max(80).nullable().optional(),
   last_synced_at: z.string().datetime({ offset: true }).nullable(),
   notes: z.array(z.string().max(500)),
 }).superRefine((service, context) => {

@@ -55,7 +55,7 @@ export function currencyMinorUnitDigits(currency: string): number {
     return new Intl.NumberFormat("en", {
       style: "currency",
       currency,
-    }).resolvedOptions().maximumFractionDigits;
+    }).resolvedOptions().maximumFractionDigits ?? 2;
   } catch {
     return 2;
   }

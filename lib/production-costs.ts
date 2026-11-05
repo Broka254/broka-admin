@@ -5,15 +5,20 @@ export type CurrencyCostSummary = {
   selectedMinor: number;
   providerReportedMinor: number;
   estimatedMinor: number;
+  estimatedMaxMinor: number;
   manualMinor: number;
   pricedServices: number;
   unpricedServices: number;
+  providerReportedServices: number;
+  estimatedServices: number;
+  estimatedMaxServices: number;
+  manualServices: number;
 };
 
 /**
- * Sums only the one selected cost basis for each service. The source figures
- * remain visible for comparison, but are not added together; this prevents an
- * invoice and its usage estimate from being counted twice.
+ * Keeps the selected amount separate from each available source amount.
+ * Selected totals count one basis per service; source totals are shown as
+ * independent comparisons and must never be added to the selected total.
  */
 export function summarizeProductionCosts(services: ProductionCostService[]): CurrencyCostSummary[] {
   const grouped = new Map<string, CurrencyCostSummary>();
@@ -24,9 +29,14 @@ export function summarizeProductionCosts(services: ProductionCostService[]): Cur
       selectedMinor: 0,
       providerReportedMinor: 0,
       estimatedMinor: 0,
+      estimatedMaxMinor: 0,
       manualMinor: 0,
       pricedServices: 0,
       unpricedServices: 0,
+      providerReportedServices: 0,
+      estimatedServices: 0,
+      estimatedMaxServices: 0,
+      manualServices: 0,
     };
 
     if (service.selected_cost_minor === null) {
@@ -34,14 +44,26 @@ export function summarizeProductionCosts(services: ProductionCostService[]): Cur
     } else {
       current.selectedMinor += service.selected_cost_minor;
       current.pricedServices += 1;
+    }
 
-      if (service.selected_cost_basis === "provider_reported") {
-        current.providerReportedMinor += service.selected_cost_minor;
-      } else if (service.selected_cost_basis === "usage_estimate") {
-        current.estimatedMinor += service.selected_cost_minor;
-      } else if (service.selected_cost_basis === "manual_entry") {
-        current.manualMinor += service.selected_cost_minor;
-      }
+    // These are the raw source values, even when that source is not the
+    // selected basis. A provider invoice must remain visible when a manual
+    // override is selected, and vice versa.
+    if (service.provider_reported_minor !== null) {
+      current.providerReportedMinor += service.provider_reported_minor;
+      current.providerReportedServices += 1;
+    }
+    if (service.usage_estimate_minor !== null) {
+      current.estimatedMinor += service.usage_estimate_minor;
+      current.estimatedServices += 1;
+    }
+    if (service.estimated_max_minor !== null) {
+      current.estimatedMaxMinor += service.estimated_max_minor;
+      current.estimatedMaxServices += 1;
+    }
+    if (service.manual_minor !== null) {
+      current.manualMinor += service.manual_minor;
+      current.manualServices += 1;
     }
 
     grouped.set(service.currency, current);

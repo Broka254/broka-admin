@@ -273,7 +273,7 @@ function ManualEntryForm({
         <div>
           <h3 className="text-sm font-semibold text-white">Record a manual production cost</h3>
           <p className="mt-1 text-xs leading-5 text-slate-400">
-            This creates a separate, auditable entry. It does not overwrite provider data or silently replace an estimate.
+            This preserves provider and estimate records. When manual entries exist, their total becomes the selected basis for that service and currency in the chosen date range.
           </p>
         </div>
         <button type="button" onClick={onClose} className="text-xs font-semibold text-slate-400 hover:text-white">Close</button>
@@ -285,7 +285,7 @@ function ManualEntryForm({
           <select required value={serviceKey} onChange={(event) => {
             setServiceKey(event.target.value);
           }} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60">
-            {services.map((service) => <option key={service.key} value={service.key}>{service.label}</option>)}
+            {services.map((service) => <option key={service.key} value={service.key}>{service.label} · {service.currency}</option>)}
           </select>
         </label>
         <label className="text-xs font-medium text-slate-300">

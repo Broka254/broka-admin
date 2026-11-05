@@ -72,7 +72,7 @@ describe("RevenuePage", () => {
   it("renders KPIs, chart container, and CSV button with a fixture", () => {
     revenueMock.mockReturnValue(okResult(fixture));
     render(<RevenuePage />);
-    // KES 12,345 appears twice: the income KPI and the stream row.
+    // KES 12,345 appears in both the income KPI and the stream row.
     expect(screen.getAllByText("KES 12,345").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("KES 10,000")).toBeInTheDocument();
     expect(screen.getByText("81.0%")).toBeInTheDocument();
@@ -82,7 +82,8 @@ describe("RevenuePage", () => {
     expect(screen.getByText("Revenue insights")).toBeInTheDocument();
     expect(screen.getByText("Cost-to-income ratio")).toBeInTheDocument();
     expect(screen.getByText("Platform income")).toBeInTheDocument();
-    expect(screen.getByText(/not an audited net-profit/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reported profit is income less costs recorded or derived by the backend/i)).toBeInTheDocument();
+    expect(screen.getByText(/Estimates are included in reported costs and profit/i)).toBeInTheDocument();
     expect(screen.getByText("Estimated")).toBeInTheDocument();
     expect(screen.getByText("Costs include estimated infrastructure spend.")).toBeInTheDocument();
   });

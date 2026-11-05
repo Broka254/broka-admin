@@ -93,10 +93,9 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
   },
   {
     method: "POST",
-    pattern: /^admin\/production-costs\/manual-entries$/,
-    requestSchema: ProductionCostManualEntryInSchema,
-    responseSchema: ProductionCostManualEntrySchema,
-    requiresIdempotencyKey: true,
+    pattern: /^admin\/revenue\/costs\/entries$/,
+    requestSchema: ProductionCostEntryInSchema,
+    responseSchema: ProductionCostEntryMutationResponseSchema,
   },
   {
     method: "PATCH",

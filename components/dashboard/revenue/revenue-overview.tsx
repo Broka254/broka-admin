@@ -106,7 +106,7 @@ function CostConfidence({ data }: { data: RevenueResponse }) {
         className="mt-3 flex h-2 overflow-hidden rounded-full bg-white/10"
         role="img"
         aria-label={
-          formatKES(recorded, data.currency) + " recorded/configured costs and " +
+          formatKES(recorded, data.currency) + " costs not flagged estimated and " +
           formatKES(estimated, data.currency) + " estimated costs"
         }
       >

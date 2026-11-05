@@ -9,18 +9,23 @@ import {
   type ProductionCostManualEntryInput,
 } from "@/lib/api/schemas";
 
+export type CreateProductionCostManualEntryVariables = {
+  input: ProductionCostManualEntryInput;
+  idempotencyKey: string;
+};
+
 export function useCreateProductionCostManualEntry() {
   const queryClient = useQueryClient();
 
-  return useMutation<ProductionCostManualEntry, Error, ProductionCostManualEntryInput>({
-    mutationFn: async (input) => {
+  return useMutation<ProductionCostManualEntry, Error, CreateProductionCostManualEntryVariables>({
+    mutationFn: async ({ input, idempotencyKey }) => {
       const response = await fetch("/api/broka/admin/production-costs/manual-entries", {
         method: "POST",
         credentials: "same-origin",
         cache: "no-store",
         headers: {
           "Content-Type": "application/json",
-          "X-Idempotency-Key": crypto.randomUUID(),
+          "X-Idempotency-Key": idempotencyKey,
         },
         body: JSON.stringify(input),
       });

@@ -4,6 +4,7 @@ import {
   RevenueResponseSchema,
   TimeseriesResponseSchema,
   buildRevenueQuery,
+  previousRevenuePeriod,
 } from "@/lib/api/revenue";
 
 const validRevenue = {
@@ -58,9 +59,33 @@ describe("RevenueResponseSchema", () => {
     ).toThrow();
   });
 
-  it("builds the expected query string", () => {
+  it("builds a half-open API range that includes the selected end date", () => {
     const params = buildRevenueQuery({ from: "2026-09-29", to: "2026-10-29", bucket: "week" });
-    expect(params.toString()).toBe("from=2026-09-29&to=2026-10-29&bucket=week");
+    expect(params.toString()).toBe("from=2026-09-29&to=2026-10-30&bucket=week");
+  });
+
+  it("builds a matching, non-overlapping previous period", () => {
+    expect(previousRevenuePeriod({
+      from: "2026-10-01",
+      to: "2026-10-30",
+      bucket: "day",
+    })).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-30",
+      bucket: "day",
+    });
+  });
+
+  it("handles leap days when deriving a previous period", () => {
+    expect(previousRevenuePeriod({
+      from: "2024-03-01",
+      to: "2024-03-31",
+      bucket: "month",
+    })).toEqual({
+      from: "2024-01-30",
+      to: "2024-02-29",
+      bucket: "month",
+    });
   });
 });
 

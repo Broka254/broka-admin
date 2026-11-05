@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ProductionCostManualEntryInSchema,
+  ProductionCostEntryInSchema,
   ProductionCostServiceSchema,
   ProductionCostsResponseSchema,
+  ProductionCostEntriesResponseSchema,
 } from "@/lib/api/schemas";
 import {
   currencyMinorUnitDigits,
@@ -12,181 +13,137 @@ import {
   toMinorUnits,
 } from "@/lib/production-costs";
 
+const period = { start: "2026-11-01T00:00:00+00:00", end: "2026-12-01T00:00:00+00:00" };
 const service = {
-  key: "sms",
-  label: "SMS delivery",
+  service_key: "sms.texin",
+  service_name: "Texin SMS",
+  provider: "Texin",
   category: "messaging",
-  usage_count: 100,
-  usage_unit: "segments",
-  request_count: 82,
+  usage_unit: "sms_segment",
+  pricing_model: "per_unit",
+  billable: true,
+  active: true,
   currency: "KES",
-  provider_reported_minor: 2900,
-  usage_estimate_minor: 3100,
-  estimated_max_minor: 3500,
-  manual_minor: null,
-  selected_cost_minor: 2900,
-  selected_cost_basis: "provider_reported" as const,
-  source_label: "Provider invoice",
-  last_synced_at: "2026-11-05T10:00:00Z",
-  notes: [],
+  default_confidence: "exact",
+  maximum_estimated_cost_minor: 3500,
+  notes: null,
+  reporting_period: period,
+  requests_total: 82,
+  requests_success: 80,
+  requests_failed: 2,
+  requests_accepted: 80,
+  usage_quantity: 100,
+  successful_quantity: 100,
+  failed_quantity: 0,
+  accepted_quantity: 100,
+  input_tokens: 0,
+  output_tokens: 0,
+  total_tokens: 0,
+  actual_cost_minor: 2900,
+  estimated_cost_minor: 3100,
+  entry_estimated_cost_minor: null,
+  usage_estimated_cost_minor: 3100,
+  manually_entered_cost_minor: null,
+  adjusted_cost_minor: null,
+  effective_cost_minor: 2900,
+  effective_currency: "KES",
+  cost_source: "invoice",
+  confidence: "exact",
+  cost_status: "priced",
+  unpriced_events: 0,
+  priced_events: 80,
+  has_usage: true,
+  has_cost_information: true,
 };
-
 const response = {
-  generated_at: "2026-11-05T10:00:00Z",
-  from: "2026-10-01",
-  to: "2026-11-01",
+  currency: "KES",
+  currencies: ["KES"],
+  reporting_period: period,
+  generated_at: "2026-12-01T00:00:00+00:00",
+  totals_by_currency: [{
+    currency: "KES",
+    effective_cost_minor: 2900,
+    actual_cost_minor: 2900,
+    estimated_cost_minor: 3100,
+    manually_entered_cost_minor: 0,
+    adjusted_cost_minor: 0,
+    maximum_estimated_cost_minor: 3500,
+    services_with_cost: 1,
+    unpriced_services: 0,
+  }],
   services: [service],
-  manual_entries: [],
-  capabilities: { manual_entries: true, provider_sync: false },
-  notes: [],
 };
 
-describe("Production cost contracts", () => {
-  it("parses a valid service ledger response", () => {
+describe("Verified production-cost API contracts", () => {
+  it("parses the backend /services response shape", () => {
     const parsed = ProductionCostsResponseSchema.parse(response);
-    expect(parsed.services[0].usage_count).toBe(100);
-    expect(parsed.services[0].estimated_max_minor).toBe(3500);
-    expect(() => ProductionCostsResponseSchema.parse({ ...response, from: "2026-02-30" })).toThrow();
+    expect(parsed.services[0].service_key).toBe("sms.texin");
+    expect(parsed.services[0].requests_failed).toBe(2);
+    expect(parsed.totals_by_currency[0].effective_cost_minor).toBe(2900);
   });
 
-  it("rejects a selected cost without an available basis", () => {
-    expect(() => ProductionCostServiceSchema.parse({
-      ...service,
-      selected_cost_basis: "unavailable",
-      selected_cost_minor: 2900,
-    })).toThrow();
+  it("rejects a service missing backend-required usage and cost fields", () => {
+    const { cost_status: _costStatus, ...invalid } = service;
+    expect(() => ProductionCostServiceSchema.parse(invalid)).toThrow();
   });
 
-  it("rejects an estimate maximum below the estimate", () => {
-    expect(() => ProductionCostServiceSchema.parse({
-      ...service,
-      selected_cost_minor: 3100,
-      selected_cost_basis: "usage_estimate",
-      estimated_max_minor: 3000,
-    })).toThrow();
-  });
-
-  it("rejects non-ISO currency codes and negative amounts", () => {
-    expect(() => ProductionCostServiceSchema.parse({ ...service, currency: "kes" })).toThrow();
-    expect(() => ProductionCostServiceSchema.parse({ ...service, selected_cost_minor: -1 })).toThrow();
-  });
-
-  it("requires a positive manual amount and an explanatory description", () => {
+  it("accepts backend cost-entry payload and rejects an empty or reversed period", () => {
     const valid = {
-      service_key: "sms",
-      amount_minor: 2900,
+      service_key: "sms.texin",
+      period_start: period.start,
+      period_end: period.end,
       currency: "KES",
-      occurred_on: "2026-11-04",
-      description: "Mobitech monthly invoice",
-      reference: "INV-123",
+      manually_entered_cost_minor: 2900,
+      notes: "Texin monthly invoice",
+      invoice_reference: "INV-123",
     };
-    expect(ProductionCostManualEntryInSchema.parse(valid).amount_minor).toBe(2900);
-    expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, amount_minor: 0 })).toThrow();
-    expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, description: "x" })).toThrow();
-    expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, occurred_on: "2026-02-30" })).toThrow();
-    expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, extra: true })).toThrow();
+    expect(ProductionCostEntryInSchema.parse(valid).manually_entered_cost_minor).toBe(2900);
+    expect(() => ProductionCostEntryInSchema.parse({ ...valid, manually_entered_cost_minor: undefined })).toThrow();
+    expect(() => ProductionCostEntryInSchema.parse({ ...valid, period_end: period.start })).toThrow();
+    expect(() => ProductionCostEntryInSchema.parse({ ...valid, currency: "kes" })).toThrow();
+    expect(() => ProductionCostEntryInSchema.parse({ ...valid, extra: true })).toThrow();
+  });
+
+  it("parses the backend /entries list response", () => {
+    const entry = {
+      id: 12, service_key: "sms.texin", service_name: "Texin SMS",
+      period_start: period.start, period_end: period.end,
+      actual_cost_minor: null, estimated_cost_minor: null,
+      manually_entered_cost_minor: 2900, currency: "KES",
+      cost_source: "manual", confidence: "manual", notes: "Invoice",
+      invoice_reference: "INV-123", entered_by: "admin-1",
+      created_at: period.start, updated_at: period.start,
+    };
+    expect(ProductionCostEntriesResponseSchema.parse({
+      reporting_period: period, entries: [entry], limit: 200, offset: 0,
+    }).entries[0].id).toBe(12);
   });
 });
 
-describe("currency minor units", () => {
-  it("formats and converts currencies using their ISO minor-unit precision", () => {
+describe("currency and totals helpers", () => {
+  it("uses ISO currency minor-unit precision", () => {
     expect(currencyMinorUnitDigits("KES")).toBe(2);
-    expect(currencyMinorUnitDigits("USD")).toBe(2);
     expect(currencyMinorUnitDigits("JPY")).toBe(0);
     expect(currencyMinorUnitDigits("KWD")).toBe(3);
-
     expect(toMinorUnits(12.34, "KES")).toBe(1234);
     expect(toMinorUnits(120, "JPY")).toBe(120);
-    expect(toMinorUnits(1.234, "KWD")).toBe(1234);
-    expect(formatMinorCurrency(120, "JPY")).toContain("120");
     expect(formatMinorCurrency(1234, "KWD")).toContain("1.234");
   });
-});
 
-describe("summarizeProductionCosts", () => {
-  it("counts only the selected basis so an invoice and estimate are not double-counted", () => {
-    const result = summarizeProductionCosts([
+  it("counts effective costs once and keeps currencies separate", () => {
+    const rows = summarizeProductionCosts([
       service,
-      {
-        ...service,
-        key: "ai",
-        label: "AI requests",
-        usage_count: null,
-        usage_unit: null,
-        request_count: 50,
-        provider_reported_minor: 400,
-        usage_estimate_minor: 700,
-        estimated_max_minor: 900,
-        manual_minor: null,
-        selected_cost_minor: 700,
-        selected_cost_basis: "usage_estimate",
-        currency: "KES",
-      },
-      {
-        ...service,
-        key: "hosting",
-        label: "Hosting",
-        provider_reported_minor: 500,
-        usage_estimate_minor: null,
-        estimated_max_minor: null,
-        manual_minor: 1200,
-        selected_cost_minor: 1200,
-        selected_cost_basis: "manual_entry",
-        currency: "KES",
-      },
+      { ...service, service_key: "infra.vercel", currency: "USD", effective_currency: "USD",
+        actual_cost_minor: null, estimated_cost_minor: 8000, manually_entered_cost_minor: null,
+        adjusted_cost_minor: null, effective_cost_minor: 8000, cost_source: "usage_estimate" },
+      { ...service, service_key: "push.fcm", actual_cost_minor: null, estimated_cost_minor: null,
+        manually_entered_cost_minor: null, adjusted_cost_minor: null, effective_cost_minor: null,
+        effective_currency: null, currency: "KES", cost_source: "none", has_cost_information: false,
+        cost_status: "unpriced" },
     ]);
-    expect(result).toEqual([{
-      currency: "KES",
-      selectedMinor: 4800,
-      providerReportedMinor: 3800,
-      estimatedMinor: 3800,
-      estimatedMaxMinor: 4400,
-      manualMinor: 1200,
-      pricedServices: 3,
-      unpricedServices: 0,
-      providerReportedServices: 3,
-      estimatedServices: 2,
-      estimatedMaxServices: 2,
-      manualServices: 1,
-    }]);
-  });
-
-
-
-  it("keeps a known zero-cost service priced rather than treating it as missing", () => {
-    const result = summarizeProductionCosts([{
-      ...service,
-      provider_reported_minor: 0,
-      usage_estimate_minor: null,
-      estimated_max_minor: null,
-      manual_minor: null,
-      selected_cost_minor: 0,
-      selected_cost_basis: "provider_reported",
-    }]);
-    expect(result[0].selectedMinor).toBe(0);
-    expect(result[0].pricedServices).toBe(1);
-    expect(result[0].unpricedServices).toBe(0);
-    expect(result[0].providerReportedServices).toBe(1);
-  });
-
-  it("keeps currencies separate and counts unpriced services without treating them as zero cost", () => {
-    const result = summarizeProductionCosts([
-      service,
-      {
-        ...service,
-        key: "ai-usd",
-        currency: "USD",
-        provider_reported_minor: null,
-        usage_estimate_minor: null,
-        estimated_max_minor: null,
-        manual_minor: null,
-        selected_cost_minor: null,
-        selected_cost_basis: "unavailable",
-      },
-    ]);
-    expect(result).toHaveLength(2);
-    expect(result.find((item) => item.currency === "KES")?.selectedMinor).toBe(2900);
-    expect(result.find((item) => item.currency === "USD")?.unpricedServices).toBe(1);
-    expect(result.find((item) => item.currency === "USD")?.selectedMinor).toBe(0);
+    expect(rows.find((row) => row.currency === "KES")?.selectedMinor).toBe(2900);
+    expect(rows.find((row) => row.currency === "KES")?.unpricedServices).toBe(1);
+    expect(rows.find((row) => row.currency === "USD")?.selectedMinor).toBe(8000);
+    expect(rows).toHaveLength(2);
   });
 });

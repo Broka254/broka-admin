@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ServiceCostsDashboardSchema } from "@/lib/api/service-costs-contract";
 
 const nullableString = z.string().nullable();
 const isoDate = nullableString;
@@ -720,7 +721,7 @@ export const AdminResourceSchemas = {
   serviceHealth: ServiceHealthSchema, zenoActivity: ZenoActivitySchema, userDetail: AdminUserDetailSchema, dealDetail: AdminDealDetailSchema,
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
-  alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
+  alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, serviceCosts: ServiceCostsDashboardSchema, timeseries: TimeseriesResponseSchema,
   listingDetail: AdminListingDetailSchema, disputeDetail: AdminDisputeDetailSchema, storeDetail: AdminStoreDetailSchema,
 } as const;
 

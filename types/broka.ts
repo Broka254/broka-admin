@@ -10,7 +10,7 @@ export type ApiResource =
   | "opsSnapshot" | "deals" | "listings" | "stores" | "disputes" | "payments" | "financeIntegrity"
   | "serviceHealth" | "zenoActivity" | "userDetail" | "dealDetail"
   | "communications" | "workerDiagnostics" | "communicationDetail" | "communicationRecipients" | "communicationStats"
-  | "alerts" | "revenue" | "serviceCosts" | "timeseries | "listingDetail" | "disputeDetail" | "storeDetail";
+  | "alerts" | "revenue" | "serviceCosts" | "timeseries" | "listingDetail" | "disputeDetail" | "storeDetail";
 
 export type StaticAdminResource = Exclude<
   ApiResource,

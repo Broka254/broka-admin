@@ -86,7 +86,7 @@ describe("Verified production-cost API contracts", () => {
   });
 
   it("rejects a service missing backend-required usage and cost fields", () => {
-    const { cost_status: _costStatus, ...invalid } = service;
+    const invalid = { ...service, cost_status: undefined };
     expect(() => ProductionCostServiceSchema.parse(invalid)).toThrow();
   });
 

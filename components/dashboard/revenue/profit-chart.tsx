@@ -51,15 +51,21 @@ export function ProfitChart({ data }: { data: RevenueResponse | undefined }) {
   }));
   return (
     <div className="rounded-xl border border-white/10 bg-[#0c1020] p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-            Profit per bucket
+            Performance by period
           </p>
           <h3 className="mt-1 font-display text-lg font-bold text-white">
-            Income vs costs, with profit line
+            Platform income vs platform costs
           </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            The reported profit line includes estimated cost rows where present.
+          </p>
         </div>
+        <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          {data.bucket} buckets
+        </span>
       </div>
       <div className="h-72" data-testid="profit-chart">
         <ResponsiveContainer width="100%" height="100%">
@@ -85,7 +91,7 @@ export function ProfitChart({ data }: { data: RevenueResponse | undefined }) {
             <Bar name="Income" dataKey="income_minor" fill={INK.violet} radius={[4, 4, 0, 0]} barSize={18} />
             <Bar name="Costs" dataKey="costs_minor" fill={INK.amber} radius={[4, 4, 0, 0]} barSize={18} />
             <Line
-              name="Profit"
+              name="Reported profit"
               type="monotone"
               dataKey="profit_minor"
               stroke={INK.cyan}

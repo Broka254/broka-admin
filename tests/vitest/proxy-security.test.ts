@@ -60,8 +60,11 @@ describe("admin proxy security boundaries", () => {
 
   it("keeps the GET allowlist narrow and rejects unknown paths", async () => {
     expect(isSafeAdminPath("admin/communications")).toBe(true);
-    expect(isSafeAdminPath("admin/production-costs")).toBe(true);
-    expect(isSafeAdminPath("admin/production-costs/manual-entries")).toBe(false);
+    expect(isSafeAdminPath("admin/revenue/costs/services")).toBe(true);
+    expect(isSafeAdminPath("admin/revenue/costs/entries")).toBe(true);
+    expect(isSafeAdminPath("admin/revenue/costs/adjustments")).toBe(true);
+    expect(isSafeAdminPath("admin/production-costs")).toBe(false);
+    expect(isSafeAdminPath("admin/revenue/costs/unknown")).toBe(false);
     expect(isSafeAdminPath("admin/communications/comm-1")).toBe(true);
     expect(isSafeAdminPath("admin/communications/comm-1/secret")).toBe(false);
     expect(isSafeAdminPath("admin/summary/extra")).toBe(false);
@@ -162,49 +165,55 @@ describe("admin proxy security boundaries", () => {
     });
   });
 
-  it("requires idempotency for manual production-cost entries", async () => {
-    const path = ["admin", "production-costs", "manual-entries"];
+  it("creates production-cost entries using the backend contract without claiming idempotency", async () => {
+    const path = ["admin", "revenue", "costs", "entries"];
     const body = JSON.stringify({
-      service_key: "sms",
-      amount_minor: 2900,
+      service_key: "sms.texin",
+      period_start: "2026-11-01T00:00:00Z",
+      period_end: "2026-12-01T00:00:00Z",
       currency: "KES",
-      occurred_on: "2026-11-04",
-      description: "Provider invoice adjustment",
-      reference: "INV-123",
+      manually_entered_cost_minor: 2900,
+      notes: "Provider invoice adjustment",
+      invoice_reference: "INV-123",
     });
 
-    const missingKey = await POST(
-      mutationRequest(body, { contentType: "application/json", path }),
-      context(...path),
-    );
-    expect(missingKey.status).toBe(400);
-    expect(await missingKey.json()).toMatchObject({ code: "idempotency_key_required" });
-    expect(state.upstreamCalls).toHaveLength(0);
-
     state.upstreamResponse = new Response(JSON.stringify({
-      id: "cost-1",
-      service_key: "sms",
-      service_label: "SMS delivery",
-      amount_minor: 2900,
-      currency: "KES",
-      occurred_on: "2026-11-04",
-      description: "Provider invoice adjustment",
-      reference: "INV-123",
-      created_at: "2026-11-05T10:00:00Z",
-      created_by_label: "Admin",
+      entry: {
+        id: 1,
+        service_key: "sms.texin",
+        service_name: "SMS — Texin BulkSMS",
+        period_start: "2026-11-01T00:00:00Z",
+        period_end: "2026-12-01T00:00:00Z",
+        actual_cost_minor: null,
+        estimated_cost_minor: null,
+        manually_entered_cost_minor: 2900,
+        currency: "KES",
+        cost_source: "manual",
+        confidence: "manual",
+        notes: "Provider invoice adjustment",
+        invoice_reference: "INV-123",
+        entered_by: "admin-1",
+        created_at: "2026-11-05T10:00:00Z",
+        updated_at: "2026-11-05T10:00:00Z",
+      },
     }), { status: 201, headers: { "content-type": "application/json" } });
 
     const accepted = await POST(
-      mutationRequest(body, {
-        contentType: "application/json",
-        path,
-        idempotencyKey: "manual-entry-123456",
-      }),
+      mutationRequest(body, { contentType: "application/json", path }),
       context(...path),
     );
     expect(accepted.status).toBe(201);
+    expect(await accepted.json()).toMatchObject({
+      entry: { service_key: "sms.texin", manually_entered_cost_minor: 2900 },
+    });
+    expect(state.upstreamCalls).toHaveLength(1);
+    expect(state.upstreamCalls[0]).toMatchObject({
+      path: "/admin/revenue/costs/entries",
+      method: "POST",
+      token: "access-token",
+    });
     const forwardedHeaders = new Headers(state.upstreamCalls[0]?.headers);
-    expect(forwardedHeaders.get("X-Idempotency-Key")).toBe("manual-entry-123456");
+    expect(forwardedHeaders.get("X-Idempotency-Key")).toBeNull();
   });
 
   it("does not export unlisted HTTP methods", async () => {

@@ -699,113 +699,142 @@ export const TimeseriesResponseSchema = z.object({
 });
 export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
 
-// ── Production service cost tracking ─────────────────────────────────────────
-// This contract is a proposed admin API surface. The inspected backend does not
-// currently expose these endpoints; see docs/API_INTEGRATION.md and BACKEND_GAPS.md.
-
-export const ProductionCostBasisSchema = z.enum([
-  "provider_reported",
-  "usage_estimate",
-  "manual_entry",
-  "unavailable",
-]);
-export type ProductionCostBasis = z.infer<typeof ProductionCostBasisSchema>;
+// ── Production service-cost API (verified against backend/api/domains/service_costs/router.py)
 
 const productionCostCurrency = z.string().regex(/^[A-Z]{3}$/);
-const productionCostDateOnly = z.string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
-  .refine((value) => {
-    const parsed = new Date(value + "T00:00:00.000Z");
-    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-  }, "Expected a real ISO calendar date.");
 const nullableMinorAmount = z.number().int().nonnegative().nullable();
+const costPeriodSchema = z.object({ start: z.string().datetime({ offset: true }), end: z.string().datetime({ offset: true }) });
+const costTotalsByCurrencySchema = z.object({
+  currency: productionCostCurrency,
+  effective_cost_minor: z.number().int().nonnegative(),
+  actual_cost_minor: z.number().int().nonnegative(),
+  estimated_cost_minor: z.number().int().nonnegative(),
+  manually_entered_cost_minor: z.number().int().nonnegative(),
+  adjusted_cost_minor: z.number().int().nonnegative(),
+  maximum_estimated_cost_minor: z.number().int().nonnegative(),
+  services_with_cost: z.number().int().nonnegative(),
+  unpriced_services: z.number().int().nonnegative(),
+});
 
 export const ProductionCostServiceSchema = z.object({
-  key: z.string().min(1).max(80),
-  label: z.string().min(1).max(120),
-  category: z.string().min(1).max(80),
-  usage_count: z.number().int().nonnegative().nullable(),
-  usage_unit: z.string().max(40).nullable(),
-  request_count: z.number().int().nonnegative().nullable(),
-  currency: productionCostCurrency,
-  provider_reported_minor: nullableMinorAmount,
-  usage_estimate_minor: nullableMinorAmount,
-  estimated_max_minor: nullableMinorAmount,
-  manual_minor: nullableMinorAmount,
-  selected_cost_minor: nullableMinorAmount,
-  selected_cost_basis: ProductionCostBasisSchema,
-  source_label: z.string().max(120).nullable(),
-  estimate_method: z.string().max(200).nullable().optional(),
-  pricing_version: z.string().max(80).nullable().optional(),
-  last_synced_at: z.string().datetime({ offset: true }).nullable(),
-  notes: z.array(z.string().max(500)),
-}).superRefine((service, context) => {
-  if (service.selected_cost_basis === "unavailable" && service.selected_cost_minor !== null) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["selected_cost_minor"],
-      message: "Unavailable costs must not contain a selected amount.",
-    });
-  }
-  if (service.selected_cost_basis !== "unavailable" && service.selected_cost_minor === null) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["selected_cost_minor"],
-      message: "A selected cost basis requires a selected amount.",
-    });
-  }
-  if (
-    service.usage_estimate_minor !== null &&
-    service.estimated_max_minor !== null &&
-    service.estimated_max_minor < service.usage_estimate_minor
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["estimated_max_minor"],
-      message: "The estimated maximum cannot be below the usage estimate.",
-    });
-  }
+  service_key: z.string().min(1),
+  service_name: z.string().min(1),
+  provider: z.string().nullable(),
+  category: z.string(),
+  usage_unit: z.string().nullable(),
+  pricing_model: z.string(),
+  billable: z.boolean(),
+  active: z.boolean(),
+  currency: z.string(),
+  default_confidence: z.string(),
+  maximum_estimated_cost_minor: nullableMinorAmount,
+  notes: z.string().nullable(),
+  reporting_period: costPeriodSchema,
+  requests_total: z.number().int().nonnegative(),
+  requests_success: z.number().int().nonnegative(),
+  requests_failed: z.number().int().nonnegative(),
+  requests_accepted: z.number().int().nonnegative(),
+  usage_quantity: z.number().nonnegative(),
+  successful_quantity: z.number().nonnegative(),
+  failed_quantity: z.number().nonnegative(),
+  accepted_quantity: z.number().nonnegative(),
+  input_tokens: z.number().int().nonnegative(),
+  output_tokens: z.number().int().nonnegative(),
+  total_tokens: z.number().int().nonnegative(),
+  actual_cost_minor: nullableMinorAmount,
+  estimated_cost_minor: nullableMinorAmount,
+  entry_estimated_cost_minor: nullableMinorAmount,
+  usage_estimated_cost_minor: nullableMinorAmount,
+  manually_entered_cost_minor: nullableMinorAmount,
+  adjusted_cost_minor: nullableMinorAmount,
+  effective_cost_minor: nullableMinorAmount,
+  effective_currency: z.string().nullable(),
+  cost_source: z.string(),
+  confidence: z.string(),
+  cost_status: z.string(),
+  unpriced_events: z.number().int().nonnegative(),
+  priced_events: z.number().int().nonnegative(),
+  has_usage: z.boolean(),
+  has_cost_information: z.boolean(),
 });
 export type ProductionCostService = z.infer<typeof ProductionCostServiceSchema>;
 
-export const ProductionCostManualEntryInSchema = z.object({
-  service_key: z.string().trim().min(1).max(80),
-  amount_minor: z.number().int().positive(),
-  currency: productionCostCurrency,
-  occurred_on: productionCostDateOnly,
-  description: z.string().trim().min(3).max(500),
-  reference: z.string().trim().max(120).nullable().optional(),
-}).strict();
-export type ProductionCostManualEntryInput = z.infer<typeof ProductionCostManualEntryInSchema>;
-
-export const ProductionCostManualEntrySchema = z.object({
-  id: z.string().min(1),
-  service_key: z.string().min(1),
-  service_label: z.string().min(1),
-  amount_minor: z.number().int().positive(),
-  currency: productionCostCurrency,
-  occurred_on: productionCostDateOnly,
-  description: z.string(),
-  reference: z.string().nullable(),
-  created_at: z.string().datetime({ offset: true }),
-  created_by_label: z.string().min(1),
-});
-export type ProductionCostManualEntry = z.infer<typeof ProductionCostManualEntrySchema>;
-
 export const ProductionCostsResponseSchema = z.object({
+  currency: z.string(),
+  currencies: z.array(productionCostCurrency),
+  reporting_period: costPeriodSchema,
   generated_at: z.string().datetime({ offset: true }),
-  from: productionCostDateOnly,
-  to: productionCostDateOnly,
+  totals_by_currency: z.array(costTotalsByCurrencySchema),
   services: z.array(ProductionCostServiceSchema),
-  manual_entries: z.array(ProductionCostManualEntrySchema),
-  capabilities: z.object({
-    manual_entries: z.boolean(),
-    provider_sync: z.boolean(),
-  }),
-  notes: z.array(z.string().max(500)),
 });
 export type ProductionCostsResponse = z.infer<typeof ProductionCostsResponseSchema>;
 
+export const ProductionCostEntrySchema = z.object({
+  id: z.number().int().positive(),
+  service_key: z.string(),
+  service_name: z.string(),
+  period_start: z.string().datetime({ offset: true }),
+  period_end: z.string().datetime({ offset: true }),
+  actual_cost_minor: nullableMinorAmount,
+  estimated_cost_minor: nullableMinorAmount,
+  manually_entered_cost_minor: nullableMinorAmount,
+  currency: productionCostCurrency,
+  cost_source: z.string(),
+  confidence: z.string(),
+  notes: z.string().nullable(),
+  invoice_reference: z.string().nullable(),
+  entered_by: z.string().nullable(),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+export const ProductionCostEntriesResponseSchema = z.object({
+  reporting_period: costPeriodSchema,
+  entries: z.array(ProductionCostEntrySchema),
+  limit: z.number().int(),
+  offset: z.number().int(),
+});
+export type ProductionCostEntry = z.infer<typeof ProductionCostEntrySchema>;
+
+export const ProductionCostAdjustmentSchema = z.object({
+  id: z.number().int().positive(),
+  service_key: z.string(),
+  service_name: z.string(),
+  entry_id: z.number().int().positive(),
+  period_start: z.string().datetime({ offset: true }),
+  period_end: z.string().datetime({ offset: true }),
+  original_estimate_minor: nullableMinorAmount,
+  adjusted_amount_minor: z.number().int().nonnegative(),
+  currency: productionCostCurrency,
+  reason: z.string(),
+  adjusted_by: z.string(),
+  created_at: z.string().datetime({ offset: true }),
+});
+export const ProductionCostAdjustmentsResponseSchema = z.object({
+  reporting_period: costPeriodSchema,
+  adjustments: z.array(ProductionCostAdjustmentSchema),
+  limit: z.number().int(),
+  offset: z.number().int(),
+});
+export type ProductionCostAdjustment = z.infer<typeof ProductionCostAdjustmentSchema>;
+
+export const ProductionCostEntryInSchema = z.object({
+  service_key: z.string().min(1).max(64),
+  period_start: z.string().datetime({ offset: true }),
+  period_end: z.string().datetime({ offset: true }),
+  currency: productionCostCurrency,
+  actual_cost_minor: z.number().int().nonnegative().nullable().optional(),
+  estimated_cost_minor: z.number().int().nonnegative().nullable().optional(),
+  manually_entered_cost_minor: z.number().int().nonnegative().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  invoice_reference: z.string().max(160).nullable().optional(),
+}).strict().refine((v) => Date.parse(v.period_end) > Date.parse(v.period_start), {
+  message: "The reporting period end must be after its start.",
+}).refine((v) => v.actual_cost_minor != null || v.estimated_cost_minor != null || v.manually_entered_cost_minor != null, {
+  message: "Enter an actual, estimated or manual amount.",
+});
+export type ProductionCostEntryInput = z.infer<typeof ProductionCostEntryInSchema>;
+
+export const ProductionCostEntryMutationResponseSchema = z.object({ entry: ProductionCostEntrySchema });
 // ── Loose single-object detail contracts ────────────────────────────────────
 // Listing/dispute/store detail mirrors the list-item shape plus backend-owned
 // extra fields. Validate loosely so minor backend drift does not 502 the page.
@@ -828,7 +857,7 @@ export const AdminResourceSchemas = {
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
   alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
-  productionCosts: ProductionCostsResponseSchema,
+  productionCosts: ProductionCostsResponseSchema, productionCostEntries: ProductionCostEntriesResponseSchema, productionCostAdjustments: ProductionCostAdjustmentsResponseSchema,
   listingDetail: AdminListingDetailSchema, disputeDetail: AdminDisputeDetailSchema, storeDetail: AdminStoreDetailSchema,
 } as const;
 

@@ -143,6 +143,8 @@ function ServiceCostTable({ services }: { services: ProductionCostService[] }) {
                 <p className="font-semibold text-slate-100">{service.label}</p>
                 <p className="mt-1 text-[11px] capitalize text-slate-500">{service.category}</p>
                 {service.source_label ? <p className="mt-1 text-[11px] text-slate-500">Source: {service.source_label}</p> : null}
+                {service.estimate_method ? <p className="mt-1 text-[11px] text-slate-500">Estimate: {service.estimate_method}</p> : null}
+                {service.pricing_version ? <p className="mt-1 text-[11px] text-slate-500">Pricing version: {service.pricing_version}</p> : null}
                 {service.notes.length > 0 ? (
                   <p className="mt-1 max-w-[240px] text-[11px] leading-4 text-amber-200/75">{service.notes.join(" ")}</p>
                 ) : null}

@@ -75,8 +75,11 @@ Proposed manual-entry contract:
 - The response includes the persisted entry ID, service, amount, currency,
   effective date, description, reference, creator label, and creation time.
 - The backend must persist the actor and audit event, enforce admin permissions,
-  and deduplicate idempotent retries. A manual entry is a separate record; it
-  must not overwrite or erase provider-reported usage or cost history.
+  and deduplicate idempotent retries. A manual entry becomes the selected cost
+  basis for that service and date range until another authorized entry supersedes
+  it. It must not overwrite or erase provider-reported usage, invoice amounts,
+  or the original estimate; all source figures remain visible beside the manual
+  override so the operator can audit the difference.
 - `capabilities.manual_entries` and `capabilities.provider_sync` are returned
   by the read endpoint. The admin UI only enables manual entry when the backend
   explicitly advertises that capability.

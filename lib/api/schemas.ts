@@ -701,7 +701,7 @@ export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
 
 // ── Production service-cost API (verified against backend/api/domains/service_costs/router.py)
 
-const productionCostCurrency = z.string().min(3).max(8);
+const productionCostCurrency = z.string().regex(/^[A-Z]{3}$/);
 const productionCostCurrencyOrMulti = z.union([productionCostCurrency, z.literal("MULTI")]);
 const nullableMinorAmount = z.number().int().nonnegative().nullable();
 const costTimestamp = z.string().datetime({ offset: true });

@@ -352,6 +352,10 @@ export default function ProductionCostsPage() {
     );
   }
 
+  if (!costs.data) {
+    return <ResourceState state="empty" message="No production-cost response was returned for this period." />;
+  }
+
   const priced = costs.data.services.filter((service) => service.selected_cost_minor !== null).length;
   const unpriced = costs.data.services.length - priced;
 

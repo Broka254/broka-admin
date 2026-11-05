@@ -232,10 +232,10 @@ function ManualEntryForm({
   const mutation = useCreateProductionCostManualEntry();
   const [serviceKey, setServiceKey] = useState(services[0]?.key ?? "");
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState(services[0]?.currency ?? "KES");
   const [occurredOn, setOccurredOn] = useState(dateOnly(new Date()));
   const [description, setDescription] = useState("");
   const [reference, setReference] = useState("");
+  const currency = services.find((service) => service.key === serviceKey)?.currency ?? "KES";
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -277,7 +277,6 @@ function ManualEntryForm({
             const nextServiceKey = event.target.value;
             setServiceKey(nextServiceKey);
             const selectedService = services.find((service) => service.key === nextServiceKey);
-            if (selectedService) setCurrency(selectedService.currency);
           }} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60">
             {services.map((service) => <option key={service.key} value={service.key}>{service.label}</option>)}
           </select>
@@ -286,12 +285,12 @@ function ManualEntryForm({
           Amount
           <input required inputMode="decimal" pattern={currencyMinorUnitDigits(currency) === 0 ? "\\d+" : "\\d+(\\.\\d{1," + currencyMinorUnitDigits(currency) + "})?"} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={currencyMinorUnitDigits(currency) === 0 ? "0" : "0." + "0".repeat(currencyMinorUnitDigits(currency))} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60" />
         </label>
-        <label className="text-xs font-medium text-slate-300">
+        <div className="text-xs font-medium text-slate-300">
           Currency
-          <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60">
-            {Array.from(new Set(["KES", "USD", ...services.map((service) => service.currency)])).sort().map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
+          <div className="mt-1.5 rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-slate-200">
+            {currency} <span className="text-xs text-slate-500">· service billing currency</span>
+          </div>
+        </div>
         <label className="text-xs font-medium text-slate-300">
           Cost date
           <input required type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60" />

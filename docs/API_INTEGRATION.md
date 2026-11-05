@@ -39,6 +39,52 @@ header mismatch is fixed. This statement does **not** extend to Service
 Communications draft creation, whose inspected handler has no creation-idempotency
 enforcement.
 
+## Production cost tracking (frontend contract; backend pending)
+
+The admin app now includes a **Production Costs** workspace, but the inspected
+backend source does not yet implement the service-cost ledger. The page therefore
+renders an explicit unavailable state until these routes are deployed; it does
+not substitute sample values or infer cost from unrelated event counters.
+
+Proposed read contract:
+
+- `GET /admin/production-costs?from=YYYY-MM-DD&to=YYYY-MM-DD` — inclusive
+  `from`, exclusive `to`; returns service rows, manual-entry history,
+  capability flags, and a generation timestamp.
+- Each service row reports usage volume/unit, request count, billing currency,
+  provider-reported cost, usage estimate, estimated maximum, manual cost,
+  selected cost amount/basis, source label, last sync time, and notes.
+- The selected cost basis is exactly one of `provider_reported`,
+  `usage_estimate`, `manual_entry`, or `unavailable`. The summary adds only
+  `selected_cost_minor`; the other source figures remain visible for comparison
+  and must not be added again.
+- Amounts are integer minor units. Each service retains its own ISO 4217
+  currency. The frontend groups totals by currency and never adds KES, USD, or
+  other currencies together without an explicit conversion record.
+- `null` means unavailable or unpriced, not zero usage or zero cost. AI and
+  image generation rows should expose request counts and a maximum estimate
+  when a defensible upper bound can be calculated. Missing pricing must remain
+  unpriced and include a note explaining the gap.
+
+Proposed manual-entry contract:
+
+- `POST /admin/production-costs/manual-entries` accepts
+  `service_key`, positive `amount_minor`, `currency`, `occurred_on`,
+  `description`, and optional invoice/reference; it requires
+  `X-Idempotency-Key`.
+- The response includes the persisted entry ID, service, amount, currency,
+  effective date, description, reference, creator label, and creation time.
+- The backend must persist the actor and audit event, enforce admin permissions,
+  and deduplicate idempotent retries. A manual entry is a separate record; it
+  must not overwrite or erase provider-reported usage or cost history.
+- `capabilities.manual_entries` and `capabilities.provider_sync` are returned
+  by the read endpoint. The admin UI only enables manual entry when the backend
+  explicitly advertises that capability.
+
+This proposed contract is frontend-validated and allowlisted in the same-origin
+admin proxy, but it is **not evidence that the live API serves either route**.
+See [`BACKEND_GAPS.md`](../BACKEND_GAPS.md) for the required backend work.
+
 ## Authorization
 
 The admin router now attaches granular dependencies from `api/core/permissions.py`: `ADMIN_SUMMARY`, `MANAGE_USERS`, `PROMOTE_ADMIN`, `VIEW_TRANSACTIONS`, `VIEW_ALL_DISPUTES`, `OVERRIDE_ESCROW`. All current admins hold every flag, so behavior is backward compatible; defining restricted admin sub-roles would require schema storage and is intentionally not done.

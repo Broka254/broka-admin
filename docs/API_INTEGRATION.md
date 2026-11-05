@@ -112,3 +112,28 @@ configured and verified manually.
 - `ledger-integrity.balanced` is true by construction; `escrow_integrity_ok` and `negative_escrow_deals` are the assertions that can fail.
 - Process-local counters (AI savings, event metrics) are labelled `scope: process_local`, `durability: none` in both backend responses and UI.
 - External provider statuses in `/admin/health/services` are configuration checks only (`probe: not_run`); the live E-Confirm probe remains `/admin/diagnostics/econfirm`.
+
+
+## Service-cost dashboard contract (frontend target; backend deployment required)
+
+The `/service-costs` screen is implemented against the following **target contract**. This is not evidence that the backend has implemented or deployed these endpoints. Until the backend returns validated data, the page deliberately renders an endpoint-unavailable panel and no demo metrics.
+
+### `GET /admin/revenue/costs?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+The interval is half-open: `from` is inclusive and `to` is exclusive. The response contains:
+
+- `generated_at` and `period: {from, to}`;
+- `currencies: [{code, minor_unit_exponent}]`;
+- `summary_by_currency`, keeping `actual_minor`, `estimated_minor`, and `manual_minor` separate, plus nullable `maximum_estimate_minor`;
+- `services`, one row per service in the backend-maintained catalog, with display name, category, provider, lifecycle status, usage quantity/unit/success/failure counts and usage source; each service also has nullable cost amount/currency, source, confidence, optional maximum estimate and explanatory note;
+- `entries`, recent itemised invoice, usage-estimate and manual cost records, each with service, description, half-open billing period, integer minor-unit amount, currency, source, note, actor and creation timestamp.
+
+An absent amount is `null`, never zero. The dashboard never totals different currencies together. The backend must include uninstrumented and unpriced services in the catalog so missing coverage remains visible rather than being interpreted as zero spend.
+
+### `POST /admin/revenue/costs/entries`
+
+Creates an administrator-entered cost record. The strict JSON body is `{service_key, description, period_start, period_end, amount_minor, currency, note}`. `period_end` is exclusive; `amount_minor` is a positive integer in the currency's minor unit. The response is `{entry: ...}` using the same entry schema as the dashboard.
+
+The client sends `X-Idempotency-Key`; the backend must persist and enforce this key per administrator and operation, reject reuse with a different payload, and return the original record for an identical replay. Every create must record actor, timestamp and audit evidence. Manual entries are additive and separately labelled; they must not overwrite or masquerade as invoices or usage estimates.
+
+The admin proxy validates request and response schemas, checks same-origin CSRF, forwards only the authenticated server-side access token, and rejects this financial mutation when its idempotency key is missing. Backend authorization, durable idempotency and audit logging remain mandatory; frontend checks are not a substitute.

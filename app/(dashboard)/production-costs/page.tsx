@@ -83,11 +83,29 @@ function basisTone(basis: ProductionCostService["selected_cost_basis"]): "succes
   return "neutral";
 }
 
+type SummaryAmountField =
+  | "selectedMinor"
+  | "providerReportedMinor"
+  | "estimatedMinor"
+  | "estimatedMaxMinor"
+  | "manualMinor";
+
+const SUMMARY_COUNT_FIELD: Record<SummaryAmountField, keyof ReturnType<typeof summarizeProductionCosts>[number]> = {
+  selectedMinor: "pricedServices",
+  providerReportedMinor: "providerReportedServices",
+  estimatedMinor: "estimatedServices",
+  estimatedMaxMinor: "estimatedMaxServices",
+  manualMinor: "manualServices",
+};
+
 function byCurrencyLabel(
   groups: ReturnType<typeof summarizeProductionCosts>,
-  field: "selectedMinor" | "providerReportedMinor" | "estimatedMinor" | "manualMinor",
+  field: SummaryAmountField,
 ): string {
-  const populated = groups.filter((group) => group[field] > 0);
+  // Include a real zero-cost record (for example, a confirmed free AI tier)
+  // instead of mislabelling it as missing data.
+  const countField = SUMMARY_COUNT_FIELD[field];
+  const populated = groups.filter((group) => group[field] > 0 || group[countField] > 0);
   return populated.length
     ? populated.map((group) => formatMinorCurrency(group[field], group.currency)).join(" · ")
     : "No value reported";
@@ -305,7 +323,7 @@ export default function ProductionCostsPage() {
     return (
       <div className="space-y-6">
         <div><SectionEyebrow>Money / Cost control</SectionEyebrow><h1 className="font-display text-3xl font-bold tracking-[-0.05em] text-white">Production costs</h1></div>
-        <DateRangePicker {...selection} onChange={setSelection} />
+        <DateRangePicker {...selection} onChange={setSelection} showBucket={false} />
         <ResourceState state="loading" message="Loading service usage and production costs." />
       </div>
     );
@@ -322,7 +340,7 @@ export default function ProductionCostsPage() {
               Service-by-service usage, provider charges, AI and image-generation estimates, and manual production-cost records.
             </p>
           </div>
-          <DateRangePicker {...selection} onChange={setSelection} />
+          <DateRangePicker {...selection} onChange={setSelection} showBucket={false} />
           <UnavailablePanel
             title="Production-cost endpoint not deployed"
             detail="The dashboard is ready for GET /admin/production-costs, but the BROKA API does not expose the service-cost ledger yet. No sample figures are shown as live usage."
@@ -351,7 +369,7 @@ export default function ProductionCostsPage() {
     return (
       <div className="space-y-6">
         <div><SectionEyebrow>Money / Cost control</SectionEyebrow><h1 className="font-display text-3xl font-bold tracking-[-0.05em] text-white">Production costs</h1></div>
-        <DateRangePicker {...selection} onChange={setSelection} />
+        <DateRangePicker {...selection} onChange={setSelection} showBucket={false} />
         <ResourceState
           state="error"
           message={costs.error instanceof Error ? costs.error.message : "Unable to load production-cost data."}
@@ -390,7 +408,7 @@ export default function ProductionCostsPage() {
         </button>
       </div>
 
-      <DateRangePicker {...selection} onChange={setSelection} />
+      <DateRangePicker {...selection} onChange={setSelection} showBucket={false} />
 
       {manualEntryOpen && costs.data.capabilities.manual_entries ? (
         <ManualEntryForm services={costs.data.services} onClose={() => setManualEntryOpen(false)} />
@@ -405,17 +423,17 @@ export default function ProductionCostsPage() {
         <SummaryCard
           label="Provider-reported"
           value={byCurrencyLabel(summaries, "providerReportedMinor")}
-          detail="Selected costs backed by provider invoices or billing records."
+          detail="Provider-reported amounts from available invoices and billing records; shown separately from the selected total."
         />
         <SummaryCard
           label="Usage estimates"
-          value={byCurrencyLabel(summaries, "estimatedMinor")}
-          detail="Selected usage-based estimates, including estimated maximums where available."
+          value={byCurrencyLabel(summaries, "estimatedMinor") + " · max " + byCurrencyLabel(summaries, "estimatedMaxMinor")}
+          detail="Usage-based estimates and maximum estimates are shown separately from the selected total."
         />
         <SummaryCard
           label="Manual entries"
           value={byCurrencyLabel(summaries, "manualMinor")}
-          detail="Selected costs from administrator-entered records with audit details."
+          detail="All recorded manual costs, including entries where another source remains the selected basis."
         />
       </section>
 

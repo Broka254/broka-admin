@@ -103,7 +103,7 @@ describe("Verified production-cost API contracts", () => {
     expect(ProductionCostEntryInSchema.parse(valid).manually_entered_cost_minor).toBe(2900);
     expect(() => ProductionCostEntryInSchema.parse({ ...valid, manually_entered_cost_minor: undefined })).toThrow();
     expect(() => ProductionCostEntryInSchema.parse({ ...valid, period_end: period.start })).toThrow();
-    expect(() => ProductionCostEntryInSchema.parse({ ...valid, currency: "kes" })).toThrow();
+    expect(() => ProductionCostEntryInSchema.parse({ ...valid, currency: "KE" })).toThrow();
     expect(() => ProductionCostEntryInSchema.parse({ ...valid, extra: true })).toThrow();
   });
 

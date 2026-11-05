@@ -712,6 +712,12 @@ export const ProductionCostBasisSchema = z.enum([
 export type ProductionCostBasis = z.infer<typeof ProductionCostBasisSchema>;
 
 const productionCostCurrency = z.string().regex(/^[A-Z]{3}$/);
+const productionCostDateOnly = z.string()
+  .regex(/^\\d{4}-\\d{2}-\\d{2}$/)
+  .refine((value) => {
+    const parsed = new Date(value + "T00:00:00.000Z");
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, "Expected a real ISO calendar date.");
 const nullableMinorAmount = z.number().int().nonnegative().nullable();
 
 export const ProductionCostServiceSchema = z.object({

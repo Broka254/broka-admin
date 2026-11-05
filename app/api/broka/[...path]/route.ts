@@ -23,7 +23,11 @@ import {
   PublishOutSchema,
   RetryOutSchema,
   ProductionCostEntryInSchema,
+  ProductionCostEntryPatchSchema,
   ProductionCostEntryMutationResponseSchema,
+  ProductionCostPricingInSchema,
+  ProductionCostPricingPatchSchema,
+  ProductionCostPricingMutationResponseSchema,
 } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
@@ -96,6 +100,24 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/revenue\/costs\/entries$/,
     requestSchema: ProductionCostEntryInSchema,
     responseSchema: ProductionCostEntryMutationResponseSchema,
+  },
+  {
+    method: "PATCH",
+    pattern: /^admin\/revenue\/costs\/entries\/(\d+)$/,
+    requestSchema: ProductionCostEntryPatchSchema,
+    responseSchema: ProductionCostEntryMutationResponseSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/revenue\/costs\/pricing$/,
+    requestSchema: ProductionCostPricingInSchema,
+    responseSchema: ProductionCostPricingMutationResponseSchema,
+  },
+  {
+    method: "PATCH",
+    pattern: /^admin\/revenue\/costs\/pricing\/(\d+)$/,
+    requestSchema: ProductionCostPricingPatchSchema,
+    responseSchema: ProductionCostPricingMutationResponseSchema,
   },
   {
     method: "PATCH",

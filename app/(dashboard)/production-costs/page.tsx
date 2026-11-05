@@ -247,7 +247,12 @@ function ManualEntryForm({
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <label className="text-xs font-medium text-slate-300">
           Service
-          <select required value={serviceKey} onChange={(event) => setServiceKey(event.target.value)} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60">
+          <select required value={serviceKey} onChange={(event) => {
+            const nextServiceKey = event.target.value;
+            setServiceKey(nextServiceKey);
+            const selectedService = services.find((service) => service.key === nextServiceKey);
+            if (selectedService) setCurrency(selectedService.currency);
+          }} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60">
             {services.map((service) => <option key={service.key} value={service.key}>{service.label}</option>)}
           </select>
         </label>

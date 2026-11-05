@@ -66,7 +66,9 @@ function CostEntryForm({ services, selection, onClose }: { services: ProductionC
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = Number(amount);
-    const digits = /^[A-Z]{3}$/.test(currency) ? new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits : 2;
+    const digits = /^[A-Z]{3}$/.test(currency)
+      ? (new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2)
+      : 2;
     const pattern = digits === 0 ? /^\d+$/ : new RegExp("^\\d+(\\.\\d{1," + digits + "})?$");
     if (!Number.isFinite(value) || value < 0 || !pattern.test(amount) || !selected) return;
     const minor = Math.round(value * (10 ** digits));

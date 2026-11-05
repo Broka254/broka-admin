@@ -952,7 +952,7 @@ export const ProductionCostPricingInSchema = z.object({
   { message: "The price end must be after its effective start." },
 );
 export const ProductionCostPricingPatchSchema = z.object({
-  unit_price_minor: z.number().int().nonnegative().optional(),
+  unit_price_minor: z.number().int().nonnegative().nullable().optional(),
   effective_until: costTimestamp.nullable().optional(),
   pricing_source: z.string().max(160).nullable().optional(),
   confidence: z.string().nullable().optional(),

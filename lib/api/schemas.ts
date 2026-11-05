@@ -764,7 +764,7 @@ export const ProductionCostManualEntryInSchema = z.object({
   service_key: z.string().trim().min(1).max(80),
   amount_minor: z.number().int().positive(),
   currency: productionCostCurrency,
-  occurred_on: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   description: z.string().trim().min(3).max(500),
   reference: z.string().trim().max(120).nullable().optional(),
 }).strict();
@@ -776,7 +776,7 @@ export const ProductionCostManualEntrySchema = z.object({
   service_label: z.string().min(1),
   amount_minor: z.number().int().positive(),
   currency: productionCostCurrency,
-  occurred_on: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   description: z.string(),
   reference: z.string().nullable(),
   created_at: z.string().datetime({ offset: true }),
@@ -786,8 +786,8 @@ export type ProductionCostManualEntry = z.infer<typeof ProductionCostManualEntry
 
 export const ProductionCostsResponseSchema = z.object({
   generated_at: z.string().datetime({ offset: true }),
-  from: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
-  to: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   services: z.array(ProductionCostServiceSchema),
   manual_entries: z.array(ProductionCostManualEntrySchema),
   capabilities: z.object({

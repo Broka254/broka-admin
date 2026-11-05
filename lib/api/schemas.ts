@@ -699,6 +699,105 @@ export const TimeseriesResponseSchema = z.object({
 });
 export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
 
+// ── Production service cost tracking ─────────────────────────────────────────
+// This contract is a proposed admin API surface. The inspected backend does not
+// currently expose these endpoints; see docs/API_INTEGRATION.md and BACKEND_GAPS.md.
+
+export const ProductionCostBasisSchema = z.enum([
+  "provider_reported",
+  "usage_estimate",
+  "manual_entry",
+  "unavailable",
+]);
+export type ProductionCostBasis = z.infer<typeof ProductionCostBasisSchema>;
+
+const productionCostCurrency = z.string().regex(/^[A-Z]{3}$/);
+const nullableMinorAmount = z.number().int().nonnegative().nullable();
+
+export const ProductionCostServiceSchema = z.object({
+  key: z.string().min(1).max(80),
+  label: z.string().min(1).max(120),
+  category: z.string().min(1).max(80),
+  usage_count: z.number().int().nonnegative().nullable(),
+  usage_unit: z.string().max(40).nullable(),
+  request_count: z.number().int().nonnegative().nullable(),
+  currency: productionCostCurrency,
+  provider_reported_minor: nullableMinorAmount,
+  usage_estimate_minor: nullableMinorAmount,
+  estimated_max_minor: nullableMinorAmount,
+  manual_minor: nullableMinorAmount,
+  selected_cost_minor: nullableMinorAmount,
+  selected_cost_basis: ProductionCostBasisSchema,
+  source_label: z.string().max(120).nullable(),
+  last_synced_at: z.string().datetime({ offset: true }).nullable(),
+  notes: z.array(z.string().max(500)),
+}).superRefine((service, context) => {
+  if (service.selected_cost_basis === "unavailable" && service.selected_cost_minor !== null) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["selected_cost_minor"],
+      message: "Unavailable costs must not contain a selected amount.",
+    });
+  }
+  if (service.selected_cost_basis !== "unavailable" && service.selected_cost_minor === null) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["selected_cost_minor"],
+      message: "A selected cost basis requires a selected amount.",
+    });
+  }
+  if (
+    service.usage_estimate_minor !== null &&
+    service.estimated_max_minor !== null &&
+    service.estimated_max_minor < service.usage_estimate_minor
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["estimated_max_minor"],
+      message: "The estimated maximum cannot be below the usage estimate.",
+    });
+  }
+});
+export type ProductionCostService = z.infer<typeof ProductionCostServiceSchema>;
+
+export const ProductionCostManualEntryInSchema = z.object({
+  service_key: z.string().trim().min(1).max(80),
+  amount_minor: z.number().int().positive(),
+  currency: productionCostCurrency,
+  occurred_on: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  description: z.string().trim().min(3).max(500),
+  reference: z.string().trim().max(120).nullable().optional(),
+}).strict();
+export type ProductionCostManualEntryInput = z.infer<typeof ProductionCostManualEntryInSchema>;
+
+export const ProductionCostManualEntrySchema = z.object({
+  id: z.string().min(1),
+  service_key: z.string().min(1),
+  service_label: z.string().min(1),
+  amount_minor: z.number().int().positive(),
+  currency: productionCostCurrency,
+  occurred_on: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  description: z.string(),
+  reference: z.string().nullable(),
+  created_at: z.string().datetime({ offset: true }),
+  created_by_label: z.string().min(1),
+});
+export type ProductionCostManualEntry = z.infer<typeof ProductionCostManualEntrySchema>;
+
+export const ProductionCostsResponseSchema = z.object({
+  generated_at: z.string().datetime({ offset: true }),
+  from: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  to: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  services: z.array(ProductionCostServiceSchema),
+  manual_entries: z.array(ProductionCostManualEntrySchema),
+  capabilities: z.object({
+    manual_entries: z.boolean(),
+    provider_sync: z.boolean(),
+  }),
+  notes: z.array(z.string().max(500)),
+});
+export type ProductionCostsResponse = z.infer<typeof ProductionCostsResponseSchema>;
+
 // ── Loose single-object detail contracts ────────────────────────────────────
 // Listing/dispute/store detail mirrors the list-item shape plus backend-owned
 // extra fields. Validate loosely so minor backend drift does not 502 the page.
@@ -720,7 +819,7 @@ export const AdminResourceSchemas = {
   serviceHealth: ServiceHealthSchema, zenoActivity: ZenoActivitySchema, userDetail: AdminUserDetailSchema, dealDetail: AdminDealDetailSchema,
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
-  alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
+  alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,\n  productionCosts: ProductionCostsResponseSchema,
   listingDetail: AdminListingDetailSchema, disputeDetail: AdminDisputeDetailSchema, storeDetail: AdminStoreDetailSchema,
 } as const;
 

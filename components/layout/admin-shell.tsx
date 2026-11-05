@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronDown, CircleHelp, ClipboardList, FileSearch, Gauge, Landmark, LayoutDashboard, LogOut, Megaphone, Menu, Network, Search, ShieldAlert, Store, Users, X } from "lucide-react";
+import { Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronDown, CircleHelp, ClipboardList, FileSearch, Gauge, Landmark, LayoutDashboard, LogOut, Megaphone, Menu, Network, Receipt, Search, ShieldAlert, Store, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -20,7 +20,7 @@ const navGroups: NavGroup[] = [
   { label: "Marketplace", entries: [{ label: "Listings", href: "/listings", icon: Store }, { label: "Deals", href: "/deals", icon: ClipboardList }, { label: "Stores", href: "/stores", icon: Store }] },
   { label: "Users", entries: [{ label: "All Users", href: "/users", icon: Users }, { label: "Admins", href: "/users?type=admin", icon: Users }] },
   { label: "Trust & Safety", entries: [{ label: "Fraud", href: "/fraud", icon: ShieldAlert }, { label: "Disputes", href: "/disputes", icon: FileSearch }, { label: "Reports", href: "/reports", icon: CircleHelp }] },
-  { label: "Money", entries: [{ label: "Revenue", href: "/revenue", icon: BarChart3 }, { label: "Payments", href: "/payments", icon: Landmark }, { label: "Finance Integrity", href: "/finance-integrity", icon: BadgeDollarSign }, { label: "Transactions", href: "/transactions", icon: Landmark }, { label: "Escrow", href: "/escrow", icon: BadgeDollarSign }, { label: "Commissions", href: "/commissions", icon: BarChart3 }] },
+  { label: "Money", entries: [{ label: "Revenue", href: "/revenue", icon: BarChart3 }, { label: "Service Costs", href: "/service-costs", icon: Receipt }, { label: "Payments", href: "/payments", icon: Landmark }, { label: "Finance Integrity", href: "/finance-integrity", icon: BadgeDollarSign }, { label: "Transactions", href: "/transactions", icon: Landmark }, { label: "Escrow", href: "/escrow", icon: BadgeDollarSign }, { label: "Commissions", href: "/commissions", icon: BarChart3 }] },
   { label: "Zeno", entries: [{ label: "AI Activity", href: "/zeno/activity", icon: Bot }, { label: "Negotiations", href: "/zeno/negotiations", icon: Bot }, { label: "AI Savings", href: "/zeno/savings", icon: Bot }] },
   { label: "Analytics", entries: [{ label: "Platform", href: "/analytics/platform", icon: BarChart3 }, { label: "Marketplace", href: "/analytics/marketplace", icon: BarChart3 }, { label: "Users", href: "/analytics/users", icon: BarChart3 }] },
   { label: "System", entries: [{ label: "Service Communications", href: "/communications", icon: Megaphone }, { label: "Service Health", href: "/service-health", icon: Gauge }, { label: "Audit Logs", href: "/audit-logs", icon: ClipboardList }, { label: "Diagnostics", href: "/diagnostics", icon: Gauge }, { label: "Events", href: "/events", icon: Activity }, { label: "Workflow Versions", href: "/workflow-versions", icon: Network }] },

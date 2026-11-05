@@ -77,7 +77,7 @@ describe("RevenuePage", () => {
     expect(screen.getByText("KES 10,000")).toBeInTheDocument();
     expect(screen.getByText("81.0%")).toBeInTheDocument();
     expect(screen.getByTestId("profit-chart")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /export csv/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /export full report \(csv\)/i })).toBeInTheDocument();
     expect(screen.getAllByText("Transaction fees").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Revenue insights")).toBeInTheDocument();
     expect(screen.getByText("Cost-to-income ratio")).toBeInTheDocument();
@@ -108,6 +108,6 @@ describe("RevenuePage", () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useRevenue>);
     render(<RevenuePage />);
-    expect(screen.getByText("Loading revenue data.")).toBeInTheDocument();
+    expect(screen.getByText("Loading platform revenue data.")).toBeInTheDocument();
   });
 });

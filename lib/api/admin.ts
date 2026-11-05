@@ -36,7 +36,9 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   alerts: "/admin/alerts",
   revenue: "/admin/revenue",
   timeseries: "/admin/analytics/timeseries",
-  productionCosts: "/admin/production-costs",
+  productionCosts: "/admin/revenue/costs/services",
+  productionCostEntries: "/admin/revenue/costs/entries",
+  productionCostAdjustments: "/admin/revenue/costs/adjustments",
 };
 
 const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [

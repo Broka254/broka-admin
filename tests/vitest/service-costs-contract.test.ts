@@ -16,8 +16,20 @@ const fixture={
 describe("service-cost contracts",()=>{
   it("accepts separate cost sources and preserves null for unpriced service costs",()=>{
     expect(ServiceCostsDashboardSchema.parse(fixture)).toEqual(fixture);
-    const unpriced=structuredClone(fixture);
-    unpriced.services[0].cost={amount_minor:null,currency:null,source:"unpriced",confidence:"unpriced",maximum_estimate_minor:null,note:"No price configured"};
+    const unpriced = {
+      ...fixture,
+      services: [{
+        ...fixture.services[0],
+        cost: {
+          amount_minor: null,
+          currency: null,
+          source: "unpriced" as const,
+          confidence: "unpriced" as const,
+          maximum_estimate_minor: null,
+          note: "No price configured",
+        },
+      }],
+    };
     expect(ServiceCostsDashboardSchema.parse(unpriced).services[0].cost.amount_minor).toBeNull();
   });
   it("rejects negative usage, negative money, and malformed currency",()=>{

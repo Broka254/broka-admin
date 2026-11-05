@@ -36,10 +36,11 @@ function context(...segments: string[]) {
   return { params: Promise.resolve({ path: segments }) };
 }
 
-function mutationRequest(body: string, options: { origin?: string | null; contentType?: string; path?: string[] } = {}) {
+function mutationRequest(body: string, options: { origin?: string | null; contentType?: string; path?: string[]; idempotencyKey?: string } = {}) {
   const headers: Record<string, string> = {};
   if (options.origin !== null) headers.origin = options.origin ?? "http://localhost";
   if (options.contentType !== undefined) headers["content-type"] = options.contentType;
+  if (options.idempotencyKey) headers["X-Idempotency-Key"] = options.idempotencyKey;
   return new Request(`http://localhost/api/broka/${(options.path ?? ["admin", "communications", "preview"]).join("/")}`, {
     method: "POST",
     headers,
@@ -59,6 +60,8 @@ describe("admin proxy security boundaries", () => {
 
   it("keeps the GET allowlist narrow and rejects unknown paths", async () => {
     expect(isSafeAdminPath("admin/communications")).toBe(true);
+    expect(isSafeAdminPath("admin/production-costs")).toBe(true);
+    expect(isSafeAdminPath("admin/production-costs/manual-entries")).toBe(false);
     expect(isSafeAdminPath("admin/communications/comm-1")).toBe(true);
     expect(isSafeAdminPath("admin/communications/comm-1/secret")).toBe(false);
     expect(isSafeAdminPath("admin/summary/extra")).toBe(false);
@@ -157,6 +160,51 @@ describe("admin proxy security boundaries", () => {
       method: "POST",
       token: "access-token",
     });
+  });
+
+  it("requires idempotency for manual production-cost entries", async () => {
+    const path = ["admin", "production-costs", "manual-entries"];
+    const body = JSON.stringify({
+      service_key: "sms",
+      amount_minor: 2900,
+      currency: "KES",
+      occurred_on: "2026-11-04",
+      description: "Provider invoice adjustment",
+      reference: "INV-123",
+    });
+
+    const missingKey = await POST(
+      mutationRequest(body, { contentType: "application/json", path }),
+      context(...path),
+    );
+    expect(missingKey.status).toBe(400);
+    expect(await missingKey.json()).toMatchObject({ code: "idempotency_key_required" });
+    expect(state.upstreamCalls).toHaveLength(0);
+
+    state.upstreamResponse = new Response(JSON.stringify({
+      id: "cost-1",
+      service_key: "sms",
+      service_label: "SMS delivery",
+      amount_minor: 2900,
+      currency: "KES",
+      occurred_on: "2026-11-04",
+      description: "Provider invoice adjustment",
+      reference: "INV-123",
+      created_at: "2026-11-05T10:00:00Z",
+      created_by_label: "Admin",
+    }), { status: 201, headers: { "content-type": "application/json" } });
+
+    const accepted = await POST(
+      mutationRequest(body, {
+        contentType: "application/json",
+        path,
+        idempotencyKey: "manual-entry-123456",
+      }),
+      context(...path),
+    );
+    expect(accepted.status).toBe(201);
+    const forwardedHeaders = new Headers(state.upstreamCalls[0]?.headers);
+    expect(forwardedHeaders.get("X-Idempotency-Key")).toBe("manual-entry-123456");
   });
 
   it("does not export unlisted HTTP methods", async () => {

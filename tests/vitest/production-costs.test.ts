@@ -5,6 +5,9 @@ import {
   ProductionCostServiceSchema,
   ProductionCostsResponseSchema,
   ProductionCostEntriesResponseSchema,
+  ProductionCostSummarySchema,
+  ProductionCostUsageResponseSchema,
+  ProductionCostPricingResponseSchema,
 } from "@/lib/api/schemas";
 import {
   currencyMinorUnitDigits,
@@ -104,6 +107,54 @@ describe("Verified production-cost API contracts", () => {
     expect(() => ProductionCostEntryInSchema.parse({ ...valid, extra: true })).toThrow();
   });
 
+  it("accepts MULTI as a backend mixed-currency sentinel", () => {
+    const parsed = ProductionCostServiceSchema.parse({
+      ...service, currency: "MULTI", effective_currency: null,
+      actual_cost_minor: null, estimated_cost_minor: null,
+      manually_entered_cost_minor: null, adjusted_cost_minor: null,
+      effective_cost_minor: null, cost_source: "none",
+      cost_status: "mixed_currency", has_cost_information: false,
+    });
+    expect(parsed.currency).toBe("MULTI");
+  });
+
+  it("validates summary, raw usage and pricing responses from the current API", () => {
+    const summary = ProductionCostSummarySchema.parse({
+      reporting_period: period, generated_at: "2026-12-01T00:00:00+00:00",
+      currency: "KES", currencies: ["KES"], totals_by_currency: response.totals_by_currency,
+      by_category: [{ category: "messaging", currency: "KES", effective_cost_minor: 2900, services: 1 }],
+      by_cost_source: [{ cost_source: "invoice", currency: "KES", effective_cost_minor: 2900, services: 1 }],
+      usage: { requests_total: 82, requests_success: 80, requests_failed: 2, input_tokens: 0, output_tokens: 0, images: 0, sms_segments: 100, emails: 0 },
+      services_total: 1, services_with_cost: 1, unpriced_services: [], notes: [],
+    });
+    expect(summary.usage.sms_segments).toBe(100);
+
+    const usage = ProductionCostUsageResponseSchema.parse({
+      reporting_period: period,
+      events: [{
+        id: 1, service_key: "sms.texin", service_name: "Texin SMS", provider: "Texin",
+        operation_type: "sms.send", status: "success", provider_reference: null, operation_id: "evt-1",
+        quantity: 1, usage_unit: "sms_segment", input_tokens: null, output_tokens: null,
+        unit_price_minor: 29, estimated_cost_minor: 29, currency: "KES",
+        cost_basis: "pricing", confidence: "exact", occurred_at: period.start,
+        reporting_period_start: period.start, metadata: {},
+      }],
+      limit: 200, offset: 0, note: "Raw events are retained for a limited period.",
+    });
+    expect(usage.events[0].service_key).toBe("sms.texin");
+
+    const pricing = ProductionCostPricingResponseSchema.parse({
+      pricing: [{
+        id: 1, service_key: "sms.texin", service_name: "Texin SMS",
+        pricing_unit: "sms_segment", unit_price_minor: 29, currency: "KES",
+        effective_from: period.start, effective_until: null, pricing_source: "Provider tariff",
+        confidence: "exact", created_by: "admin-1", created_at: period.start,
+      }],
+      limit: 500, offset: 0,
+    });
+    expect(pricing.pricing[0].unit_price_minor).toBe(29);
+  });
+
   it("parses the backend /entries list response", () => {
     const entry = {
       id: 12, service_key: "sms.texin", service_name: "Texin SMS",
@@ -128,6 +179,7 @@ describe("currency and totals helpers", () => {
     expect(toMinorUnits(12.34, "KES")).toBe(1234);
     expect(toMinorUnits(120, "JPY")).toBe(120);
     expect(formatMinorCurrency(1234, "KWD")).toContain("1.234");
+    expect(formatMinorCurrency(100, "MULTI")).toBe("Mixed currencies");
   });
 
   it("counts effective costs once and keeps currencies separate", () => {

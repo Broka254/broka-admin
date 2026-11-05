@@ -85,8 +85,9 @@ function CostConfidence({ data }: { data: RevenueResponse }) {
   const recorded = Math.max(0, data.costs.total_minor - estimated);
   const hasEstimatedRows = data.costs.kinds.some((kind) => kind.estimated) || estimated > 0;
   const hasUnpricedRows = data.costs.kinds.some((kind) => kind.estimated && kind.amount_minor === 0);
-  const estimatedShare = data.costs.total_minor > 0 ? (estimated / data.costs.total_minor) * 100 : 0;
-  const recordedShare = data.costs.total_minor > 0 ? 100 - estimatedShare : 0;
+  const hasPricedCostTotal = data.costs.total_minor > 0;
+  const estimatedShare = hasPricedCostTotal ? (estimated / data.costs.total_minor) * 100 : 0;
+  const recordedShare = hasPricedCostTotal ? 100 - estimatedShare : 0;
 
   return (
     <div className="mt-3 rounded-xl border border-white/10 bg-[#0c1020] p-4">
@@ -113,8 +114,12 @@ function CostConfidence({ data }: { data: RevenueResponse }) {
         <div className="h-full bg-amber-300" style={{ width: estimatedShare + "%" }} />
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
-        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-cyan-300" />Recorded/configured: {formatKES(recorded, data.currency)}</span>
-        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-300" />Estimated: {formatKES(estimated, data.currency)}</span>
+        {hasPricedCostTotal ? (
+          <>
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-cyan-300" />Not flagged estimated: {formatKES(recorded, data.currency)}</span>
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-300" />Estimated: {formatKES(estimated, data.currency)}</span>
+          </>
+        ) : <span>No priced cost total is available to split.</span>}
       </div>
       <p className="mt-2 text-xs leading-5 text-slate-500">
         Reported profit includes estimated costs. Provider usage without a verified rate can be recorded as an estimated zero-value row, so zero does not always mean no usage.

@@ -59,7 +59,7 @@ type MutationOperation = {
 const MUTATION_OPERATIONS: MutationOperation[] = [
   {
     method: "POST",
-    pattern: /^admin\\/revenue\\/costs\\/entries$/,
+    pattern: /^admin\/revenue\/costs\/entries$/,
     requestSchema: ServiceCostEntryCreateInSchema,
     responseSchema: ServiceCostEntryCreateResponseSchema,
     requiresIdempotencyKey: true,

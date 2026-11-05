@@ -40,7 +40,10 @@ const SERVICE_CATALOG: ServiceCatalogItem[] = [
 ];
 
 function dateOnly(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
 }
 
 function defaultSelection(): DateRangeSelection {
@@ -154,9 +157,11 @@ function ServiceCostTable({ services }: { services: ProductionCostService[] }) {
                 {service.provider_reported_minor === null ? "—" : formatMinorCurrency(service.provider_reported_minor, service.currency)}
               </td>
               <td className="px-4 py-4 text-right tabular-nums text-slate-300">
-                {service.usage_estimate_minor === null ? "—" : (
+                {service.usage_estimate_minor === null && service.estimated_max_minor === null ? "—" : (
                   <span>
-                    {formatMinorCurrency(service.usage_estimate_minor, service.currency)}
+                    {service.usage_estimate_minor === null
+                      ? "Estimate unavailable"
+                      : formatMinorCurrency(service.usage_estimate_minor, service.currency)}
                     {service.estimated_max_minor !== null ? (
                       <span className="mt-1 block text-[11px] text-amber-200/80">
                         max {formatMinorCurrency(service.estimated_max_minor, service.currency)}

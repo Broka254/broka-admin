@@ -17,13 +17,17 @@ interface DateRangePickerProps extends DateRangeSelection {
 type Preset = "7d" | "30d" | "90d" | "custom";
 
 function toISODate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
 }
 
 function rangeForPreset(preset: Exclude<Preset, "custom">, bucket: RevenueBucket): DateRangeSelection {
+  const days = preset === "7d" ? 7 : preset === "30d" ? 30 : 90;
   const to = new Date();
   const from = new Date();
-  from.setDate(to.getDate() - (preset === "7d" ? 7 : preset === "30d" ? 30 : 90));
+  from.setDate(to.getDate() - (days - 1));
   return { from: toISODate(from), to: toISODate(to), bucket };
 }
 
@@ -68,10 +72,10 @@ export function DateRangePicker({ from, to, bucket, onChange }: DateRangePickerP
         />
       </label>
       <label className="flex items-center gap-1.5 text-xs text-slate-400">
-        To
+        Through
         <input
           type="date"
-          aria-label="To date"
+          aria-label="Through date"
           value={to}
           min={from}
           onChange={(event) => onChange({ from, to: event.target.value, bucket })}

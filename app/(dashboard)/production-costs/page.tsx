@@ -29,7 +29,7 @@ function rangeQuery(selection: DateRangeSelection): URLSearchParams {
 function money(value: number | null, currency: string): string {
   if (value === null) return "Not priced";
   if (!/^[A-Z]{3}$/.test(currency)) return "Mixed currencies";
-  const digits = new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits;
+  const digits = new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
   return new Intl.NumberFormat("en-KE", { style: "currency", currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value / (10 ** digits));
 }
 

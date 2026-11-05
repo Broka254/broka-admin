@@ -819,7 +819,8 @@ export const AdminResourceSchemas = {
   serviceHealth: ServiceHealthSchema, zenoActivity: ZenoActivitySchema, userDetail: AdminUserDetailSchema, dealDetail: AdminDealDetailSchema,
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
-  alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,\n  productionCosts: ProductionCostsResponseSchema,
+  alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
+  productionCosts: ProductionCostsResponseSchema,
   listingDetail: AdminListingDetailSchema, disputeDetail: AdminDisputeDetailSchema, storeDetail: AdminStoreDetailSchema,
 } as const;
 

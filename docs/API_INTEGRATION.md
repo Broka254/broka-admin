@@ -50,7 +50,7 @@ database or provider billing APIs.
 | Operation | Backend route | Dashboard use |
 |---|---|---|
 | Service ledger | `GET /admin/revenue/costs/services?from=YYYY-MM-DD&to=YYYY-MM-DD` | Service usage, actual/estimated/manual/effective costs and currency totals |
-| Summary | `GET /admin/revenue/costs/summary?from=...&to=...` | Aggregate reporting endpoint available for future summary views |
+| Summary | `GET /admin/revenue/costs/summary?from=...&to=...` | Aggregate totals and provider usage metrics |
 | Usage events | `GET /admin/revenue/costs/usage?from=...&to=...` | Raw provider operation history |
 | Cost entries | `GET /admin/revenue/costs/entries?from=...&to=...` | Invoice and manually entered billing-period records |
 | Adjustments | `GET /admin/revenue/costs/adjustments?from=...&to=...` | Audited manual adjustment history |

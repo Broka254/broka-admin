@@ -122,8 +122,12 @@ export default function ProductionCostsPage() {
   const [entryOpen, setEntryOpen] = useState(false);
   const query = useMemo(() => rangeQuery(selection), [selection.from, selection.to]);
   const costs = useAdminResource("productionCosts", query);
+  const summary = useAdminResource("productionCostSummary", query, Boolean(costs.data));
+  const usageEventsResource = useAdminResource("productionCostUsage", query, Boolean(costs.data));
   const entries = useAdminResource("productionCostEntries", query, Boolean(costs.data));
   const adjustments = useAdminResource("productionCostAdjustments", query, Boolean(costs.data));
+  const pricingQuery = useMemo(() => new URLSearchParams("limit=500"), []);
+  const pricing = useAdminResource("productionCostPricing", pricingQuery, Boolean(costs.data));
 
   if (costs.isLoading) return <div className="space-y-6"><div><SectionEyebrow>Money / Cost control</SectionEyebrow><h1 className="font-display text-3xl font-bold text-white">Production costs</h1></div><DateRangePicker {...selection} onChange={setSelection} showBucket={false} /><ResourceState state="loading" message="Loading provider usage and production costs." /></div>;
   if (costs.isError) {
@@ -137,7 +141,10 @@ export default function ProductionCostsPage() {
   const amountList = (key: "effective_cost_minor" | "actual_cost_minor" | "estimated_cost_minor" | "manually_entered_cost_minor" | "adjusted_cost_minor") => totals.length ? totals.map((t) => money(t[key], t.currency)).join(" · ") : "No priced costs";
   const priced = data.services.filter((s) => s.effective_cost_minor !== null).length;
   const usage = data.services.reduce((n, s) => n + s.requests_total, 0);
-  const notes = Array.from(new Set(data.services.map((s) => s.notes).filter((v): v is string => Boolean(v))));
+  const notes = Array.from(new Set([
+    ...data.services.map((s) => s.notes),
+    ...(summary.data?.notes ?? []),
+  ].filter((v): v is string => Boolean(v))));
 
   return (
     <div className="space-y-6">
@@ -163,6 +170,55 @@ export default function ProductionCostsPage() {
       <section className="space-y-3"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Audit history</p><h2 className="mt-1 font-display text-xl font-bold text-white">Cost adjustments</h2></div><StatusBadge tone="neutral">{adjustments.data?.adjustments.length ?? 0} adjustment(s)</StatusBadge></div>
         {adjustments.isLoading ? <ResourceState state="loading" message="Loading adjustment history." /> : adjustments.isError ? <ResourceState state="error" message={adjustments.error.message} /> : adjustments.data?.adjustments.length ? <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0c1020]"><table className="w-full min-w-[750px] text-sm"><thead><tr className="border-b border-white/10 text-left text-[10px] uppercase text-slate-500"><th className="p-3">Changed</th><th className="p-3">Service</th><th className="p-3">Reason</th><th className="p-3">Admin</th><th className="p-3 text-right">Adjusted amount</th></tr></thead><tbody>{adjustments.data.adjustments.map((a) => <tr key={a.id} className="border-b border-white/[0.05]"><td className="p-3 text-slate-400">{new Date(a.created_at).toLocaleString("en-KE")}</td><td className="p-3 text-white">{a.service_name}</td><td className="p-3 text-slate-400">{a.reason}</td><td className="p-3 text-slate-400">{a.adjusted_by}</td><td className="p-3 text-right text-white">{money(a.adjusted_amount_minor,a.currency)}</td></tr>)}</tbody></table></div> : <p className="rounded-xl border border-white/10 bg-[#0c1020] p-4 text-sm text-slate-500">No manual adjustments in this period.</p>}
       </section>
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Usage events</p><h2 className="mt-1 font-display text-xl font-bold text-white">Provider activity</h2></div>
+          <StatusBadge tone="neutral">{usageEventsResource.data?.events.length ?? 0} raw event(s)</StatusBadge>
+        </div>
+        {usageEventsResource.isLoading ? <ResourceState state="loading" message="Loading recent provider events." /> : usageEventsResource.isError ? <ResourceState state="error" message={usageEventsResource.error.message} /> : usageEventsResource.data?.events.length ? (
+          <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0c1020]">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead><tr className="border-b border-white/10 text-left text-[10px] uppercase tracking-wider text-slate-500"><th className="p-3">Time</th><th className="p-3">Service</th><th className="p-3">Operation</th><th className="p-3">Status</th><th className="p-3 text-right">Quantity</th><th className="p-3 text-right">Tokens</th><th className="p-3 text-right">Estimate</th></tr></thead>
+              <tbody>{usageEventsResource.data.events.map((event) => (
+                <tr key={event.id} className="border-b border-white/[0.05]">
+                  <td className="p-3 text-slate-400">{new Date(event.occurred_at).toLocaleString("en-KE")}</td>
+                  <td className="p-3 text-white">{event.service_name ?? event.service_key ?? "Unknown"}</td>
+                  <td className="p-3 text-slate-400">{event.operation_type}</td>
+                  <td className="p-3"><StatusBadge tone={event.status === "success" ? "success" : event.status === "failed" || event.status === "rejected" ? "danger" : "neutral"}>{event.status}</StatusBadge></td>
+                  <td className="p-3 text-right tabular-nums text-slate-300">{event.quantity ?? "—"} {event.usage_unit ?? ""}</td>
+                  <td className="p-3 text-right tabular-nums text-slate-300">{((event.input_tokens ?? 0) + (event.output_tokens ?? 0)).toLocaleString("en-KE")}</td>
+                  <td className="p-3 text-right text-slate-300">{money(event.estimated_cost_minor, event.currency ?? "KES")}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <p className="rounded-xl border border-white/10 bg-[#0c1020] p-4 text-sm text-slate-500">No raw events were returned. Older activity may already be in daily rollups.</p>}
+        {usageEventsResource.data?.note ? <p className="text-[11px] text-slate-500">{usageEventsResource.data.note}</p> : null}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Effective-dated pricing</p><h2 className="mt-1 font-display text-xl font-bold text-white">Service pricing history</h2></div>
+          <StatusBadge tone="neutral">{pricing.data?.pricing.length ?? 0} price record(s)</StatusBadge>
+        </div>
+        {pricing.isLoading ? <ResourceState state="loading" message="Loading service price history." /> : pricing.isError ? <ResourceState state="error" message={pricing.error.message} /> : pricing.data?.pricing.length ? (
+          <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0c1020]">
+            <table className="w-full min-w-[850px] text-sm">
+              <thead><tr className="border-b border-white/10 text-left text-[10px] uppercase tracking-wider text-slate-500"><th className="p-3">Service</th><th className="p-3">Unit</th><th className="p-3 text-right">Unit price</th><th className="p-3">Effective from</th><th className="p-3">Effective until</th><th className="p-3">Source / confidence</th></tr></thead>
+              <tbody>{pricing.data.pricing.map((row) => (
+                <tr key={row.id} className="border-b border-white/[0.05]">
+                  <td className="p-3 text-white">{row.service_name}</td><td className="p-3 text-slate-400">{row.pricing_unit}</td>
+                  <td className="p-3 text-right text-slate-200">{money(row.unit_price_minor, row.currency)}</td>
+                  <td className="p-3 text-slate-400">{new Date(row.effective_from).toLocaleDateString("en-KE")}</td>
+                  <td className="p-3 text-slate-400">{row.effective_until ? new Date(row.effective_until).toLocaleDateString("en-KE") : "Current"}</td>
+                  <td className="p-3 text-slate-400">{row.pricing_source} · {row.confidence}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <p className="rounded-xl border border-white/10 bg-[#0c1020] p-4 text-sm text-slate-500">No unit prices have been configured.</p>}
+      </section>
+
       <p className="text-[11px] leading-5 text-slate-600">The backend keeps actual invoices, usage-derived estimates, manual amounts and adjustments distinct. Totals are never combined across currencies. Usage-event details are available through the backend /admin/revenue/costs/usage endpoint.</p>
     </div>
   );

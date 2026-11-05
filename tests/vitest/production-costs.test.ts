@@ -5,7 +5,12 @@ import {
   ProductionCostServiceSchema,
   ProductionCostsResponseSchema,
 } from "@/lib/api/schemas";
-import { summarizeProductionCosts } from "@/lib/production-costs";
+import {
+  currencyMinorUnitDigits,
+  formatMinorCurrency,
+  summarizeProductionCosts,
+  toMinorUnits,
+} from "@/lib/production-costs";
 
 const service = {
   key: "sms",
@@ -78,6 +83,21 @@ describe("Production cost contracts", () => {
     expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, amount_minor: 0 })).toThrow();
     expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, description: "x" })).toThrow();
     expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, extra: true })).toThrow();
+  });
+});
+
+describe("currency minor units", () => {
+  it("formats and converts currencies using their ISO minor-unit precision", () => {
+    expect(currencyMinorUnitDigits("KES")).toBe(2);
+    expect(currencyMinorUnitDigits("USD")).toBe(2);
+    expect(currencyMinorUnitDigits("JPY")).toBe(0);
+    expect(currencyMinorUnitDigits("KWD")).toBe(3);
+
+    expect(toMinorUnits(12.34, "KES")).toBe(1234);
+    expect(toMinorUnits(120, "JPY")).toBe(120);
+    expect(toMinorUnits(1.234, "KWD")).toBe(1234);
+    expect(formatMinorCurrency(120, "JPY")).toContain("120");
+    expect(formatMinorCurrency(1234, "KWD")).toContain("1.234");
   });
 });
 

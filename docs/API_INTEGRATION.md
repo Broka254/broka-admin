@@ -39,65 +39,41 @@ header mismatch is fixed. This statement does **not** extend to Service
 Communications draft creation, whose inspected handler has no creation-idempotency
 enforcement.
 
-## Production cost tracking (backend PR #5 pending review)
+## Production cost tracking (verified backend integration)
 
-The admin app includes a Production Costs workspace. Its API paths and response
-contract have now been checked against backend PR
-[Broka254/broka#5](https://github.com/Broka254/broka/pull/5), branch
-`feat/admin-production-cost-ledger`, head
-`64cb48faa4a9be6a03db086d4ebba03d4ed65df2`.
+The admin dashboard consumes the production-cost domain mounted in
+`Broka254/broka/backend/main.py` at `/admin/revenue/costs`
+(`api/domains/service_costs/router.py`). The UI validates the backend response
+contracts and uses the same-origin proxy; it never connects directly to the
+database or provider billing APIs.
 
-**The contracts match, but the backend is not released yet.** PR #5 is still a
-draft and has not been merged into the backend default branch or deployed.
-Consequently, the live API may continue returning 404 until that release is
-completed. The dashboard intentionally displays an unavailable state in that
-case; it does not invent figures or substitute unrelated counters.
+| Operation | Backend route | Dashboard use |
+|---|---|---|
+| Service ledger | `GET /admin/revenue/costs/services?from=YYYY-MM-DD&to=YYYY-MM-DD` | Service usage, actual/estimated/manual/effective costs and currency totals |
+| Summary | `GET /admin/revenue/costs/summary?from=...&to=...` | Aggregate reporting endpoint available for future summary views |
+| Usage events | `GET /admin/revenue/costs/usage?from=...&to=...` | Raw provider operation history |
+| Cost entries | `GET /admin/revenue/costs/entries?from=...&to=...` | Invoice and manually entered billing-period records |
+| Adjustments | `GET /admin/revenue/costs/adjustments?from=...&to=...` | Audited manual adjustment history |
+| Pricing | `GET /admin/revenue/costs/pricing?service_key=...` | Effective-dated service unit prices |
+| Create cost entry | `POST /admin/revenue/costs/entries` | Invoice, estimate or manual cost entry |
+| Update cost entry | `PATCH /admin/revenue/costs/entries/{id}` | Correct an existing entry; manual changes append an adjustment |
+| Create pricing | `POST /admin/revenue/costs/pricing` | Add a new effective-dated rate |
+| Update pricing | `PATCH /admin/revenue/costs/pricing/{id}` | Correct a future price or close its validity window |
 
-Verified backend PR contract:
+All read routes require `ADMIN_SUMMARY`; writes require `MANAGE_COSTS`.
+Reporting windows are half-open `[from, to)` in UTC. Amounts are integer
+minor currency units. Unknown cost is `null`, not zero. Currency totals are
+never combined across currencies. The service response includes the reporting
+period, generation time, per-service usage counts, success/failure counts,
+token counts, actual/estimated/manual/adjusted/effective amounts, cost source,
+confidence and status.
 
-- `GET /admin/production-costs?from=YYYY-MM-DD&to=YYYY-MM-DD` — inclusive
-  start date and exclusive end date. Returns `generated_at`, `from`, `to`,
-  `services`, `manual_entries`, `capabilities`, and explanatory `notes`.
-- Service rows match the frontend Zod schema: service key/label/category,
-  usage and request counts, currency, provider-reported and estimated amounts,
-  estimated maximum, manual amount, selected amount/basis, source/pricing
-  metadata, last sync timestamp, and notes.
-- Cost basis is one of `provider_reported`, `usage_estimate`,
-  `manual_entry`, or `unavailable`. The UI counts only the selected basis
-  in the selected total and keeps source comparisons separate.
-- Amounts are integer minor units and totals remain grouped by ISO currency.
-  An unavailable or unpriced amount is `null`, not a fabricated zero.
-- `POST /admin/production-costs/manual-entries` accepts
-  `service_key`, positive `amount_minor`, `currency`, `occurred_on`,
-  `description`, and optional `reference`. It requires
-  `X-Idempotency-Key`. The response includes the persisted ID, service,
-  amount, currency, date, description, reference, creator label, and
-  timestamp. The frontend proxy validates the request and response and
-  forwards the key.
-- The backend route uses `VIEW_PRODUCTION_COSTS` for reads and
-  `MANAGE_PRODUCTION_COSTS` for writes. In the current backend permission
-  model all `is_admin` accounts receive both permissions; these names do not
-  yet establish different admin sub-roles.
-
-Current PR implementation limits that must remain visible in the UI:
-
-- Existing SMS and AI `PlatformCost` rows feed the report. Payment fees are
-  derived from the existing revenue calculator's tariff assumptions, so they
-  are estimates rather than provider invoices.
-- Successful Resend email and Hugging Face image-generation events are
-  counted as unpriced usage until verified rates are configured. They must not
-  be described as free or assigned an assumed cost.
-- Database, storage, Redis, push, and other provider billing integrations are
-  not yet connected. Provider sync is reported as unavailable, and estimated
-  maximums are `null` where no defensible ceiling exists.
-- Manual entries are stored separately, attributed to the administrator, and
-  audited. They do not mutate the original `PlatformCost` evidence.
-
-The dashboard contract is therefore integrated with the **draft source
-contract**, not proof that the production API already serves it. After PR #5
-is merged, its schema/database change is deployed, and the live endpoint is
-verified in staging, recheck the end-to-end dashboard against the deployed
-response before enabling production use.
+The backend does **not** expose the earlier proposed
+`/admin/production-costs` or `/manual-entries` routes. The dashboard has been
+updated to use the actual `/admin/revenue/costs` routes and request/response
+shapes. Cost entry creation is not guarded by an idempotency key in the current
+backend contract; the UI does not claim retry-safe idempotency and displays
+backend conflicts if the same service/period/source entry already exists.
 
 ## Authorization
 

@@ -39,14 +39,19 @@ function unavailable(error: unknown): boolean {
 
 const SERVICE_ICONS: Record<string, typeof Activity> = {
   messaging: MessageSquare,
-  artificial_intelligence: Bot,
-  media_generation: ImageIcon,
-  infrastructure: Server,
+  ai_inference: Bot,
+  image_generation: ImageIcon,
+  email: Mail,
+  push: Activity,
+  voice: Activity,
   payments: CreditCard,
+  escrow: CreditCard,
   storage: HardDrive,
+  hosting: Server,
   database: Database,
   cache: Layers,
-  email: Mail,
+  monitoring: Activity,
+  other: Layers,
 };
 
 function CostEntryForm({ services, selection, onClose }: { services: ProductionCostService[]; selection: DateRangeSelection; onClose: () => void }) {

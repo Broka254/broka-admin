@@ -243,10 +243,12 @@ function ManualEntryForm({
     const digits = currencyMinorUnitDigits(currency);
     const amountPattern = digits === 0 ? /^\d+$/ : new RegExp("^\\d+(\\.\\d{1," + digits + "})?$");
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || !amountPattern.test(amount)) return;
+    const amountMinor = toMinorUnits(parsedAmount, currency);
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return;
 
     mutation.mutate({
       service_key: serviceKey,
-      amount_minor: toMinorUnits(parsedAmount, currency),
+      amount_minor: amountMinor,
       currency,
       occurred_on: occurredOn,
       description: description.trim(),
@@ -433,7 +435,9 @@ export default function ProductionCostsPage() {
         />
         <SummaryCard
           label="Usage estimates"
-          value={byCurrencyLabel(summaries, "estimatedMinor") + " · max " + byCurrencyLabel(summaries, "estimatedMaxMinor")}
+          value={byCurrencyLabel(summaries, "estimatedMinor") === "No value reported" && byCurrencyLabel(summaries, "estimatedMaxMinor") === "No value reported"
+            ? "No estimate reported"
+            : byCurrencyLabel(summaries, "estimatedMinor") + " · max " + byCurrencyLabel(summaries, "estimatedMaxMinor")}
           detail="Usage-based estimates and maximum estimates are shown separately from the selected total."
         />
         <SummaryCard

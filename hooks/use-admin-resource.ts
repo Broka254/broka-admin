@@ -33,6 +33,7 @@ const resourcePaths: Record<StaticAdminResource, string> = {
   alerts: "admin/alerts",
   revenue: "admin/revenue",
   timeseries: "admin/analytics/timeseries",
+  productionCosts: "admin/production-costs",
 };
 
 export class AdminRequestError extends Error {

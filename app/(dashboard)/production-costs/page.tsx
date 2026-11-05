@@ -274,9 +274,7 @@ function ManualEntryForm({
         <label className="text-xs font-medium text-slate-300">
           Service
           <select required value={serviceKey} onChange={(event) => {
-            const nextServiceKey = event.target.value;
-            setServiceKey(nextServiceKey);
-            const selectedService = services.find((service) => service.key === nextServiceKey);
+            setServiceKey(event.target.value);
           }} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60">
             {services.map((service) => <option key={service.key} value={service.key}>{service.label}</option>)}
           </select>

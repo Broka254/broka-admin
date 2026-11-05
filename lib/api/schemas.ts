@@ -702,8 +702,11 @@ export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
 // ── Production service-cost API (verified against backend/api/domains/service_costs/router.py)
 
 const productionCostCurrency = z.string().regex(/^[A-Z]{3}$/);
+const productionCostCurrencyOrMulti = z.union([productionCostCurrency, z.literal("MULTI")]);
 const nullableMinorAmount = z.number().int().nonnegative().nullable();
-const costPeriodSchema = z.object({ start: z.string().datetime({ offset: true }), end: z.string().datetime({ offset: true }) });
+const costTimestamp = z.string().datetime({ offset: true });
+const costPeriodSchema = z.object({ start: costTimestamp, end: costTimestamp });
+
 const costTotalsByCurrencySchema = z.object({
   currency: productionCostCurrency,
   effective_cost_minor: z.number().int().nonnegative(),
@@ -717,18 +720,18 @@ const costTotalsByCurrencySchema = z.object({
 });
 
 export const ProductionCostServiceSchema = z.object({
-  service_key: z.string().min(1),
-  service_name: z.string().min(1),
-  provider: z.string().nullable(),
-  category: z.string(),
-  usage_unit: z.string().nullable(),
+  service_key: z.string().min(1).max(64),
+  service_name: z.string().min(1).max(120),
+  provider: nullableString,
+  category: z.string().min(1),
+  usage_unit: nullableString,
   pricing_model: z.string(),
   billable: z.boolean(),
   active: z.boolean(),
-  currency: z.string(),
+  currency: productionCostCurrencyOrMulti,
   default_confidence: z.string(),
   maximum_estimated_cost_minor: nullableMinorAmount,
-  notes: z.string().nullable(),
+  notes: nullableString,
   reporting_period: costPeriodSchema,
   requests_total: z.number().int().nonnegative(),
   requests_success: z.number().int().nonnegative(),
@@ -748,7 +751,7 @@ export const ProductionCostServiceSchema = z.object({
   manually_entered_cost_minor: nullableMinorAmount,
   adjusted_cost_minor: nullableMinorAmount,
   effective_cost_minor: nullableMinorAmount,
-  effective_currency: z.string().nullable(),
+  effective_currency: productionCostCurrency.nullable(),
   cost_source: z.string(),
   confidence: z.string(),
   cost_status: z.string(),
@@ -760,38 +763,103 @@ export const ProductionCostServiceSchema = z.object({
 export type ProductionCostService = z.infer<typeof ProductionCostServiceSchema>;
 
 export const ProductionCostsResponseSchema = z.object({
-  currency: z.string(),
+  currency: productionCostCurrencyOrMulti,
   currencies: z.array(productionCostCurrency),
   reporting_period: costPeriodSchema,
-  generated_at: z.string().datetime({ offset: true }),
+  generated_at: costTimestamp,
   totals_by_currency: z.array(costTotalsByCurrencySchema),
   services: z.array(ProductionCostServiceSchema),
 });
 export type ProductionCostsResponse = z.infer<typeof ProductionCostsResponseSchema>;
 
+export const ProductionCostSummarySchema = z.object({
+  reporting_period: costPeriodSchema,
+  generated_at: costTimestamp,
+  currency: productionCostCurrencyOrMulti,
+  currencies: z.array(productionCostCurrency),
+  totals_by_currency: z.array(costTotalsByCurrencySchema),
+  by_category: z.array(z.object({
+    category: z.string(), currency: productionCostCurrency,
+    effective_cost_minor: z.number().int().nonnegative(),
+    services: z.number().int().nonnegative(),
+  })),
+  by_cost_source: z.array(z.object({
+    cost_source: z.string(), currency: productionCostCurrency,
+    effective_cost_minor: z.number().int().nonnegative(),
+    services: z.number().int().nonnegative(),
+  })),
+  usage: z.object({
+    requests_total: z.number().int().nonnegative(),
+    requests_success: z.number().int().nonnegative(),
+    requests_failed: z.number().int().nonnegative(),
+    input_tokens: z.number().int().nonnegative(),
+    output_tokens: z.number().int().nonnegative(),
+    images: z.number().int().nonnegative(),
+    sms_segments: z.number().int().nonnegative(),
+    emails: z.number().int().nonnegative(),
+  }),
+  services_total: z.number().int().nonnegative(),
+  services_with_cost: z.number().int().nonnegative(),
+  unpriced_services: z.array(z.string()),
+  notes: z.array(z.string()),
+});
+export type ProductionCostSummary = z.infer<typeof ProductionCostSummarySchema>;
+
+export const ProductionCostUsageEventSchema = z.object({
+  id: z.number().int().positive(),
+  service_key: nullableString,
+  service_name: nullableString,
+  provider: nullableString,
+  operation_type: z.string(),
+  status: z.string(),
+  provider_reference: nullableString,
+  operation_id: nullableString,
+  quantity: z.number().int().nonnegative().nullable(),
+  usage_unit: nullableString,
+  input_tokens: z.number().int().nonnegative().nullable(),
+  output_tokens: z.number().int().nonnegative().nullable(),
+  unit_price_minor: nullableMinorAmount,
+  estimated_cost_minor: nullableMinorAmount,
+  currency: productionCostCurrency.nullable(),
+  cost_basis: z.string(),
+  confidence: z.string(),
+  occurred_at: costTimestamp,
+  reporting_period_start: costTimestamp,
+  metadata: z.record(z.string(), z.unknown()),
+});
+export const ProductionCostUsageResponseSchema = z.object({
+  reporting_period: costPeriodSchema,
+  events: z.array(ProductionCostUsageEventSchema),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+  note: z.string(),
+});
+export type ProductionCostUsageEvent = z.infer<typeof ProductionCostUsageEventSchema>;
+export type ProductionCostUsageResponse = z.infer<typeof ProductionCostUsageResponseSchema>;
+
 export const ProductionCostEntrySchema = z.object({
   id: z.number().int().positive(),
   service_key: z.string(),
   service_name: z.string(),
-  period_start: z.string().datetime({ offset: true }),
-  period_end: z.string().datetime({ offset: true }),
+  period_start: costTimestamp,
+  period_end: costTimestamp,
   actual_cost_minor: nullableMinorAmount,
   estimated_cost_minor: nullableMinorAmount,
   manually_entered_cost_minor: nullableMinorAmount,
   currency: productionCostCurrency,
   cost_source: z.string(),
   confidence: z.string(),
-  notes: z.string().nullable(),
-  invoice_reference: z.string().nullable(),
-  entered_by: z.string().nullable(),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
+  notes: nullableString,
+  invoice_reference: nullableString,
+  entered_by: nullableString,
+  created_at: costTimestamp,
+  updated_at: costTimestamp,
 });
 export const ProductionCostEntriesResponseSchema = z.object({
   reporting_period: costPeriodSchema,
   entries: z.array(ProductionCostEntrySchema),
-  limit: z.number().int(),
-  offset: z.number().int(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
 });
 export type ProductionCostEntry = z.infer<typeof ProductionCostEntrySchema>;
 
@@ -800,41 +868,98 @@ export const ProductionCostAdjustmentSchema = z.object({
   service_key: z.string(),
   service_name: z.string(),
   entry_id: z.number().int().positive().nullable(),
-  period_start: z.string().datetime({ offset: true }),
-  period_end: z.string().datetime({ offset: true }),
+  period_start: costTimestamp,
+  period_end: costTimestamp,
   original_estimate_minor: nullableMinorAmount,
   adjusted_amount_minor: z.number().int().nonnegative(),
   currency: productionCostCurrency,
-  reason: z.string().nullable(),
+  reason: nullableString,
   adjusted_by: z.string(),
-  created_at: z.string().datetime({ offset: true }),
+  created_at: costTimestamp,
 });
 export const ProductionCostAdjustmentsResponseSchema = z.object({
   reporting_period: costPeriodSchema,
   adjustments: z.array(ProductionCostAdjustmentSchema),
-  limit: z.number().int(),
-  offset: z.number().int(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
 });
 export type ProductionCostAdjustment = z.infer<typeof ProductionCostAdjustmentSchema>;
 
+export const ProductionCostPricingSchema = z.object({
+  id: z.number().int().positive(),
+  service_key: z.string(),
+  service_name: z.string(),
+  pricing_unit: z.string(),
+  unit_price_minor: z.number().int().nonnegative(),
+  currency: productionCostCurrency,
+  effective_from: costTimestamp,
+  effective_until: costTimestamp.nullable(),
+  pricing_source: z.string(),
+  confidence: z.string(),
+  created_by: nullableString,
+  created_at: costTimestamp,
+});
+export const ProductionCostPricingResponseSchema = z.object({
+  pricing: z.array(ProductionCostPricingSchema),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+});
+export type ProductionCostPricing = z.infer<typeof ProductionCostPricingSchema>;
+
 export const ProductionCostEntryInSchema = z.object({
-  service_key: z.string().min(1).max(64),
-  period_start: z.string().datetime({ offset: true }),
-  period_end: z.string().datetime({ offset: true }),
+  service_key: z.string().trim().min(1).max(64),
+  period_start: costTimestamp,
+  period_end: costTimestamp,
   currency: productionCostCurrency,
   actual_cost_minor: z.number().int().nonnegative().nullable().optional(),
   estimated_cost_minor: z.number().int().nonnegative().nullable().optional(),
   manually_entered_cost_minor: z.number().int().nonnegative().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   invoice_reference: z.string().max(160).nullable().optional(),
-}).strict().refine((v) => Date.parse(v.period_end) > Date.parse(v.period_start), {
+}).strict().refine((value) => Date.parse(value.period_end) > Date.parse(value.period_start), {
   message: "The reporting period end must be after its start.",
-}).refine((v) => v.actual_cost_minor != null || v.estimated_cost_minor != null || v.manually_entered_cost_minor != null, {
-  message: "Enter an actual, estimated or manual amount.",
-});
+}).refine((value) =>
+  value.actual_cost_minor != null ||
+  value.estimated_cost_minor != null ||
+  value.manually_entered_cost_minor != null,
+{ message: "Enter an actual, estimated or manual amount." });
 export type ProductionCostEntryInput = z.infer<typeof ProductionCostEntryInSchema>;
 
+export const ProductionCostEntryPatchSchema = z.object({
+  actual_cost_minor: z.number().int().nonnegative().nullable().optional(),
+  estimated_cost_minor: z.number().int().nonnegative().nullable().optional(),
+  manually_entered_cost_minor: z.number().int().nonnegative().nullable().optional(),
+  currency: z.string().min(3).max(8).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  invoice_reference: z.string().max(160).nullable().optional(),
+  reason: z.string().max(1000).nullable().optional(),
+  clear_manual: z.boolean().optional(),
+}).strict();
+export type ProductionCostEntryPatch = z.infer<typeof ProductionCostEntryPatchSchema>;
 export const ProductionCostEntryMutationResponseSchema = z.object({ entry: ProductionCostEntrySchema });
+
+export const ProductionCostPricingInSchema = z.object({
+  service_key: z.string().trim().min(1).max(64),
+  pricing_unit: z.string().trim().min(1).max(40),
+  unit_price_minor: z.number().int().nonnegative(),
+  currency: z.string().min(3).max(8),
+  effective_from: costTimestamp,
+  effective_until: costTimestamp.nullable().optional(),
+  pricing_source: z.string().trim().min(1).max(160),
+  confidence: z.string().default("estimated"),
+}).strict().refine(
+  (value) => value.effective_until == null || Date.parse(value.effective_until) > Date.parse(value.effective_from),
+  { message: "The price end must be after its effective start." },
+);
+export const ProductionCostPricingPatchSchema = z.object({
+  unit_price_minor: z.number().int().nonnegative().optional(),
+  effective_until: costTimestamp.optional(),
+  pricing_source: z.string().max(160).optional(),
+  confidence: z.string().optional(),
+  reason: z.string().max(1000).optional(),
+}).strict();
+export const ProductionCostPricingMutationResponseSchema = z.object({ pricing: ProductionCostPricingSchema });
+
 // ── Loose single-object detail contracts ────────────────────────────────────
 // Listing/dispute/store detail mirrors the list-item shape plus backend-owned
 // extra fields. Validate loosely so minor backend drift does not 502 the page.
@@ -857,7 +982,12 @@ export const AdminResourceSchemas = {
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
   alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
-  productionCosts: ProductionCostsResponseSchema, productionCostEntries: ProductionCostEntriesResponseSchema, productionCostAdjustments: ProductionCostAdjustmentsResponseSchema,
+  productionCosts: ProductionCostsResponseSchema,
+  productionCostSummary: ProductionCostSummarySchema,
+  productionCostUsage: ProductionCostUsageResponseSchema,
+  productionCostEntries: ProductionCostEntriesResponseSchema,
+  productionCostAdjustments: ProductionCostAdjustmentsResponseSchema,
+  productionCostPricing: ProductionCostPricingResponseSchema,
   listingDetail: AdminListingDetailSchema, disputeDetail: AdminDisputeDetailSchema, storeDetail: AdminStoreDetailSchema,
 } as const;
 

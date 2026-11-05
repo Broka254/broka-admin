@@ -409,7 +409,17 @@ export default function ProductionCostsPage() {
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
             Understand the real cost of running BROKA across messaging, AI, media generation, email, hosting and infrastructure.
           </p>
-          <p className="mt-2 text-[11px] text-slate-500">Generated {new Date(costs.data.generated_at).toLocaleString("en-KE")}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <p className="text-[11px] text-slate-500">Generated {new Date(costs.data.generated_at).toLocaleString("en-KE")}</p>
+            <StatusBadge tone={costs.data.capabilities.provider_sync ? "success" : "warning"}>
+              {costs.data.capabilities.provider_sync ? "Provider sync connected" : "Provider sync not connected"}
+            </StatusBadge>
+            {!costs.data.capabilities.provider_sync ? (
+              <span className="text-[11px] text-amber-200/80">
+                Provider invoices are not synchronized automatically; enter external invoices as audited manual costs.
+              </span>
+            ) : null}
+          </div>
         </div>
         <button
           type="button"

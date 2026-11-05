@@ -122,55 +122,51 @@ and verified.
 | In-app reads | `read_count` counts in-app read acknowledgements. It is not push or device-delivery evidence. |
 | Worker diagnostics | The response documents sweep/claim timing, batch/concurrency configuration, process-local counters for the last pass, and durable backlog counts. The `last_pass` counters are process-local and reset on process restart; they are not a durable delivery history. |
 
-### 4. Production service cost ledger is not implemented
+### 4. Production cost ledger implementation awaits merge/deployment and coverage completion
 
-The admin dashboard's Production Costs page is in place, but the inspected
-backend source has no verified service-cost read API or durable manual-entry
-API. Until this is implemented, the dashboard must remain in its explicit
-"endpoint not deployed" state. It must not show demo counts, assume zero costs,
-or calculate total spend from unrelated process-local counters.
+The backend implementation is available in
+[Broka254/broka PR #5](https://github.com/Broka254/broka/pull/5). It adds
+`GET /admin/production-costs`, durable manual entries, permission checks,
+actor attribution, and idempotency. PR #5 is still draft/unmerged, so the live
+API must not be assumed to serve these routes. The dashboard remains in its
+explicit unavailable state until merge, deployment, and live verification.
 
-Required backend work:
+Verified scope in the PR:
 
-1. Add authenticated, permission-checked
-   `GET /admin/production-costs?from=YYYY-MM-DD&to=YYYY-MM-DD`, using an
-   inclusive start and exclusive end date.
-2. Instrument actual usage by service. At minimum, expose SMS messages/segments
-   and provider cost; AI and image-generation request counts plus estimated
-   maximum cost; email volume and cost; server/hosting costs; and any active
-   database, storage, cache, push-notification, payment-provider or other
-   production-service costs.
-3. Keep provider-reported invoice/usage amounts, usage-derived estimates, and
-   manually entered amounts as distinct source fields. Each row must choose
-   exactly one amount and basis for the reported selected total. Do not add an
-   invoice and its estimate together. Keep unpriced services as `null` with
-   an explanatory note, not a fabricated zero.
-4. Include the service's currency with every amount. Do not aggregate across
-   currencies unless the backend records a conversion rate, target currency,
-   and conversion timestamp. Use integer minor-unit amounts in the API.
-5. Store the pricing source/version used for AI and image-generation estimates.
-   Where a trustworthy maximum cannot be established, return the estimate as
-   unavailable rather than inventing a ceiling.
-6. Add durable manual cost entry through
-   `POST /admin/production-costs/manual-entries`. Require a positive amount,
-   ISO currency, effective date, service key, description, and
-   `X-Idempotency-Key`. Persist the authenticated admin actor, creation time,
-   invoice/reference, and an audit-log record. A retry with the same key and
-   payload must replay the same entry; a conflicting payload must be rejected.
-7. Return explicit capability flags. The UI enables manual entries only when
-   the backend reports that capability as available. Provider integration
-   health must distinguish configured, last successful sync, last failed sync,
-   and stale/missing source data.
-8. Add backend tests for date-boundary behavior, provider invoice vs estimate
-   precedence, duplicate/idempotent manual submissions, currency grouping,
-   unavailable pricing, zero-usage vs missing-data distinction, and audit
-   attribution.
+- Existing `PlatformCost` records supply SMS cost/usage and AI estimates/known
+  token counts. Payment fees are derived through the existing revenue
+  calculator and are presented as estimates to avoid double counting.
+- Successful email and image-generation usage is recorded, but pricing is
+  unconfigured and monetary totals remain unavailable for those services.
+- Database, storage, Redis/cache, and push-notification usage instrumentation
+  is not connected. Hosting and miscellaneous provider invoices can be entered
+  manually; automatic provider invoice sync is not implemented.
+- `estimated_max_minor` remains null because the implementation has no
+  defensible upper bound. AI rate assumptions are surfaced as estimates, but a
+  pricing-version identifier is not yet returned.
+- Manual entries are durable, include the admin actor and audit event, and use
+  `X-Idempotency-Key`; a replay with the same payload returns the same entry,
+  while a conflicting payload is rejected. The manual total becomes the
+  selected basis for that service/currency/date window while provider and
+  estimate figures remain visible for comparison.
+- Cost permissions are named and checked at the route boundary. At present,
+  every `is_admin` user receives both permissions; restricted administrator
+  sub-roles are not implemented.
+- The PR includes tests for authorization, unpriced usage, source handling,
+  date boundaries, manual-entry audit, replay, and conflict rejection.
+  PostgreSQL/staging validation and deployed API verification remain required.
 
-The frontend's Zod contracts and same-origin proxy allowlist describe the
-proposed request/response format; these do **not** make the endpoints available
-on the deployed API. Backend implementation, deployment, and integration tests
-are still required before this workspace can display live cost metrics.
+Release checks before the dashboard can be considered live:
 
+1. Review and merge backend PR #5, then deploy the backend change.
+2. Run the production-cost API against the target PostgreSQL database and verify
+   the manual-entry table is created and persisted correctly.
+3. Verify an admin can read costs and create a manual entry, while a
+   non-admin is denied; verify idempotent replay and conflict rejection.
+4. Confirm the deployed response validates against the dashboard's Zod schema,
+   including date boundaries, currency-separated rows, and null/unpriced data.
+5. Keep uninstrumented services visibly unavailable; do not convert missing
+   telemetry or unconfigured prices into zero cost.
 ## Other open platform gaps
 
 | Gap | Impact |

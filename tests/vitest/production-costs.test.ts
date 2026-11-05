@@ -46,6 +46,7 @@ describe("Production cost contracts", () => {
     const parsed = ProductionCostsResponseSchema.parse(response);
     expect(parsed.services[0].usage_count).toBe(100);
     expect(parsed.services[0].estimated_max_minor).toBe(3500);
+    expect(() => ProductionCostsResponseSchema.parse({ ...response, from: "2026-02-30" })).toThrow();
   });
 
   it("rejects a selected cost without an available basis", () => {
@@ -82,6 +83,7 @@ describe("Production cost contracts", () => {
     expect(ProductionCostManualEntryInSchema.parse(valid).amount_minor).toBe(2900);
     expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, amount_minor: 0 })).toThrow();
     expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, description: "x" })).toThrow();
+    expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, occurred_on: "2026-02-30" })).toThrow();
     expect(() => ProductionCostManualEntryInSchema.parse({ ...valid, extra: true })).toThrow();
   });
 });

@@ -701,7 +701,7 @@ export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
 
 // ── Production service-cost API (verified against backend/api/domains/service_costs/router.py)
 
-const productionCostCurrency = z.string().regex(/^[A-Z]{3}$/);
+const productionCostCurrency = z.string().min(3).max(8);
 const productionCostCurrencyOrMulti = z.union([productionCostCurrency, z.literal("MULTI")]);
 const nullableMinorAmount = z.number().int().nonnegative().nullable();
 const costTimestamp = z.string().datetime({ offset: true });
@@ -929,7 +929,7 @@ export const ProductionCostEntryPatchSchema = z.object({
   actual_cost_minor: z.number().int().nonnegative().nullable().optional(),
   estimated_cost_minor: z.number().int().nonnegative().nullable().optional(),
   manually_entered_cost_minor: z.number().int().nonnegative().nullable().optional(),
-  currency: z.string().min(3).max(8).optional(),
+  currency: z.string().min(3).max(8).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   invoice_reference: z.string().max(160).nullable().optional(),
   reason: z.string().max(1000).nullable().optional(),
@@ -953,10 +953,10 @@ export const ProductionCostPricingInSchema = z.object({
 );
 export const ProductionCostPricingPatchSchema = z.object({
   unit_price_minor: z.number().int().nonnegative().optional(),
-  effective_until: costTimestamp.optional(),
-  pricing_source: z.string().max(160).optional(),
-  confidence: z.string().optional(),
-  reason: z.string().max(1000).optional(),
+  effective_until: costTimestamp.nullable().optional(),
+  pricing_source: z.string().max(160).nullable().optional(),
+  confidence: z.string().nullable().optional(),
+  reason: z.string().max(1000).nullable().optional(),
 }).strict();
 export const ProductionCostPricingMutationResponseSchema = z.object({ pricing: ProductionCostPricingSchema });
 

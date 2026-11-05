@@ -122,51 +122,66 @@ and verified.
 | In-app reads | `read_count` counts in-app read acknowledgements. It is not push or device-delivery evidence. |
 | Worker diagnostics | The response documents sweep/claim timing, batch/concurrency configuration, process-local counters for the last pass, and durable backlog counts. The `last_pass` counters are process-local and reset on process restart; they are not a durable delivery history. |
 
-### 4. Production cost ledger implementation awaits merge/deployment and coverage completion
+### 4. Production service cost ledger — backend implementation pending release
 
-The backend implementation is available in
-[Broka254/broka PR #5](https://github.com/Broka254/broka/pull/5). It adds
-`GET /admin/production-costs`, durable manual entries, permission checks,
-actor attribution, and idempotency. PR #5 is still draft/unmerged, so the live
-API must not be assumed to serve these routes. The dashboard remains in its
-explicit unavailable state until merge, deployment, and live verification.
+Backend implementation has been submitted in
+[Broka254/broka#5](https://github.com/Broka254/broka/pull/5), currently a
+**draft, unmerged PR** on `feat/admin-production-cost-ledger`. Its head is
+`64cb48faa4a9be6a03db086d4ebba03d4ed65df2`. The admin dashboard's endpoint
+paths, request body, response fields, date semantics, and idempotency header
+have been checked against that PR and match the frontend contract.
 
-Verified scope in the PR:
+This is a meaningful implementation step, but it is not a production release.
+The live API and deployed database are not proven to contain the route or
+manual-entry table until the PR is merged, the schema change is deployed, and
+the endpoints are verified in staging.
 
-- Existing `PlatformCost` records supply SMS cost/usage and AI estimates/known
-  token counts. Payment fees are derived through the existing revenue
-  calculator and are presented as estimates to avoid double counting.
-- Successful email and image-generation usage is recorded, but pricing is
-  unconfigured and monetary totals remain unavailable for those services.
-- Database, storage, Redis/cache, and push-notification usage instrumentation
-  is not connected. Hosting and miscellaneous provider invoices can be entered
-  manually; automatic provider invoice sync is not implemented.
-- `estimated_max_minor` remains null because the implementation has no
-  defensible upper bound. AI rate assumptions are surfaced as estimates, but a
-  pricing-version identifier is not yet returned.
-- Manual entries are durable, include the admin actor and audit event, and use
-  `X-Idempotency-Key`; a replay with the same payload returns the same entry,
-  while a conflicting payload is rejected. The manual total becomes the
-  selected basis for that service/currency/date window while provider and
-  estimate figures remain visible for comparison.
-- Cost permissions are named and checked at the route boundary. At present,
-  every `is_admin` user receives both permissions; restricted administrator
-  sub-roles are not implemented.
-- The PR includes tests for authorization, unpriced usage, source handling,
-  date boundaries, manual-entry audit, replay, and conflict rejection.
-  PostgreSQL/staging validation and deployed API verification remain required.
+**Implemented in the draft backend PR:**
 
-Release checks before the dashboard can be considered live:
+- Permission-checked `GET /admin/production-costs?from=YYYY-MM-DD&to=YYYY-MM-DD`,
+  with an inclusive start and exclusive end date.
+- A response that keeps provider-reported amounts, usage estimates, manual
+  amounts, and the selected cost basis separate, with per-service currency,
+  usage/request counts, notes, and capability flags.
+- Durable manual entries through
+  `POST /admin/production-costs/manual-entries`, with a unique idempotency
+  key, administrator attribution, and an audit event.
+- Dedicated view/manage permission flags. In the current permission model,
+  every `is_admin` account receives both flags; this is not yet per-admin
+  role separation.
+- Existing SMS/AI ledger evidence and recorded payment/infrastructure cost
+  kinds are reused. Successful Resend email and Hugging Face image-generation
+  events are recorded as unpriced usage rather than being misrepresented as
+  zero-cost services.
+- Payment fees are derived through the existing revenue calculator's tariff
+  assumptions, rather than duplicated as stored rows.
 
-1. Review and merge backend PR #5, then deploy the backend change.
-2. Run the production-cost API against the target PostgreSQL database and verify
-   the manual-entry table is created and persisted correctly.
-3. Verify an admin can read costs and create a manual entry, while a
-   non-admin is denied; verify idempotent replay and conflict rejection.
-4. Confirm the deployed response validates against the dashboard's Zod schema,
-   including date boundaries, currency-separated rows, and null/unpriced data.
-5. Keep uninstrumented services visibly unavailable; do not convert missing
-   telemetry or unconfigured prices into zero cost.
+**Still unavailable or limited in the draft implementation:**
+
+1. Provider invoice/billing integrations for hosting, database, storage,
+   Redis, push notifications, and other external services are not connected.
+   The manual-entry path is the available fallback for those invoices.
+2. Email and image-generation usage can be counted, but verified provider
+   rates are not configured. Those costs remain unpriced.
+3. AI/image maximum estimates remain unavailable where no defensible upper
+   bound is available. The API returns `null` rather than fabricating a cap.
+4. Payment-provider costs are modelled from tariff assumptions; they are not
+   confirmation of the actual provider invoice or settlement charge.
+5. Provider sync is not implemented (`provider_sync: false`). The dashboard
+   must not imply automated invoice synchronization or fresh provider billing
+   reconciliation.
+6. The PR's tests and CI are still subject to completion/review and the
+   deployed schema migration. A passing test job does not establish that the
+   production database has been migrated or that the live API is serving the
+   new routes.
+
+Release sequence: complete backend review and CI, merge PR #5 through the
+backend repository's normal approval process, deploy the backend and database
+schema, verify read/write authorization and idempotent replay in staging, then
+verify the admin dashboard against that deployed API. Until then the dashboard
+must keep its explicit unavailable state and must not show demo counts, assume
+zero costs, or calculate spend from unrelated process-local counters.
+
 ## Other open platform gaps
 
 | Gap | Impact |

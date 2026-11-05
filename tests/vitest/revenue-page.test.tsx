@@ -78,7 +78,11 @@ describe("RevenuePage", () => {
     expect(screen.getByText("81.0%")).toBeInTheDocument();
     expect(screen.getByTestId("profit-chart")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /export csv/i })).toBeInTheDocument();
-    expect(screen.getByText("Transaction fees")).toBeInTheDocument();
+    expect(screen.getAllByText("Transaction fees").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Revenue insights")).toBeInTheDocument();
+    expect(screen.getByText("Cost-to-income ratio")).toBeInTheDocument();
+    expect(screen.getByText("Platform income")).toBeInTheDocument();
+    expect(screen.getByText(/not an audited net-profit/i)).toBeInTheDocument();
     expect(screen.getByText("Estimated")).toBeInTheDocument();
     expect(screen.getByText("Costs include estimated infrastructure spend.")).toBeInTheDocument();
   });

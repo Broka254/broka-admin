@@ -112,7 +112,7 @@ describe("summarizeProductionCosts", () => {
         usage_count: null,
         usage_unit: null,
         request_count: 50,
-        provider_reported_minor: null,
+        provider_reported_minor: 400,
         usage_estimate_minor: 700,
         estimated_max_minor: 900,
         manual_minor: null,
@@ -124,7 +124,7 @@ describe("summarizeProductionCosts", () => {
         ...service,
         key: "hosting",
         label: "Hosting",
-        provider_reported_minor: null,
+        provider_reported_minor: 500,
         usage_estimate_minor: null,
         estimated_max_minor: null,
         manual_minor: 1200,
@@ -136,12 +136,35 @@ describe("summarizeProductionCosts", () => {
     expect(result).toEqual([{
       currency: "KES",
       selectedMinor: 4800,
-      providerReportedMinor: 2900,
-      estimatedMinor: 700,
+      providerReportedMinor: 3800,
+      estimatedMinor: 3800,
+      estimatedMaxMinor: 4400,
       manualMinor: 1200,
       pricedServices: 3,
       unpricedServices: 0,
+      providerReportedServices: 3,
+      estimatedServices: 2,
+      estimatedMaxServices: 2,
+      manualServices: 1,
     }]);
+  });
+
+
+
+  it("keeps a known zero-cost service priced rather than treating it as missing", () => {
+    const result = summarizeProductionCosts([{
+      ...service,
+      provider_reported_minor: 0,
+      usage_estimate_minor: null,
+      estimated_max_minor: null,
+      manual_minor: null,
+      selected_cost_minor: 0,
+      selected_cost_basis: "provider_reported",
+    }]);
+    expect(result[0].selectedMinor).toBe(0);
+    expect(result[0].pricedServices).toBe(1);
+    expect(result[0].unpricedServices).toBe(0);
+    expect(result[0].providerReportedServices).toBe(1);
   });
 
   it("keeps currencies separate and counts unpriced services without treating them as zero cost", () => {

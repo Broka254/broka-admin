@@ -140,7 +140,7 @@ export default function ProductionCostsPage() {
   const totals = data.totals_by_currency;
   const amountList = (key: "effective_cost_minor" | "actual_cost_minor" | "estimated_cost_minor" | "manually_entered_cost_minor" | "adjusted_cost_minor") => totals.length ? totals.map((t) => money(t[key], t.currency)).join(" · ") : "No priced costs";
   const priced = data.services.filter((s) => s.effective_cost_minor !== null).length;
-  const usage = data.services.reduce((n, s) => n + s.requests_total, 0);
+  const usage = summary.data?.usage.requests_total ?? data.services.reduce((n, s) => n + s.requests_total, 0);
   const notes = Array.from(new Set([
     ...data.services.map((s) => s.notes),
     ...(summary.data?.notes ?? []),

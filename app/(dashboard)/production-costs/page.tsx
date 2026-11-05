@@ -21,7 +21,7 @@ import { ResourceState, SectionEyebrow, StatusBadge, UnavailablePanel } from "@/
 import { useAdminResource, AdminRequestError, isEndpointMissing } from "@/hooks/use-admin-resource";
 import { useCreateProductionCostManualEntry } from "@/hooks/use-production-costs";
 import type { ProductionCostService } from "@/lib/api/schemas";
-import { formatMinorCurrency, formatUsage, summarizeProductionCosts } from "@/lib/production-costs";
+import { currencyMinorUnitDigits, formatMinorCurrency, formatUsage, summarizeProductionCosts, toMinorUnits } from "@/lib/production-costs";
 
 type ServiceCatalogItem = { label: string; detail: string; icon: LucideIcon };
 
@@ -214,11 +214,13 @@ function ManualEntryForm({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsedAmount = Number(amount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || !/^\d+(\.\d{1,2})?$/.test(amount)) return;
+    const digits = currencyMinorUnitDigits(currency);
+    const amountPattern = digits === 0 ? /^\d+$/ : new RegExp("^\\d+(\\.\\d{1," + digits + "})?$");
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || !amountPattern.test(amount)) return;
 
     mutation.mutate({
       service_key: serviceKey,
-      amount_minor: Math.round(parsedAmount * 100),
+      amount_minor: toMinorUnits(parsedAmount, currency),
       currency,
       occurred_on: occurredOn,
       description: description.trim(),
@@ -249,7 +251,7 @@ function ManualEntryForm({
         </label>
         <label className="text-xs font-medium text-slate-300">
           Amount
-          <input required inputMode="decimal" pattern="\d+(\.\d{1,2})?" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60" />
+          <input required inputMode="decimal" pattern={currencyMinorUnitDigits(currency) === 0 ? "\\d+" : "\\d+(\\.\\d{1," + currencyMinorUnitDigits(currency) + "})?"} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={currencyMinorUnitDigits(currency) === 0 ? "0" : "0." + "0".repeat(currencyMinorUnitDigits(currency))} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#080a14] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b75ff]/60" />
         </label>
         <label className="text-xs font-medium text-slate-300">
           Currency

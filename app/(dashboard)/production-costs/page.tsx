@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Activity,
   Bell,
@@ -235,6 +235,7 @@ function ManualEntryForm({
   const [occurredOn, setOccurredOn] = useState(dateOnly(new Date()));
   const [description, setDescription] = useState("");
   const [reference, setReference] = useState("");
+  const idempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const currency = services.find((service) => service.key === serviceKey)?.currency ?? "KES";
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -246,15 +247,23 @@ function ManualEntryForm({
     const amountMinor = toMinorUnits(parsedAmount, currency);
     if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return;
 
-    mutation.mutate({
+    const input = {
       service_key: serviceKey,
       amount_minor: amountMinor,
       currency,
       occurred_on: occurredOn,
       description: description.trim(),
       reference: reference.trim() || null,
-    }, {
-      onSuccess: () => onClose(),
+    };
+    const fingerprint = JSON.stringify(input);
+    if (!idempotencyRef.current || idempotencyRef.current.fingerprint !== fingerprint) {
+      idempotencyRef.current = { fingerprint, key: crypto.randomUUID() };
+    }
+    mutation.mutate({ input, idempotencyKey: idempotencyRef.current.key }, {
+      onSuccess: () => {
+        idempotencyRef.current = null;
+        onClose();
+      },
     });
   }
 

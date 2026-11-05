@@ -31,6 +31,7 @@ export function summarizeProductionCosts(services: ProductionCostService[]): Cur
 }
 
 export function currencyMinorUnitDigits(currency: string): number {
+  if (currency === "MULTI") return 2;
   try { return new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2; }
   catch { return 2; }
 }
@@ -41,6 +42,7 @@ export function toMinorUnits(amount: number, currency: string): number {
 
 export function formatMinorCurrency(amountMinor: number | null, currency: string): string {
   if (amountMinor === null) return "Not priced";
+  if (currency === "MULTI") return "Mixed currencies";
   if (!/^[A-Z]{3}$/.test(currency)) return "Mixed currencies";
   const digits = currencyMinorUnitDigits(currency);
   try {

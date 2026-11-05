@@ -2,8 +2,13 @@ export type CsvRow = Record<string, string | number | boolean | null | undefined
 
 function escapeCell(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined) return "";
-  const text = String(value);
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  let text = String(value);
+  // Spreadsheet applications may execute untrusted text beginning with a
+  // formula marker. Numeric values remain numeric; only text cells are guarded.
+  if (typeof value === "string" && /^[\s]*[=+\-@]/.test(text)) {
+    text = "'" + text;
+  }
+  return /[",\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
 /** Serialize rows to CSV text. Headers are the union of keys in row order. */

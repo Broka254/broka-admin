@@ -68,7 +68,10 @@ export function DateRangePicker({ from, to, bucket, onChange, showBucket = true 
           aria-label="From date"
           value={from}
           max={to}
-          onChange={(event) => onChange({ from: event.target.value, to, bucket })}
+          required
+          onChange={(event) => {
+            if (event.target.value) onChange({ from: event.target.value, to, bucket });
+          }}
           className={controlClass}
         />
       </label>
@@ -79,7 +82,10 @@ export function DateRangePicker({ from, to, bucket, onChange, showBucket = true 
           aria-label="Through date"
           value={to}
           min={from}
-          onChange={(event) => onChange({ from, to: event.target.value, bucket })}
+          required
+          onChange={(event) => {
+            if (event.target.value) onChange({ from, to: event.target.value, bucket });
+          }}
           className={controlClass}
         />
       </label>

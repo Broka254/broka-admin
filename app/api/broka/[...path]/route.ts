@@ -22,6 +22,8 @@ import {
   CommunicationOutSchema,
   PublishOutSchema,
   RetryOutSchema,
+  ProductionCostManualEntryInSchema,
+  ProductionCostManualEntrySchema,
 } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
@@ -88,6 +90,13 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/communications$/,
     requestSchema: CommunicationCreateInSchema,
     responseSchema: CommunicationOutSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/production-costs\/manual-entries$/,
+    requestSchema: ProductionCostManualEntryInSchema,
+    responseSchema: ProductionCostManualEntrySchema,
+    requiresIdempotencyKey: true,
   },
   {
     method: "PATCH",
@@ -284,6 +293,12 @@ async function handleMutation(
       );
     }
     idempotencyKey = rawIdempotency;
+  }
+  if (operation.requiresIdempotencyKey && !idempotencyKey) {
+    return NextResponse.json(
+      { code: "idempotency_key_required", message: "This operation requires an X-Idempotency-Key header.", request_id: id },
+      { status: 400, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
+    );
   }
 
   // Validate incoming request body if required

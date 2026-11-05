@@ -84,7 +84,7 @@ describe("RevenuePage", () => {
     expect(screen.getByText("Platform income")).toBeInTheDocument();
     expect(screen.getByText(/Reported profit is income less costs recorded or derived by the backend/i)).toBeInTheDocument();
     expect(screen.getByText(/Estimates are included in reported costs and profit/i)).toBeInTheDocument();
-    expect(screen.getByText("Estimated")).toBeInTheDocument();
+    expect(screen.getByText("Contains estimates")).toBeInTheDocument();
     expect(screen.getByText("Costs include estimated infrastructure spend.")).toBeInTheDocument();
   });
 

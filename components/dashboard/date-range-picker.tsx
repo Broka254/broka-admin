@@ -12,6 +12,7 @@ export interface DateRangeSelection {
 
 interface DateRangePickerProps extends DateRangeSelection {
   onChange: (selection: DateRangeSelection) => void;
+  showBucket?: boolean;
 }
 
 type Preset = "7d" | "30d" | "90d" | "custom";
@@ -31,7 +32,7 @@ function rangeForPreset(preset: Exclude<Preset, "custom">, bucket: RevenueBucket
   return { from: toISODate(from), to: toISODate(to), bucket };
 }
 
-export function DateRangePicker({ from, to, bucket, onChange }: DateRangePickerProps) {
+export function DateRangePicker({ from, to, bucket, onChange, showBucket = true }: DateRangePickerProps) {
   const activePreset = useMemo<Preset>(() => {
     for (const preset of ["7d", "30d", "90d"] as const) {
       const candidate = rangeForPreset(preset, bucket);
@@ -67,7 +68,10 @@ export function DateRangePicker({ from, to, bucket, onChange }: DateRangePickerP
           aria-label="From date"
           value={from}
           max={to}
-          onChange={(event) => onChange({ from: event.target.value, to, bucket })}
+          required
+          onChange={(event) => {
+            if (event.target.value) onChange({ from: event.target.value, to, bucket });
+          }}
           className={controlClass}
         />
       </label>
@@ -78,23 +82,28 @@ export function DateRangePicker({ from, to, bucket, onChange }: DateRangePickerP
           aria-label="Through date"
           value={to}
           min={from}
-          onChange={(event) => onChange({ from, to: event.target.value, bucket })}
+          required
+          onChange={(event) => {
+            if (event.target.value) onChange({ from, to: event.target.value, bucket });
+          }}
           className={controlClass}
         />
       </label>
-      <label className="flex items-center gap-1.5 text-xs text-slate-400">
-        Bucket
-        <select
-          aria-label="Bucket"
-          value={bucket}
-          onChange={(event) => onChange({ from, to, bucket: event.target.value as RevenueBucket })}
-          className={controlClass}
-        >
-          <option value="day">Daily</option>
-          <option value="week">Weekly</option>
-          <option value="month">Monthly</option>
-        </select>
-      </label>
+      {showBucket ? (
+        <label className="flex items-center gap-1.5 text-xs text-slate-400">
+          Bucket
+          <select
+            aria-label="Bucket"
+            value={bucket}
+            onChange={(event) => onChange({ from, to, bucket: event.target.value as RevenueBucket })}
+            className={controlClass}
+          >
+            <option value="day">Daily</option>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+          </select>
+        </label>
+      ) : null}
     </div>
   );
 }

@@ -39,6 +39,42 @@ header mismatch is fixed. This statement does **not** extend to Service
 Communications draft creation, whose inspected handler has no creation-idempotency
 enforcement.
 
+## Production cost tracking (verified backend integration)
+
+The admin dashboard consumes the production-cost domain mounted in
+`Broka254/broka/backend/main.py` at `/admin/revenue/costs`
+(`api/domains/service_costs/router.py`). The UI validates the backend response
+contracts and uses the same-origin proxy; it never connects directly to the
+database or provider billing APIs.
+
+| Operation | Backend route | Dashboard use |
+|---|---|---|
+| Service ledger | `GET /admin/revenue/costs/services?from=YYYY-MM-DD&to=YYYY-MM-DD` | Service usage, actual/estimated/manual/effective costs and currency totals |
+| Summary | `GET /admin/revenue/costs/summary?from=...&to=...` | Aggregate totals and provider usage metrics |
+| Usage events | `GET /admin/revenue/costs/usage?from=...&to=...` | Raw provider operation history |
+| Cost entries | `GET /admin/revenue/costs/entries?from=...&to=...` | Invoice and manually entered billing-period records |
+| Adjustments | `GET /admin/revenue/costs/adjustments?from=...&to=...` | Audited manual adjustment history |
+| Pricing | `GET /admin/revenue/costs/pricing?service_key=...` | Effective-dated service unit prices |
+| Create cost entry | `POST /admin/revenue/costs/entries` | Invoice, estimate or manual cost entry |
+| Update cost entry | `PATCH /admin/revenue/costs/entries/{id}` | Correct an existing entry; manual changes append an adjustment |
+| Create pricing | `POST /admin/revenue/costs/pricing` | Add a new effective-dated rate |
+| Update pricing | `PATCH /admin/revenue/costs/pricing/{id}` | Correct a future price or close its validity window |
+
+All read routes require `ADMIN_SUMMARY`; writes require `MANAGE_COSTS`.
+Reporting windows are half-open `[from, to)` in UTC. Amounts are integer
+minor currency units. Unknown cost is `null`, not zero. Currency totals are
+never combined across currencies. The service response includes the reporting
+period, generation time, per-service usage counts, success/failure counts,
+token counts, actual/estimated/manual/adjusted/effective amounts, cost source,
+confidence and status.
+
+The backend does **not** expose the earlier proposed
+`/admin/production-costs` or `/manual-entries` routes. The dashboard has been
+updated to use the actual `/admin/revenue/costs` routes and request/response
+shapes. Cost entry creation is not guarded by an idempotency key in the current
+backend contract; the UI does not claim retry-safe idempotency and displays
+backend conflicts if the same service/period/source entry already exists.
+
 ## Authorization
 
 The admin router now attaches granular dependencies from `api/core/permissions.py`: `ADMIN_SUMMARY`, `MANAGE_USERS`, `PROMOTE_ADMIN`, `VIEW_TRANSACTIONS`, `VIEW_ALL_DISPUTES`, `OVERRIDE_ESCROW`. All current admins hold every flag, so behavior is backward compatible; defining restricted admin sub-roles would require schema storage and is intentionally not done.

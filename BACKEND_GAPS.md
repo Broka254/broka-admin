@@ -122,6 +122,26 @@ and verified.
 | In-app reads | `read_count` counts in-app read acknowledgements. It is not push or device-delivery evidence. |
 | Worker diagnostics | The response documents sweep/claim timing, batch/concurrency configuration, process-local counters for the last pass, and durable backlog counts. The `last_pass` counters are process-local and reset on process restart; they are not a durable delivery history. |
 
+### 4. Production service-cost API — implemented in current backend source
+
+The current backend source mounts
+`api.domains.service_costs.router` from `backend/main.py` at
+`/admin/revenue/costs`. It provides service reports, summary, raw usage,
+cost entries, adjustments and effective-dated pricing. The admin dashboard
+branch has been updated to consume these actual paths and payload shapes.
+
+The backend contract does not provide the former
+`/admin/production-costs` or `/manual-entries` endpoints. Cost-entry creation
+uses `POST /admin/revenue/costs/entries` and currently has no
+`X-Idempotency-Key` guarantee. The dashboard does not claim retry-safe
+idempotency and handles backend conflicts.
+
+Remaining provider coverage is intentionally reported as unpriced/unavailable
+where no usage or trustworthy billing amount exists. Provider invoices can be
+recorded through cost entries; pricing is maintained through effective-dated
+pricing records. The live deployed API and database migration still need
+staging verification before production readiness can be claimed.
+
 ## Other open platform gaps
 
 | Gap | Impact |

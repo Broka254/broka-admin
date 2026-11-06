@@ -22,6 +22,12 @@ import {
   CommunicationOutSchema,
   PublishOutSchema,
   RetryOutSchema,
+  ProductionCostEntryInSchema,
+  ProductionCostEntryPatchSchema,
+  ProductionCostEntryMutationResponseSchema,
+  ProductionCostPricingInSchema,
+  ProductionCostPricingPatchSchema,
+  ProductionCostPricingMutationResponseSchema,
 } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
@@ -88,6 +94,30 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/communications$/,
     requestSchema: CommunicationCreateInSchema,
     responseSchema: CommunicationOutSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/revenue\/costs\/entries$/,
+    requestSchema: ProductionCostEntryInSchema,
+    responseSchema: ProductionCostEntryMutationResponseSchema,
+  },
+  {
+    method: "PATCH",
+    pattern: /^admin\/revenue\/costs\/entries\/(\d+)$/,
+    requestSchema: ProductionCostEntryPatchSchema,
+    responseSchema: ProductionCostEntryMutationResponseSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/revenue\/costs\/pricing$/,
+    requestSchema: ProductionCostPricingInSchema,
+    responseSchema: ProductionCostPricingMutationResponseSchema,
+  },
+  {
+    method: "PATCH",
+    pattern: /^admin\/revenue\/costs\/pricing\/(\d+)$/,
+    requestSchema: ProductionCostPricingPatchSchema,
+    responseSchema: ProductionCostPricingMutationResponseSchema,
   },
   {
     method: "PATCH",
@@ -284,6 +314,12 @@ async function handleMutation(
       );
     }
     idempotencyKey = rawIdempotency;
+  }
+  if (operation.requiresIdempotencyKey && !idempotencyKey) {
+    return NextResponse.json(
+      { code: "idempotency_key_required", message: "This operation requires an X-Idempotency-Key header.", request_id: id },
+      { status: 400, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
+    );
   }
 
   // Validate incoming request body if required

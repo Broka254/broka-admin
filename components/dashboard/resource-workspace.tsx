@@ -125,7 +125,6 @@ const workspaces: Record<string, WorkspaceDefinition> = {
   events: { title: "Events", eyebrow: "System administration", description: "The static event catalog: every event type by domain. Instance records are not exposed by the backend.", endpoint: "/admin/event-catalog", resource: "eventCatalog", missing: "Event catalog endpoint is unavailable." },
   "workflow-versions": { title: "Workflow Versions", eyebrow: "System administration", description: "Registered workflow rule sets and the current version.", endpoint: "/admin/workflow-versions", resource: "workflowVersions", missing: "Workflow versions endpoint is unavailable." },
   "analytics/platform": { title: "Platform Analytics", eyebrow: "Analytics", description: "Real event counters for the current process only; they reset on deploy and are per-worker.", endpoint: "/admin/event-metrics", resource: "eventMetrics", missing: "Event metrics endpoint is unavailable." },
-  reports: { title: "Reports", eyebrow: "Trust & Safety", description: "Reported content and users require a dedicated backend review workflow.", missing: "No verified admin reports endpoint exists in the backend admin surface." },
   escrow: { title: "Escrow", eyebrow: "Financial operations", description: "Escrow state is read-only here: finance integrity and deal detail expose balances, while money movement stays with the escrow engine.", missing: "Use Finance Integrity and Deal Detail for escrow visibility." },
   commissions: { title: "Commissions", eyebrow: "Financial operations", description: "Recognised commission is on the Command Center and Finance Integrity pages. No time-series commission analytics endpoint exists.", missing: "Use Finance Integrity for commission reconciliation." },
   "zeno/negotiations": { title: "Zeno Negotiations", eyebrow: "BROKA intelligence", description: "Negotiation message counts are on the Zeno Activity page from durable tables.", missing: "Per-negotiation admin detail is not exposed by the backend." },
@@ -165,8 +164,13 @@ function FilterToolbar({ definition, params, onSet, onSetMany }: { definition: W
   const active = (definition.filters ?? []).filter((filter) => params.get(filter.param) && params.get(filter.param) !== "all");
   if (!definition.filters?.length) return null;
   const source = params.get("source");
+  // Remount the uncontrolled inputs when a filter changes elsewhere (Clear,
+  // back/forward), but not for the search text or the page: keying on the
+  // whole query string remounted the form on every debounced keystroke and
+  // threw the cursor out of the search box mid-word.
+  const formKey = Array.from(params.entries()).filter(([param]) => param !== "search" && param !== "page").map(([param, value]) => `${param}=${value}`).join("&");
   return <section className="data-panel p-4">
-    <form key={params.toString()} className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => event.preventDefault()}>
+    <form key={formKey} className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => event.preventDefault()}>
       {(definition.filters ?? []).map((filter) => {
         if (filter.kind === "search" && filter.param === "search") {
           return <DebouncedSearchInput key={filter.param} placeholder={filter.placeholder} initialValue={params.get(filter.param) ?? ""} onCommit={(value) => onSet("search", value)} />;
@@ -207,7 +211,9 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
       if (value === null || value === "" || value === "all") next.delete(param); else next.set(param, value);
     }
     if (Object.keys(updates).some((param) => param !== "page")) next.delete("page");
-    router.replace(next.size ? `?${next.toString()}` : "?", { scroll: false });
+    // Not next.size: older Safari and Android WebViews lack it.
+    const search = next.toString();
+    router.replace(search ? `?${search}` : "?", { scroll: false });
   }
 
   function setParam(param: string, value: string | null) {

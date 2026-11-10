@@ -18,13 +18,17 @@ pnpm dev
 
 Open `http://localhost:3000`. Set `BROKA_COOKIE_SECURE=false` only for a plain HTTP local development session. Keep the default secure/SameSite=None cookie behavior for HTTPS Preview and production.
 
+`BROKA_FRAME_ANCESTORS` (read when the app is **built**) sets which sites may embed the dashboard in an iframe. Unset, any HTTPS origin may, as before. Set it to the real embedding origins, for example `'self' https://preview.example.com`, or `'none'`, to stop other sites framing a signed-in admin session. The Dockerfile passes it through as a build argument.
+
 ## API boundary
 
 The application uses:
 
 - `POST /auth/login` with the verified `phone` and `password` request body;
 - `GET /auth/me` to require `is_admin === true` before rendering protected routes;
-- `POST /auth/token/refresh` for one refresh/retry path;
+- `POST /auth/token/refresh` when the access token is rejected, and up front
+  when only the 14-day refresh cookie is left (the 8-hour access cookie has
+  expired). Parallel requests share one refresh;
 - `POST /auth/token/revoke` at logout; and
 - an allowlisted server-side proxy for verified `/admin/*` reads and supported
   communications mutations.
@@ -32,6 +36,39 @@ The application uses:
 The proxy forwards `X-Total-Count` when the backend returns it, so a filtered users total is never inferred from the number of rows on the current page. Tokens are held only in HttpOnly cookies. The browser does not receive tokens, and no token is written to `localStorage` or `sessionStorage`.
 
 The retrieved OpenAPI document leaves success schemas for all inspected admin endpoints empty. Consequently, the UI deliberately renders **response schema unavailable** rather than mapping unverified fields into KPI values, financial tables, charts, risk levels, or activity records. See [`docs/API_INTEGRATION.md`](docs/API_INTEGRATION.md) and [`BACKEND_GAPS.md`](BACKEND_GAPS.md).
+
+## Founder surfaces
+
+These read the founder-intelligence, report and complaint-triage endpoints of the
+upgraded BROKA API (`/admin/intelligence/*`, `/admin/reports*`, `/admin/feedback*`).
+Every figure excludes administrator accounts, their listings and their chats.
+On a backend without them, each surface says "needs the upgraded BROKA API"
+instead of failing.
+
+- **Command Center (`/`)** opens on the founder cockpit: liquidity (the share of
+  new listings a buyer contacts within 7 days, the north-star metric, target 50%),
+  seller replies within 24 hours, market balance, 14 pulse tiles against the
+  previous period (7 or 30 days), a ranked decision feed, complaint deadlines and
+  the Day-30 targets with break-even. The verified platform totals and Command
+  Center panels follow below.
+- **Intelligence (`/intelligence`)**: demand against supply per category with a
+  recommendation for each, counties, buyers waiting on sellers (a call list),
+  busiest sellers and stale listings.
+- **Growth (`/growth`)**: seller and buyer funnels for a signup range with the
+  biggest drop-off called out, and weekly retention cohorts.
+- **Complaints (`/complaints`)**: the triage desk for what users file in the
+  app. Queues by first-reply deadline (urgent 4h, high 24h, normal 72h, low 5
+  days), a case drawer with the reporter, the listing, user and deal it names,
+  history, reply templates and a preview of the push the user receives. Saving
+  reports how many of the reporter's devices the push reached. The search box
+  also finds the reference the app shows the reporter (`#3F2A9C`).
+- **Reports (`/reports`)**: the daily, weekly and monthly reports the backend
+  writes when each period closes (EAT by default), a live preview of the period
+  in progress, generation for any past period, and Markdown, CSV, print/PDF and a
+  copyable digest.
+
+Press **Ctrl+K** (⌘K on macOS) anywhere to jump to a page or search users and
+complaints.
 
 ## Notification surfaces
 

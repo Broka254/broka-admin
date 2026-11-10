@@ -1,9 +1,9 @@
 "use client";
 
-import { Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronDown, CircleHelp, ClipboardList, FileSearch, Gauge, Landmark, LayoutDashboard, LogOut, Megaphone, Menu, Network, Receipt, Search, ShieldAlert, Store, Users, X } from "lucide-react";
+import { Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronDown, ClipboardList, CornerDownLeft, FileSearch, FileText, Gauge, Landmark, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquareWarning, Network, Radar, Receipt, Search, ShieldAlert, Store, TrendingUp, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { cn } from "@/lib/utils";
 import { useUnreadAlerts } from "@/hooks/use-alerts";
@@ -12,33 +12,33 @@ import { useAdminResource } from "@/hooks/use-admin-resource";
 import type { AdminIdentity } from "@/types/broka";
 import { StatusBadge } from "@/components/ui/primitives";
 
-type NavEntry = { label: string; href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> };
+type NavEntry = { label: string; href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; badge?: "complaints" };
 type NavGroup = { label: string; entries: NavEntry[] };
 
 const navGroups: NavGroup[] = [
-  { label: "Overview", entries: [{ label: "Command Center", href: "/", icon: LayoutDashboard }, { label: "Alert Centre", href: "/alerts", icon: Bell }] },
+  { label: "Founder", entries: [{ label: "Command Center", href: "/", icon: LayoutDashboard }, { label: "Intelligence", href: "/intelligence", icon: Radar }, { label: "Growth", href: "/growth", icon: TrendingUp }, { label: "Reports", href: "/reports", icon: FileText }] },
+  { label: "Respond", entries: [{ label: "Complaints", href: "/complaints", icon: MessageSquareWarning, badge: "complaints" }, { label: "Alert Centre", href: "/alerts", icon: Bell }] },
   { label: "Marketplace", entries: [{ label: "Listings", href: "/listings", icon: Store }, { label: "Deals", href: "/deals", icon: ClipboardList }, { label: "Stores", href: "/stores", icon: Store }] },
   { label: "Users", entries: [{ label: "All Users", href: "/users", icon: Users }, { label: "Admins", href: "/users?type=admin", icon: Users }] },
-  { label: "Trust & Safety", entries: [{ label: "Fraud", href: "/fraud", icon: ShieldAlert }, { label: "Disputes", href: "/disputes", icon: FileSearch }, { label: "Reports", href: "/reports", icon: CircleHelp }] },
+  { label: "Trust & Safety", entries: [{ label: "Fraud", href: "/fraud", icon: ShieldAlert }, { label: "Disputes", href: "/disputes", icon: FileSearch }] },
   { label: "Money", entries: [{ label: "Revenue", href: "/revenue", icon: BarChart3 }, { label: "Production Costs", href: "/production-costs", icon: Receipt }, { label: "Payments", href: "/payments", icon: Landmark }, { label: "Finance Integrity", href: "/finance-integrity", icon: BadgeDollarSign }, { label: "Transactions", href: "/transactions", icon: Landmark }, { label: "Escrow", href: "/escrow", icon: BadgeDollarSign }, { label: "Commissions", href: "/commissions", icon: BarChart3 }] },
   { label: "Zeno", entries: [{ label: "AI Activity", href: "/zeno/activity", icon: Bot }, { label: "Negotiations", href: "/zeno/negotiations", icon: Bot }, { label: "AI Savings", href: "/zeno/savings", icon: Bot }] },
   { label: "Analytics", entries: [{ label: "Platform", href: "/analytics/platform", icon: BarChart3 }, { label: "Marketplace", href: "/analytics/marketplace", icon: BarChart3 }, { label: "Users", href: "/analytics/users", icon: BarChart3 }] },
-  { label: "System", entries: [{ label: "Service Communications", href: "/communications", icon: Megaphone }, { label: "Service Health", href: "/service-health", icon: Gauge }, { label: "Audit Logs", href: "/audit-logs", icon: ClipboardList }, { label: "Diagnostics", href: "/diagnostics", icon: Gauge }, { label: "Events", href: "/events", icon: Activity }, { label: "Workflow Versions", href: "/workflow-versions", icon: Network }] },
+  { label: "System", entries: [{ label: "Service Communications", href: "/communications", icon: Megaphone }, { label: "Service Health", href: "/service-health", icon: Gauge }, { label: "Audit Logs", href: "/audit-logs", icon: ClipboardList }, { label: "Diagnostics", href: "/diagnostics", icon: Gauge }, { label: "Events", href: "/events", icon: Activity }, { label: "Workflow Versions", href: "/workflow-versions", icon: Network }, { label: "Settings", href: "/settings", icon: Gauge }] },
 ];
 
-function HeaderSearch() {
-  const router = useRouter();
-  const [value, setValue] = useState("");
-  function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    const q = value.trim();
-    router.push(q ? `/users?search=${encodeURIComponent(q)}` : "/users");
-  }
-  return <form onSubmit={onSubmit} role="search" aria-label="Search users" className="hidden min-w-[200px] items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-slate-400 xl:flex"><Search size={15} aria-hidden="true" /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Search users" aria-label="Search users" className="w-full bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600" /></form>;
+const allEntries = navGroups.flatMap((group) => group.entries.map((entry) => ({ ...entry, group: group.label })));
+
+type ComplaintBadge = { count: number; urgent: boolean } | null;
+
+function useComplaintBadge(enabled: boolean): ComplaintBadge {
+  const stats = useAdminResource("feedbackStats", undefined, enabled);
+  if (!stats.data) return null;
+  return { count: stats.data.unanswered, urgent: stats.data.sla_breached > 0 };
 }
 
 function BrandLockup() {
-  return <Link href="/" className="focus-ring flex items-center gap-3 rounded-lg px-2 py-2"><div className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl border border-[#8b75ff]/35 bg-[#8b75ff]/10"><img src="/brand/broka-mark.png" alt="BROKA" className="h-full w-full object-cover" /></div><div><p className="font-display text-base font-black leading-none tracking-[-0.06em] text-white">BROKA</p><p className="mt-1 border-t border-[#8b75ff]/35 pt-1 text-[9px] font-bold tracking-[0.3em] text-[#a895ff]">ADMIN</p></div></Link>;
+  return <Link href="/" className="focus-ring flex items-center gap-3 rounded-lg px-2 py-2"><div className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl border border-[#8b75ff]/35 bg-[#8b75ff]/10 shadow-[0_0_24px_rgba(139,117,255,0.25)]"><img src="/brand/broka-mark.png" alt="BROKA" className="h-full w-full object-cover" /></div><div><p className="font-display text-base font-black leading-none tracking-[-0.06em] text-white">BROKA</p><p className="mt-1 border-t border-[#8b75ff]/35 pt-1 text-[9px] font-bold tracking-[0.3em] text-[#a895ff]">ADMIN</p></div></Link>;
 }
 
 function entryIsActive(pathname: string, href: string, currentSearch: string) {
@@ -53,10 +53,10 @@ function entryIsActive(pathname: string, href: string, currentSearch: string) {
   return !(path === "/users" && new URLSearchParams(currentSearch).get("type") === "admin");
 }
 
-function RailContent({ onNavigate }: { onNavigate?: () => void }) {
+function RailContent({ onNavigate, complaints }: { onNavigate?: () => void; complaints: ComplaintBadge }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  return <nav className="mt-7 flex-1 overflow-y-auto px-3 pb-6" aria-label="Admin navigation">{navGroups.map((group) => <section key={group.label} className="mb-6"><p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">{group.label}</p><div className="space-y-0.5">{group.entries.map((entry) => { const isActive = entryIsActive(pathname, entry.href, searchParams.toString()); const Icon = entry.icon; return <Link key={entry.href} href={entry.href} onClick={onNavigate} aria-current={isActive ? "page" : undefined} className={cn("focus-ring group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors", isActive ? "bg-[#8b75ff]/[0.14] text-[#ded8ff] shadow-[inset_2px_0_0_0_#8b75ff]" : "text-slate-400 hover:bg-white/[0.045] hover:text-slate-100")}><Icon size={16} strokeWidth={isActive ? 2.2 : 1.7} aria-hidden="true" /><span className="truncate">{entry.label}</span></Link>; })}</div></section>)}<section className="mb-5"><p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">Settings</p><Link href="/settings" onClick={onNavigate} className="focus-ring flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-slate-400 transition-colors hover:bg-white/[0.045] hover:text-slate-100"><Gauge size={16} strokeWidth={1.7} aria-hidden="true" /> Settings</Link></section></nav>;
+  return <nav className="mt-6 flex-1 overflow-y-auto px-3 pb-6" aria-label="Admin navigation">{navGroups.map((group) => <section key={group.label} className="mb-6"><p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">{group.label}</p><div className="space-y-0.5">{group.entries.map((entry) => { const isActive = entryIsActive(pathname, entry.href, searchParams.toString()); const Icon = entry.icon; const badge = entry.badge === "complaints" && complaints && complaints.count > 0 ? complaints : null; return <Link key={entry.href} href={entry.href} onClick={onNavigate} aria-current={isActive ? "page" : undefined} className={cn("focus-ring group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors", isActive ? "bg-[#8b75ff]/[0.14] text-[#ded8ff] shadow-[inset_2px_0_0_0_#8b75ff]" : "text-slate-400 hover:bg-white/[0.045] hover:text-slate-100")}><Icon size={16} strokeWidth={isActive ? 2.2 : 1.7} aria-hidden="true" /><span className="truncate">{entry.label}</span>{badge ? <span className={cn("ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums", badge.urgent ? "bg-rose-400/90 text-white shadow-[0_0_12px_rgba(251,113,133,0.55)]" : "bg-white/[0.08] text-slate-200")} aria-label={`${badge.count} awaiting a reply${badge.urgent ? ", some past deadline" : ""}`}>{badge.count > 99 ? "99+" : badge.count}</span> : null}</Link>; })}</div></section>)}</nav>;
 }
 
 function UserFooter({ admin }: { admin: AdminIdentity }) {
@@ -66,15 +66,88 @@ function UserFooter({ admin }: { admin: AdminIdentity }) {
   return <div className="border-t border-white/[0.07] p-3"><div className="flex items-center gap-3 rounded-xl bg-white/[0.035] p-2.5"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#ded8ff] to-[#8b75ff] text-xs font-black text-slate-950" aria-hidden="true">{admin.displayName.slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-slate-100">{admin.displayName}</p><p className="truncate text-[10px] text-slate-500">{admin.roleLabel}</p></div><button onClick={logout} disabled={busy} className="focus-ring rounded-md p-1.5 text-slate-500 transition hover:bg-white/5 hover:text-rose-300" aria-label="Log out"><LogOut size={15} aria-hidden="true" /></button></div></div>;
 }
 
+type PaletteItem = { key: string; label: string; hint: string; href: string; icon: NavEntry["icon"] };
+
+/** Ctrl/⌘+K: jump to any surface, or search users and complaints. */
+function CommandPalette({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [index, setIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    inputRef.current?.focus();
+    return () => previous?.focus();
+  }, []);
+
+  const items = useMemo<PaletteItem[]>(() => {
+    const q = query.trim();
+    const needle = q.toLowerCase();
+    const pages = allEntries
+      .filter((entry) => !needle || entry.label.toLowerCase().includes(needle) || entry.group.toLowerCase().includes(needle))
+      .map((entry) => ({ key: entry.href, label: entry.label, hint: entry.group, href: entry.href, icon: entry.icon }));
+    if (!q) return pages;
+    const searches: PaletteItem[] = [
+      { key: "search-users", label: `Search users for “${q}”`, hint: "Name, email or phone", href: `/users?search=${encodeURIComponent(q)}`, icon: Users },
+      { key: "search-complaints", label: `Search complaints for “${q}”`, hint: /^#?[0-9a-f]{6}$/i.test(q) ? "Complaint reference" : "Subject or reference", href: `/complaints?search=${encodeURIComponent(q)}&queue=all`, icon: MessageSquareWarning },
+    ];
+    return [...pages, ...searches];
+  }, [query]);
+
+  useEffect(() => { setIndex(0); }, [query]);
+
+  function go(item: PaletteItem | undefined) {
+    if (!item) return;
+    onClose();
+    router.push(item.href);
+  }
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") { event.preventDefault(); onClose(); }
+    else if (event.key === "ArrowDown") { event.preventDefault(); setIndex((current) => (items.length ? (current + 1) % items.length : 0)); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); setIndex((current) => (items.length ? (current - 1 + items.length) % items.length : 0)); }
+    else if (event.key === "Enter") { event.preventDefault(); go(items[index]); }
+    else if (event.key === "Tab") event.preventDefault();
+  }
+
+  return <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/70 px-4 pt-[12vh] backdrop-blur-sm" onKeyDown={onKeyDown}>
+    <button type="button" className="absolute inset-0 cursor-default" aria-label="Close command palette" tabIndex={-1} onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-label="Command palette" className="palette-panel relative w-full max-w-xl overflow-hidden rounded-2xl border border-[#8b75ff]/30 bg-[#0a0d18]/95 shadow-[0_30px_120px_rgba(0,0,0,0.6),0_0_60px_rgba(139,117,255,0.18)]">
+      <div className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-3">
+        <Search size={16} className="text-[#a895ff]" aria-hidden="true" />
+        <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jump to a page, or search users and complaints…" aria-label="Command" aria-controls="palette-results" aria-activedescendant={items[index] ? `palette-${items[index].key}` : undefined} role="combobox" aria-expanded="true" className="h-9 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600" />
+        <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-500">Esc</kbd>
+      </div>
+      <ul id="palette-results" role="listbox" aria-label="Results" className="max-h-[52vh] overflow-y-auto p-2">
+        {items.map((item, position) => {
+          const Icon = item.icon;
+          const active = position === index;
+          return <li key={item.key} id={`palette-${item.key}`} role="option" aria-selected={active}>
+            <button type="button" tabIndex={-1} onMouseEnter={() => setIndex(position)} onClick={() => go(item)} className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition", active ? "bg-[#8b75ff]/15 text-white" : "text-slate-300")}>
+              <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg border", active ? "border-[#8b75ff]/40 bg-[#8b75ff]/15 text-[#ded8ff]" : "border-white/[0.07] bg-white/[0.03] text-slate-400")} aria-hidden="true"><Icon size={15} /></span>
+              <span className="min-w-0 flex-1"><span className="block truncate font-medium">{item.label}</span><span className="block truncate text-[11px] text-slate-500">{item.hint}</span></span>
+              {active ? <CornerDownLeft size={14} className="text-slate-500" aria-hidden="true" /> : null}
+            </button>
+          </li>;
+        })}
+        {!items.length ? <li className="px-3 py-6 text-center text-xs text-slate-500">No page matches. Type a name to search users.</li> : null}
+      </ul>
+    </div>
+  </div>;
+}
+
 export function AdminShell({ children, admin, apiConfigured }: { children: React.ReactNode; admin: AdminIdentity; apiConfigured: boolean }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
-  const pageTitle = pathname === "/" ? "Command Center" : pathname.split("/").filter(Boolean).map((part) => part.replaceAll("-", " ")).join(" / ");
+  const knownTitle = allEntries.find((entry) => entry.href === pathname)?.label;
+  const pageTitle = pathname === "/" ? "Command Center" : knownTitle ?? pathname.split("/").filter(Boolean).map((part) => part.replaceAll("-", " ")).join(" / ");
   // A configured URL is not evidence of connectivity or contract
   // compatibility. Only a validated /health response may show green.
   const health = useAdminResource("health", undefined, apiConfigured);
   const unread = useUnreadAlerts(apiConfigured);
-  const stream = useAlertsStream();
+  const stream = useAlertsStream(apiConfigured);
+  const complaints = useComplaintBadge(apiConfigured);
   const unreadCount = unread.data ?? 0;
   const apiState = !apiConfigured ? "not-configured" : health.isLoading ? "checking" : health.isSuccess ? "healthy" : "failed";
   const apiBadge = {
@@ -83,5 +156,44 @@ export function AdminShell({ children, admin, apiConfigured }: { children: React
     healthy: { tone: "success" as const, label: "API health verified", detail: "The public /health endpoint responded and matched its contract. This does not prove every admin endpoint is deployed." },
     failed: { tone: "danger" as const, label: "API health check failed", detail: "The BROKA API health response was unreachable or invalid." },
   }[apiState];
-  return <div className="min-h-screen bg-[#05060d] text-slate-100"><aside className="fixed inset-y-0 left-0 z-30 hidden w-[252px] flex-col border-r border-white/[0.07] bg-[#080a14]/95 lg:flex"><div className="px-4 pt-4"><BrandLockup /></div><RailContent /><UserFooter admin={admin} /></aside>{mobileOpen ? <button className="fixed inset-0 z-40 bg-black/70 lg:hidden" aria-label="Close navigation" onClick={() => setMobileOpen(false)} /> : null}<aside className={cn("fixed inset-y-0 left-0 z-50 flex w-[276px] flex-col border-r border-white/[0.08] bg-[#080a14] shadow-2xl transition-transform lg:hidden", mobileOpen ? "translate-x-0" : "-translate-x-full")}><div className="flex items-center justify-between px-4 pt-4"><BrandLockup /><button className="focus-ring rounded-md p-2 text-slate-400 hover:bg-white/5 hover:text-white" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={18} /></button></div><RailContent onNavigate={() => setMobileOpen(false)} /><UserFooter admin={admin} /></aside><div className="min-h-screen lg:pl-[252px]"><header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-white/[0.07] bg-[#05060d]/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8"><button className="focus-ring rounded-lg border border-white/[0.08] p-2 text-slate-300 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={18} /></button><div className="hidden min-w-0 flex-1 lg:block"><p className="font-display text-sm font-semibold capitalize text-slate-200">{pageTitle}</p><p className="mt-0.5 text-[11px] text-slate-600">Broka operations control center</p></div><div className="ml-auto flex items-center gap-2 sm:gap-3"><HeaderSearch /><span title={apiBadge.detail}><StatusBadge tone={apiBadge.tone}>{apiBadge.label}</StatusBadge></span><StatusBadge tone={stream.status === "connected" ? "success" : stream.status === "connecting" ? "warning" : "neutral"}>{stream.status === "connected" ? "Live" : stream.status === "connecting" ? "Connecting" : "Offline"}</StatusBadge><Link href="/alerts" className="focus-ring relative rounded-lg border border-white/[0.07] p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-slate-100" aria-label={unreadCount > 0 ? `Open alert centre, ${unreadCount} unread alerts` : "Open alert centre, no unread alerts"}><Bell size={17} aria-hidden="true" />{unreadCount > 0 ? <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#8b75ff] px-1 text-[10px] font-black text-white" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}</Link><button className="focus-ring hidden items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.025] px-2.5 py-1.5 text-left sm:flex" aria-label="Authenticated administrator profile"><span className="grid h-6 w-6 place-items-center rounded-full bg-[#8b75ff] text-[10px] font-black text-white">{admin.displayName.slice(0, 1).toUpperCase()}</span><span className="max-w-24 truncate text-xs font-semibold text-slate-200">{admin.displayName}</span><ChevronDown size={14} className="text-slate-500" aria-hidden="true" /></button></div></header><main className="mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main></div></div>;
+
+  useEffect(() => {
+    function onKeydown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      } else if (event.key === "Escape") {
+        setMobileOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKeydown);
+    return () => document.removeEventListener("keydown", onKeydown);
+  }, []);
+
+  // Navigating closes the drawer, whatever link was used.
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  return <div className="min-h-screen bg-[#05060d] text-slate-100">
+    <aside className="print-hidden fixed inset-y-0 left-0 z-30 hidden w-[252px] flex-col border-r border-white/[0.07] bg-[#080a14]/95 lg:flex"><div className="px-4 pt-4"><BrandLockup /></div><RailContent complaints={complaints} /><UserFooter admin={admin} /></aside>
+    {mobileOpen ? <button className="fixed inset-0 z-40 bg-black/70 lg:hidden" aria-label="Close navigation" onClick={() => setMobileOpen(false)} /> : null}
+    {/* Off-screen while closed: inert keeps its links out of the tab order and the accessibility tree. */}
+    <aside inert={!mobileOpen} aria-hidden={!mobileOpen} className={cn("print-hidden fixed inset-y-0 left-0 z-50 flex w-[276px] flex-col border-r border-white/[0.08] bg-[#080a14] shadow-2xl transition-transform lg:hidden", mobileOpen ? "translate-x-0" : "-translate-x-full")}><div className="flex items-center justify-between px-4 pt-4"><BrandLockup /><button className="focus-ring rounded-md p-2 text-slate-400 hover:bg-white/5 hover:text-white" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={18} /></button></div><RailContent complaints={complaints} onNavigate={() => setMobileOpen(false)} /><UserFooter admin={admin} /></aside>
+    <div className="min-h-screen lg:pl-[252px]">
+      <header className="print-hidden sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-white/[0.07] bg-[#05060d]/85 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <button className="focus-ring rounded-lg border border-white/[0.08] p-2 text-slate-300 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen}><Menu size={18} /></button>
+        <div className="hidden min-w-0 flex-1 lg:block"><p className="font-display text-sm font-semibold capitalize text-slate-200">{pageTitle}</p><p className="mt-0.5 text-[11px] text-slate-600">Broka operations control center</p></div>
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <button type="button" onClick={() => setPaletteOpen(true)} className="focus-ring hidden min-w-[220px] items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-left text-xs text-slate-500 transition hover:border-[#8b75ff]/35 hover:text-slate-300 xl:flex" aria-label="Open command palette"><Search size={15} aria-hidden="true" /><span className="flex-1">Search or jump to…</span><kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-500">Ctrl K</kbd></button>
+          <button type="button" onClick={() => setPaletteOpen(true)} className="focus-ring rounded-lg border border-white/[0.07] p-2 text-slate-400 xl:hidden" aria-label="Search or jump"><Search size={17} aria-hidden="true" /></button>
+          <span title={apiBadge.detail} className="hidden sm:inline-flex"><StatusBadge tone={apiBadge.tone}>{apiBadge.label}</StatusBadge></span>
+          <StatusBadge tone={stream.status === "connected" ? "success" : stream.status === "connecting" ? "warning" : "neutral"}>{stream.status === "connected" ? "Live" : stream.status === "connecting" ? "Connecting" : "Offline"}</StatusBadge>
+          {complaints && complaints.count > 0 ? <Link href="/complaints" className={cn("focus-ring relative rounded-lg border p-2 transition", complaints.urgent ? "border-rose-400/35 text-rose-200 hover:bg-rose-400/10" : "border-white/[0.07] text-slate-400 hover:bg-white/[0.05] hover:text-slate-100")} aria-label={`Open complaints, ${complaints.count} awaiting a reply`}><MessageSquareWarning size={17} aria-hidden="true" /><span className={cn("absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-black text-white", complaints.urgent ? "bg-rose-500" : "bg-slate-600")} aria-hidden="true">{complaints.count > 99 ? "99+" : complaints.count}</span></Link> : null}
+          <Link href="/alerts" className="focus-ring relative rounded-lg border border-white/[0.07] p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-slate-100" aria-label={unreadCount > 0 ? `Open alert centre, ${unreadCount} unread alerts` : "Open alert centre, no unread alerts"}><Bell size={17} aria-hidden="true" />{unreadCount > 0 ? <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#8b75ff] px-1 text-[10px] font-black text-white" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}</Link>
+          <button className="focus-ring hidden items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.025] px-2.5 py-1.5 text-left sm:flex" aria-label="Authenticated administrator profile"><span className="grid h-6 w-6 place-items-center rounded-full bg-[#8b75ff] text-[10px] font-black text-white">{admin.displayName.slice(0, 1).toUpperCase()}</span><span className="max-w-24 truncate text-xs font-semibold text-slate-200">{admin.displayName}</span><ChevronDown size={14} className="text-slate-500" aria-hidden="true" /></button>
+        </div>
+      </header>
+      <main className="mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+    </div>
+    {paletteOpen ? <CommandPalette onClose={() => setPaletteOpen(false)} /> : null}
+  </div>;
 }

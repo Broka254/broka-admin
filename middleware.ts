@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { sessionCookieOptions } from "@/lib/auth/cookies";
+import { expireSessionCookies, sessionCookieOptions } from "@/lib/auth/cookies";
 
 const ACCESS_COOKIE = "broka_admin_access";
 const REFRESH_COOKIE = "broka_admin_refresh";
 const AUTH_TIMEOUT_MS = 5000;
+const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 14;
 
 function loginRedirect(request: NextRequest, reason: "restricted" | "forbidden" | "session") {
   const url = new URL("/login", request.url);
@@ -26,6 +27,20 @@ async function requestMe(api: string, accessToken: string) {
   return { response, data };
 }
 
+async function requestRefresh(api: string, refreshToken: string): Promise<{ access: string; refresh?: string } | null> {
+  const refreshed = await fetch(`${api}/auth/token/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
+  });
+  const tokens = refreshed.ok ? await refreshed.json().catch(() => null) : null;
+  const record = tokens && typeof tokens === "object" && !Array.isArray(tokens) ? (tokens as Record<string, unknown>) : null;
+  if (typeof record?.access_token !== "string") return null;
+  return { access: record.access_token, refresh: typeof record.refresh_token === "string" ? record.refresh_token : undefined };
+}
+
 function isAdmin(payload: unknown) {
   return Boolean(payload && typeof payload === "object" && !Array.isArray(payload) && (payload as Record<string, unknown>).is_admin === true);
 }
@@ -37,50 +52,39 @@ export async function middleware(request: NextRequest) {
   const api = baseUrl();
   const accessToken = request.cookies.get(ACCESS_COOKIE)?.value;
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
-  if (!api || !accessToken) return loginRedirect(request, "restricted");
+  // The access cookie expires after 8 hours and the browser drops it; the
+  // 14-day refresh cookie is still a session, so only no tokens at all
+  // sends the administrator back to sign in.
+  if (!api || (!accessToken && !refreshToken)) return loginRedirect(request, "restricted");
 
   try {
-    let validation = await requestMe(api, accessToken);
-    let updatedAccessToken: string | undefined;
-    let updatedRefreshToken: string | undefined;
+    let updated: { access: string; refresh?: string } | null = null;
+    let validation = accessToken ? await requestMe(api, accessToken) : null;
 
-    if (validation.response.status === 401 && refreshToken) {
-      const refreshed = await fetch(`${api}/auth/token/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
-      });
-      const tokens = refreshed.ok ? await refreshed.json().catch(() => null) : null;
-      const tokenRecord = tokens && typeof tokens === "object" && !Array.isArray(tokens) ? (tokens as Record<string, unknown>) : null;
-      if (typeof tokenRecord?.access_token !== "string") {
-        const response = loginRedirect(request, "session");
-        response.cookies.delete(ACCESS_COOKIE);
-        response.cookies.delete(REFRESH_COOKIE);
-        return response;
-      }
-      updatedAccessToken = tokenRecord.access_token;
-      updatedRefreshToken = typeof tokenRecord.refresh_token === "string" ? tokenRecord.refresh_token : undefined;
-      validation = await requestMe(api, updatedAccessToken);
+    if ((!validation || validation.response.status === 401) && refreshToken) {
+      updated = await requestRefresh(api, refreshToken);
+      if (!updated) return expireSessionCookies(loginRedirect(request, "session"));
+      validation = await requestMe(api, updated.access);
     }
 
-    if (!validation.response.ok) {
-      const response = loginRedirect(request, validation.response.status === 403 ? "forbidden" : "session");
-      if (validation.response.status === 401) {
-        response.cookies.delete(ACCESS_COOKIE);
-        response.cookies.delete(REFRESH_COOKIE);
-      }
-      return response;
+    if (!validation || !validation.response.ok) {
+      const response = loginRedirect(request, validation?.response.status === 403 ? "forbidden" : "session");
+      return validation?.response.status === 401 ? expireSessionCookies(response) : response;
     }
 
     if (!isAdmin(validation.data)) {
       return loginRedirect(request, "forbidden");
     }
 
-    const response = NextResponse.next();
-    if (updatedAccessToken) response.cookies.set(ACCESS_COOKIE, updatedAccessToken, sessionCookieOptions());
-    if (updatedRefreshToken) response.cookies.set(REFRESH_COOKIE, updatedRefreshToken, sessionCookieOptions(60 * 60 * 24 * 14));
+    if (!updated) return NextResponse.next();
+    // Server components in this same request read the request cookies, not
+    // the response: forward the new tokens on the request, or the layout's
+    // session check sees the expired token and redirects to sign in anyway.
+    request.cookies.set(ACCESS_COOKIE, updated.access);
+    if (updated.refresh) request.cookies.set(REFRESH_COOKIE, updated.refresh);
+    const response = NextResponse.next({ request: { headers: request.headers } });
+    response.cookies.set(ACCESS_COOKIE, updated.access, sessionCookieOptions());
+    if (updated.refresh) response.cookies.set(REFRESH_COOKIE, updated.refresh, sessionCookieOptions(REFRESH_COOKIE_MAX_AGE));
     return response;
   } catch {
     // Fail closed when the authorization service cannot be confirmed.

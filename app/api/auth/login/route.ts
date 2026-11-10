@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { fetchAdminIdentity, login } from "@/lib/api/auth";
 import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE } from "@/lib/api/client";
 import { sessionCookieOptions } from "@/lib/auth/cookies";
+import { readBoundedJsonBody } from "@/lib/http/bounded-body";
 import { requireSameOrigin } from "@/lib/security/csrf";
 import type { LoginInput } from "@/types/broka";
 
@@ -18,8 +19,11 @@ function isLoginInput(value: unknown): value is LoginInput {
 export async function POST(request: Request) {
   const csrfFailure = requireSameOrigin(request);
   if (csrfFailure) return csrfFailure;
+  // A phone number and a password: anything larger is not a sign-in.
+  const body = await readBoundedJsonBody(request, 4 * 1024);
+  if (!body.ok) return NextResponse.json({ message: body.status === 413 ? "The sign-in request is too large." : "Phone number and password are required." }, { status: body.status });
   try {
-    const input = await request.json();
+    const input = body.value;
     if (!isLoginInput(input)) {
       return NextResponse.json({ message: "Phone number and password are required." }, { status: 400 });
     }

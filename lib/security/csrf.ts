@@ -18,7 +18,12 @@ export function requireSameOrigin(request: Request) {
     : requestUrl.origin;
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
-  const suppliedOrigin = origin ?? (referer ? new URL(referer).origin : null);
+  let refererOrigin: string | null = null;
+  if (referer) {
+    // A malformed Referer used to throw here and surface as a 500.
+    try { refererOrigin = new URL(referer).origin; } catch { refererOrigin = null; }
+  }
+  const suppliedOrigin = origin ?? refererOrigin;
 
   if (suppliedOrigin !== expectedOrigin) {
     return NextResponse.json(

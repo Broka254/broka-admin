@@ -39,6 +39,17 @@ const resourcePaths: Record<StaticAdminResource, string> = {
   productionCostUsage: "admin/revenue/costs/usage",
   productionCostPricing: "admin/revenue/costs/pricing",
   productionCostAdjustments: "admin/revenue/costs/adjustments",
+  intelligencePulse: "admin/intelligence/pulse",
+  intelligenceInsights: "admin/intelligence/insights",
+  intelligenceCategories: "admin/intelligence/categories",
+  intelligenceGeography: "admin/intelligence/geography",
+  intelligenceFunnel: "admin/intelligence/funnel",
+  intelligenceCohorts: "admin/intelligence/cohorts",
+  intelligenceSellers: "admin/intelligence/sellers",
+  reports: "admin/reports",
+  reportPreview: "admin/reports/preview",
+  feedback: "admin/feedback",
+  feedbackStats: "admin/feedback/stats",
 };
 
 export class AdminRequestError extends Error {
@@ -57,7 +68,11 @@ export function isEndpointMissing(error: unknown): boolean {
 }
 
 async function fetchAdminPath<T>(path: string, query?: URLSearchParams, signal?: AbortSignal): Promise<T> {
-  const suffix = query?.size ? `?${query.toString()}` : "";
+  // toString(), not .size: URLSearchParams.size is missing in Safari before 17
+  // and older Android WebViews (the admin APK), which silently dropped every
+  // query string - filters, pages and windows.
+  const search = query?.toString() ?? "";
+  const suffix = search ? `?${search}` : "";
   const response = await fetch(`/api/broka/${path}${suffix}`, { credentials: "same-origin", cache: "no-store", signal });
   const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
   if (!response.ok) throw new AdminRequestError(payload.message ?? "Unable to load BROKA data.", response.status, payload.code);
@@ -67,6 +82,9 @@ async function fetchAdminPath<T>(path: string, query?: URLSearchParams, signal?:
 // Queries that back always-visible operational chrome (health badge, command
 // center, ops snapshot) poll every 30s while the tab is focused.
 const SUMMARY_RESOURCES: ReadonlySet<string> = new Set(["summary", "opsSnapshot", "health"]);
+// Founder intelligence is heavier (dozens of aggregates per read) and moves
+// slowly: refreshed every two minutes while visible, never in the background.
+const INTELLIGENCE_RESOURCES: ReadonlySet<string> = new Set(["intelligencePulse", "intelligenceInsights", "feedbackStats"]);
 
 export function useAdminResource<K extends StaticAdminResource>(resource: K, query?: URLSearchParams, enabled = true) {
   return useQuery<AdminResourcePayloads[K]>({
@@ -75,7 +93,9 @@ export function useAdminResource<K extends StaticAdminResource>(resource: K, que
     queryFn: ({ signal }) => fetchAdminPath<AdminResourcePayloads[K]>(resourcePaths[resource], query, signal),
     ...(SUMMARY_RESOURCES.has(resource as string)
       ? { refetchInterval: 30_000, refetchIntervalInBackground: false }
-      : {}),
+      : INTELLIGENCE_RESOURCES.has(resource as string)
+        ? { refetchInterval: 120_000, refetchIntervalInBackground: false, staleTime: 60_000 }
+        : {}),
   });
 }
 
@@ -96,12 +116,14 @@ export function useAdminUsers(query: URLSearchParams, enabled = true) {
   });
 }
 
-const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail", string> = {
+const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail", string> = {
   userDetail: "admin/users",
   dealDetail: "admin/deals",
   listingDetail: "admin/listings",
   disputeDetail: "admin/disputes",
   storeDetail: "admin/stores",
+  reportDetail: "admin/reports",
+  feedbackDetail: "admin/feedback",
 };
 
 export function useAdminDetail<K extends keyof typeof DETAIL_PATHS>(resource: K, id: string, enabled = true) {

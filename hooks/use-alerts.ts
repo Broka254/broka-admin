@@ -80,6 +80,9 @@ export function useAcknowledgeAlert() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["broka-admin", "alerts"] });
+      // A separate key, not a child of "alerts": the header badge kept the
+      // old unread count until the next poll.
+      void queryClient.invalidateQueries({ queryKey: ["broka-admin", "alerts-unread"] });
     },
   });
 }
@@ -95,6 +98,9 @@ export function useResolveAlert() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["broka-admin", "alerts"] });
+      // A separate key, not a child of "alerts": the header badge kept the
+      // old unread count until the next poll.
+      void queryClient.invalidateQueries({ queryKey: ["broka-admin", "alerts-unread"] });
     },
   });
 }

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { revokeRefreshToken } from "@/lib/api/auth";
-import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/api/client";
+import { REFRESH_COOKIE } from "@/lib/api/client";
+import { expireSessionCookies } from "@/lib/auth/cookies";
 import { requireSameOrigin } from "@/lib/security/csrf";
 
 export const runtime = "nodejs";
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
     }
   }
 
-  const response = NextResponse.json({ ok: true });
-  response.cookies.delete(ACCESS_COOKIE);
-  response.cookies.delete(REFRESH_COOKIE);
-  return response;
+  // Expire with the attributes the cookies were set with (SameSite=None;
+  // Secure in the embedded deployment); a bare delete is ignored there and
+  // the session outlived the sign-out.
+  return expireSessionCookies(NextResponse.json({ ok: true }));
 }

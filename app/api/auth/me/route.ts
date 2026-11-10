@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 import { fetchAdminIdentity, refreshAccessToken } from "@/lib/api/auth";
 import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE } from "@/lib/api/client";
-import { sessionCookieOptions } from "@/lib/auth/cookies";
+import { expireSessionCookies, sessionCookieOptions } from "@/lib/auth/cookies";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,9 +12,11 @@ export async function GET() {
   const store = await cookies();
   const accessToken = store.get(ACCESS_COOKIE)?.value;
   const refreshToken = store.get(REFRESH_COOKIE)?.value;
-  if (!accessToken) return NextResponse.json({ message: "Authentication required." }, { status: 401 });
+  if (!accessToken && !refreshToken) return NextResponse.json({ message: "Authentication required." }, { status: 401 });
 
   try {
+    // An expired access cookie is gone from the browser; go straight to the refresh.
+    if (!accessToken) throw new BrokaApiError("Access token expired.", 401, "unauthorized");
     const admin = await fetchAdminIdentity(accessToken);
     return NextResponse.json({ admin: { name: admin.displayName, role: admin.roleLabel } });
   } catch (error) {
@@ -31,10 +33,7 @@ export async function GET() {
       if (tokens.refreshToken) response.cookies.set(REFRESH_COOKIE, tokens.refreshToken, sessionCookieOptions(60 * 60 * 24 * 14));
       return response;
     } catch {
-      const response = NextResponse.json({ message: "Your session is no longer valid. Please sign in again." }, { status: 401 });
-      response.cookies.delete(ACCESS_COOKIE);
-      response.cookies.delete(REFRESH_COOKIE);
-      return response;
+      return expireSessionCookies(NextResponse.json({ message: "Your session is no longer valid. Please sign in again." }, { status: 401 }));
     }
   }
 }

@@ -10,12 +10,15 @@ export type ApiResource =
   | "opsSnapshot" | "deals" | "listings" | "stores" | "disputes" | "payments" | "financeIntegrity"
   | "serviceHealth" | "zenoActivity" | "userDetail" | "dealDetail"
   | "communications" | "workerDiagnostics" | "communicationDetail" | "communicationRecipients" | "communicationStats"
-  | "alerts" | "revenue" | "timeseries" | "productionCosts" | "productionCostSummary" | "productionCostUsage" | "productionCostEntries" | "productionCostAdjustments" | "productionCostPricing" | "listingDetail" | "disputeDetail" | "storeDetail";
+  | "alerts" | "revenue" | "timeseries" | "productionCosts" | "productionCostSummary" | "productionCostUsage" | "productionCostEntries" | "productionCostAdjustments" | "productionCostPricing" | "listingDetail" | "disputeDetail" | "storeDetail"
+  | "intelligencePulse" | "intelligenceInsights" | "intelligenceCategories" | "intelligenceGeography" | "intelligenceFunnel"
+  | "intelligenceCohorts" | "intelligenceSellers" | "reports" | "reportPreview" | "reportDetail"
+  | "feedback" | "feedbackStats" | "feedbackDetail";
 
 export type StaticAdminResource = Exclude<
   ApiResource,
   "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats"
-  | "listingDetail" | "disputeDetail" | "storeDetail"
+  | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail"
 >;
 
 export type AdminActionName = "flag" | "unflag" | "recompute-trust" | "promote-admin" | "resolve-fraud-event";

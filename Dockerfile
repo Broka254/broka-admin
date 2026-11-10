@@ -7,6 +7,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable && pnpm install --frozen-lockfile
 
 FROM base AS build
+# Security headers are fixed at build time; see lib/security/frame-ancestors.ts.
+ARG BROKA_FRAME_ANCESTORS
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 RUN corepack enable && pnpm build

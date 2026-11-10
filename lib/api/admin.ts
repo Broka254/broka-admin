@@ -6,7 +6,7 @@ import { parseAdminResource, AdminActionResultSchema, type AdminActionResult, ty
 import { ZodError } from "zod";
 
 export type { StaticAdminResource };
-export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats">;
+export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats" | "reportDetail" | "feedbackDetail">;
 
 export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   summary: "/admin/summary",
@@ -42,6 +42,17 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   productionCostUsage: "/admin/revenue/costs/usage",
   productionCostPricing: "/admin/revenue/costs/pricing",
   productionCostAdjustments: "/admin/revenue/costs/adjustments",
+  intelligencePulse: "/admin/intelligence/pulse",
+  intelligenceInsights: "/admin/intelligence/insights",
+  intelligenceCategories: "/admin/intelligence/categories",
+  intelligenceGeography: "/admin/intelligence/geography",
+  intelligenceFunnel: "/admin/intelligence/funnel",
+  intelligenceCohorts: "/admin/intelligence/cohorts",
+  intelligenceSellers: "/admin/intelligence/sellers",
+  reports: "/admin/reports",
+  reportPreview: "/admin/reports/preview",
+  feedback: "/admin/feedback",
+  feedbackStats: "/admin/feedback/stats",
 };
 
 const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
@@ -53,7 +64,27 @@ const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   { pattern: /^admin\/communications\/([^/]+)$/, resource: "communicationDetail" },
   { pattern: /^admin\/communications\/([^/]+)\/recipients$/, resource: "communicationRecipients" },
   { pattern: /^admin\/communications\/([^/]+)\/stats$/, resource: "communicationStats" },
+  // Static paths under these prefixes (reports/preview, feedback/stats) are
+  // resolved from RESOURCE_BY_PATH first; ids are UUIDs.
+  { pattern: /^admin\/reports\/([A-Za-z0-9-]+)$/, resource: "reportDetail" },
+  { pattern: /^admin\/feedback\/([A-Za-z0-9-]+)$/, resource: "feedbackDetail" },
 ];
+
+// "." and ".." are not ids: fetch() resolves them, so admin/communications/..
+// would leave the allowlisted prefix (admin/communications/../cancel is
+// admin/cancel upstream). Any path containing one is refused outright.
+export function hasDotSegment(path: string): boolean {
+  return normalizePath(path).split("?")[0].split("/").some((segment) => {
+    let decoded = segment;
+    try { decoded = decodeURIComponent(segment); } catch { return true; }
+    return decoded === "." || decoded === ".." || decoded.includes("/") || decoded.includes("\\");
+  });
+}
+
+/** One path segment that can safely be interpolated as a record id. */
+export function isSafeIdSegment(value: string): boolean {
+  return value.length > 0 && value.length <= 128 && !hasDotSegment(value) && /^[A-Za-z0-9._:-]+$/.test(value);
+}
 
 // The SSE stream is a text/event-stream passthrough, not a JSON resource, so
 // it is allowlisted here but has no entry in AdminResourceSchemas.
@@ -83,6 +114,7 @@ export function isSafeAdminPath(path: string): boolean {
   // Query strings never reach this check (the proxy strips them before
   // allowlisting), but tolerate them here for direct callers.
   const bare = normalized.split("?")[0];
+  if (hasDotSegment(bare)) return false;
   return RESOURCE_BY_PATH.has(bare) || STREAM_PATHS.has(bare) || DETAIL_PATTERNS.some((entry) => entry.pattern.test(bare));
 }
 

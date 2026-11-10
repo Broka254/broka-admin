@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+import {
+  CategoriesResponseSchema,
+  CohortsResponseSchema,
+  FeedbackDetailSchema,
+  FeedbackPageSchema,
+  FeedbackStatsSchema,
+  FunnelResponseSchema,
+  GeographyResponseSchema,
+  InsightsResponseSchema,
+  PulseSchema,
+  ReportDetailSchema,
+  ReportListSchema,
+  SellersResponseSchema,
+} from "@/lib/api/intelligence-schemas";
+
 const nullableString = z.string().nullable();
 const isoDate = nullableString;
 const money = z.number();
@@ -989,6 +1004,19 @@ export const AdminResourceSchemas = {
   productionCostAdjustments: ProductionCostAdjustmentsResponseSchema,
   productionCostPricing: ProductionCostPricingResponseSchema,
   listingDetail: AdminListingDetailSchema, disputeDetail: AdminDisputeDetailSchema, storeDetail: AdminStoreDetailSchema,
+  intelligencePulse: PulseSchema,
+  intelligenceInsights: InsightsResponseSchema,
+  intelligenceCategories: CategoriesResponseSchema,
+  intelligenceGeography: GeographyResponseSchema,
+  intelligenceFunnel: FunnelResponseSchema,
+  intelligenceCohorts: CohortsResponseSchema,
+  intelligenceSellers: SellersResponseSchema,
+  reports: ReportListSchema,
+  reportPreview: ReportDetailSchema,
+  reportDetail: ReportDetailSchema,
+  feedback: FeedbackPageSchema,
+  feedbackStats: FeedbackStatsSchema,
+  feedbackDetail: FeedbackDetailSchema,
 } as const;
 
 export type AdminResourcePayloads = { [K in keyof typeof AdminResourceSchemas]: z.infer<(typeof AdminResourceSchemas)[K]> };
@@ -997,8 +1025,11 @@ export function parseAdminResource<K extends keyof typeof AdminResourceSchemas>(
   return AdminResourceSchemas[resource].parse(payload) as AdminResourcePayloads[K];
 }
 
+// is_admin is a boolean here, not literal(true): a valid non-admin account
+// must reach asAdminIdentity's 403 ("not authorized"), not fail the contract
+// and surface as a 502 "did not match the verified identity contract".
 export const AuthMeSchema = z.object({
-  id: z.string(), name: z.string(), email: nullableString, phone: nullableString, is_admin: z.literal(true), account_type: z.string(),
+  id: z.string(), name: z.string(), email: nullableString, phone: nullableString, is_admin: z.boolean(), account_type: z.string(),
   is_verified: z.boolean(), trust_score: z.number(), trust_band: z.string(), is_flagged: z.boolean(), created_at: isoDate,
 }).passthrough();
 

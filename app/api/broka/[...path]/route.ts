@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import type { ZodType } from "zod";
 
 import { refreshAccessToken } from "@/lib/api/auth";
-import { isSafeAdminPath, isStreamPath, resourceForPath, validateAdminResource } from "@/lib/api/admin";
-import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE, parseUnknownJson, publicErrorMessage, upstreamFetch, upstreamStream } from "@/lib/api/client";
-import { sessionCookieOptions } from "@/lib/auth/cookies";
+import { hasDotSegment, isSafeAdminPath, isStreamPath, resourceForPath, validateAdminResource } from "@/lib/api/admin";
+import { BrokaApiError, parseUnknownJson, publicErrorMessage, upstreamFetch, upstreamStream } from "@/lib/api/client";
+import { expireSessionCookies } from "@/lib/auth/cookies";
+import { applyRefreshedCookies, readSessionTokens, type RefreshedTokens } from "@/lib/auth/session-tokens";
 import { readBoundedJsonBody } from "@/lib/http/bounded-body";
 import { requireSameOrigin } from "@/lib/security/csrf";
 import {
@@ -29,6 +29,12 @@ import {
   ProductionCostPricingPatchSchema,
   ProductionCostPricingMutationResponseSchema,
 } from "@/lib/api/schemas";
+import {
+  FeedbackAdminItemSchema,
+  FeedbackTriageInSchema,
+  ReportDetailSchema,
+  ReportGenerateInSchema,
+} from "@/lib/api/intelligence-schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,9 +42,7 @@ export const dynamic = "force-dynamic";
 const MAX_PAYLOAD_BYTES = 512 * 1024; // 512KB
 
 function clearSession(response: NextResponse) {
-  response.cookies.delete(ACCESS_COOKIE);
-  response.cookies.delete(REFRESH_COOKIE);
-  return response;
+  return expireSessionCookies(response);
 }
 
 function requestId(request: Request) {
@@ -155,6 +159,21 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     requestSchema: RetryInSchema,
     responseSchema: RetryOutSchema,
   },
+  // Complaint triage: status and/or a reply the user sees (and is pushed).
+  // Setting a state is naturally idempotent, so no key is demanded.
+  {
+    method: "PATCH",
+    pattern: /^admin\/feedback\/([A-Za-z0-9-]+)$/,
+    requestSchema: FeedbackTriageInSchema,
+    responseSchema: FeedbackAdminItemSchema,
+  },
+  // Build or rebuild one closed period's founder report: an upsert.
+  {
+    method: "POST",
+    pattern: /^admin\/reports\/generate$/,
+    requestSchema: ReportGenerateInSchema,
+    responseSchema: ReportDetailSchema,
+  },
 ];
 
 function findMutationOperation(method: string, pathWithoutLeadingSlash: string): MutationOperation | null {
@@ -176,8 +195,8 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
   // SSE streams pass the upstream body through unbuffered as
   // text/event-stream. Never JSON-parse or buffer it here.
   if (isStreamPath(requestedPath.slice(1))) {
-    const tokenStore = await cookies();
-    const accessToken = tokenStore.get(ACCESS_COOKIE)?.value;
+    const session = await readSessionTokens();
+    const accessToken = session.accessToken;
     if (!accessToken) {
       return NextResponse.json(
         { code: "unauthorized", message: "Authentication required.", request_id: id },
@@ -201,7 +220,9 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
           { status: upstream.status, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
         );
       }
-      return new Response(upstream.body, {
+      // NextResponse (not Response) so a refresh made for this request can
+      // set its cookies on the stream response too.
+      return applyRefreshedCookies(new NextResponse(upstream.body, {
         status: 200,
         headers: {
           "Content-Type": "text/event-stream",
@@ -210,7 +231,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
           "X-Request-ID": id,
           "X-Accel-Buffering": "no",
         },
-      });
+      }), session.refreshed);
     } catch (error) {
       const status = error instanceof BrokaApiError && error.status ? error.status : 503;
       const message = error instanceof BrokaApiError ? error.message : "The BROKA API could not be reached.";
@@ -226,9 +247,9 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
     );
   }
 
-  const tokenStore = await cookies();
-  let accessToken = tokenStore.get(ACCESS_COOKIE)?.value;
-  const refreshToken = tokenStore.get(REFRESH_COOKIE)?.value;
+  const session = await readSessionTokens();
+  let accessToken = session.accessToken;
+  const refreshToken = session.refreshToken;
   if (!accessToken) {
     return NextResponse.json(
       { code: "unauthorized", message: "Authentication required.", request_id: id },
@@ -240,8 +261,8 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
   const upstreamPath = `${requestedPath}${sourceUrl.search}`;
   try {
     let upstream = await upstreamFetch(upstreamPath, { method: "GET", headers: { "X-Request-ID": id } }, accessToken);
-    let refreshedTokens: Awaited<ReturnType<typeof refreshAccessToken>> | undefined;
-    if (upstream.status === 401 && refreshToken) {
+    let refreshedTokens: RefreshedTokens | undefined = session.refreshed;
+    if (upstream.status === 401 && refreshToken && !session.refreshed) {
       refreshedTokens = await refreshAccessToken(refreshToken);
       accessToken = refreshedTokens.accessToken;
       upstream = await upstreamFetch(upstreamPath, { method: "GET", headers: { "X-Request-ID": id } }, accessToken);
@@ -265,12 +286,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
     // number of matching records; never synthesise it when it is absent.
     const total = totalCount(upstream);
     if (total !== null) headers["X-Total-Count"] = total;
-    const response = NextResponse.json(validated, { headers });
-    if (refreshedTokens) {
-      response.cookies.set(ACCESS_COOKIE, refreshedTokens.accessToken, sessionCookieOptions());
-      if (refreshedTokens.refreshToken) response.cookies.set(REFRESH_COOKIE, refreshedTokens.refreshToken, sessionCookieOptions(60 * 60 * 24 * 14));
-    }
-    return response;
+    return applyRefreshedCookies(NextResponse.json(validated, { headers }), refreshedTokens);
   } catch (error) {
     const status = error instanceof BrokaApiError && error.status ? error.status : 503;
     const code = error instanceof BrokaApiError && error.code === "invalid-response" ? "contract_validation_failed" : status === 401 ? "unauthorized" : "backend_unavailable";
@@ -294,8 +310,9 @@ async function handleMutation(
   const pathWithoutLeadingSlash = segments.join("/");
   const requestedPath = `/${pathWithoutLeadingSlash}`;
 
-  // Find explicit allowed operation
-  const operation = findMutationOperation(method, pathWithoutLeadingSlash);
+  // Find explicit allowed operation. A dot segment is never an id: fetch()
+  // would resolve it out of the allowlisted prefix.
+  const operation = hasDotSegment(pathWithoutLeadingSlash) ? null : findMutationOperation(method, pathWithoutLeadingSlash);
   if (!operation) {
     return NextResponse.json(
       { code: "mutation_not_allowlisted", message: `The ${method} operation for this path is not allowlisted.`, request_id: id },
@@ -348,9 +365,9 @@ async function handleMutation(
   }
 
   // Authorization check
-  const tokenStore = await cookies();
-  let accessToken = tokenStore.get(ACCESS_COOKIE)?.value;
-  const refreshToken = tokenStore.get(REFRESH_COOKIE)?.value;
+  const session = await readSessionTokens();
+  let accessToken = session.accessToken;
+  const refreshToken = session.refreshToken;
   if (!accessToken) {
     return NextResponse.json(
       { code: "unauthorized", message: "Authentication required.", request_id: id },
@@ -365,8 +382,10 @@ async function handleMutation(
   if (idempotencyKey) upstreamHeaders["X-Idempotency-Key"] = idempotencyKey;
   if (validatedBody !== undefined) upstreamHeaders["Content-Type"] = "application/json";
 
-  const sourceUrl = new URL(request.url);
-  const upstreamPath = `${requestedPath}${sourceUrl.search}`;
+  // Mutations carry their input in the validated body only. The browser's
+  // query string used to be appended unchecked, a side channel past the
+  // strict request schemas.
+  const upstreamPath = requestedPath;
 
   try {
     let upstream = await upstreamFetch(
@@ -379,8 +398,8 @@ async function handleMutation(
       accessToken
     );
 
-    let refreshedTokens: Awaited<ReturnType<typeof refreshAccessToken>> | undefined;
-    if (upstream.status === 401 && refreshToken) {
+    let refreshedTokens: RefreshedTokens | undefined = session.refreshed;
+    if (upstream.status === 401 && refreshToken && !session.refreshed) {
       refreshedTokens = await refreshAccessToken(refreshToken);
       accessToken = refreshedTokens.accessToken;
       upstream = await upstreamFetch(
@@ -434,6 +453,15 @@ async function handleMutation(
       return upstream.status === 401 ? clearSession(response) : response;
     }
 
+    // An empty success has nothing to validate; parsing it threw, and the
+    // catch below then failed again building a 204 with a JSON body.
+    if (upstream.status === 204) {
+      return applyRefreshedCookies(
+        new NextResponse(null, { status: 204, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }),
+        refreshedTokens,
+      );
+    }
+
     // Parse and runtime-validate response payload
     const rawResponse = await parseUnknownJson(upstream);
     const parsedResponse = operation.responseSchema.safeParse(rawResponse);
@@ -457,17 +485,10 @@ async function handleMutation(
       );
     }
 
-    const response = NextResponse.json(parsedResponse.data, {
+    return applyRefreshedCookies(NextResponse.json(parsedResponse.data, {
       status: upstream.status,
       headers: { "X-Request-ID": id, "Cache-Control": "no-store" },
-    });
-    if (refreshedTokens) {
-      response.cookies.set(ACCESS_COOKIE, refreshedTokens.accessToken, sessionCookieOptions());
-      if (refreshedTokens.refreshToken) {
-        response.cookies.set(REFRESH_COOKIE, refreshedTokens.refreshToken, sessionCookieOptions(60 * 60 * 24 * 14));
-      }
-    }
-    return response;
+    }), refreshedTokens);
   } catch (error) {
     const status = error instanceof BrokaApiError && error.status ? error.status : 503;
     const code =

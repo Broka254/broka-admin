@@ -198,10 +198,11 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
     const session = await readSessionTokens();
     const accessToken = session.accessToken;
     if (!accessToken) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { code: "unauthorized", message: "Authentication required.", request_id: id },
         { status: 401, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
       );
+      return session.refreshRejected ? clearSession(response) : response;
     }
     const sourceUrl = new URL(request.url);
     const upstreamPath = `${requestedPath}${sourceUrl.search}`;
@@ -251,10 +252,11 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
   let accessToken = session.accessToken;
   const refreshToken = session.refreshToken;
   if (!accessToken) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { code: "unauthorized", message: "Authentication required.", request_id: id },
       { status: 401, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
     );
+    return session.refreshRejected ? clearSession(response) : response;
   }
 
   const sourceUrl = new URL(request.url);
@@ -369,10 +371,11 @@ async function handleMutation(
   let accessToken = session.accessToken;
   const refreshToken = session.refreshToken;
   if (!accessToken) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { code: "unauthorized", message: "Authentication required.", request_id: id },
       { status: 401, headers: { "X-Request-ID": id, "Cache-Control": "no-store" } }
     );
+    return session.refreshRejected ? clearSession(response) : response;
   }
 
   const upstreamHeaders: Record<string, string> = {

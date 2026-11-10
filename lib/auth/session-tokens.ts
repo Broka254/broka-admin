@@ -4,13 +4,20 @@ import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
 import { refreshAccessToken } from "@/lib/api/auth";
-import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/api/client";
+import { ACCESS_COOKIE, BrokaApiError, REFRESH_COOKIE } from "@/lib/api/client";
 import { sessionCookieOptions } from "@/lib/auth/cookies";
 
 export const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 14;
 
 export type RefreshedTokens = Awaited<ReturnType<typeof refreshAccessToken>>;
-export type SessionTokens = { accessToken?: string; refreshToken?: string; refreshed?: RefreshedTokens };
+export type SessionTokens = {
+  accessToken?: string;
+  refreshToken?: string;
+  refreshed?: RefreshedTokens;
+  // The API refused the refresh token (not merely unreachable): the session
+  // is over and its cookies should go.
+  refreshRejected?: boolean;
+};
 
 /**
  * The session cookies, refreshed up front when only the refresh token is
@@ -27,8 +34,9 @@ export async function readSessionTokens(): Promise<SessionTokens> {
   try {
     const refreshed = await refreshAccessToken(refreshToken);
     return { accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken ?? refreshToken, refreshed };
-  } catch {
-    return { refreshToken };
+  } catch (error) {
+    const rejected = error instanceof BrokaApiError && (error.status === 400 || error.status === 401 || error.status === 403);
+    return { refreshToken, refreshRejected: rejected };
   }
 }
 

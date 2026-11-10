@@ -83,7 +83,8 @@ export function ReportsCenter() {
     for (const [key, value] of Object.entries(changes)) {
       if (value === null || value === "") next.delete(key); else next.set(key, value);
     }
-    router.replace(next.size ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+    const search = next.toString();
+    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {

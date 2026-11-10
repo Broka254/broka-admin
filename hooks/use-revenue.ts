@@ -11,7 +11,9 @@ import {
 } from "@/lib/api/revenue";
 
 async function fetchAdminPath<T>(path: string, query?: URLSearchParams, signal?: AbortSignal): Promise<T> {
-  const suffix = query?.size ? `?${query.toString()}` : "";
+  // toString(), not .size: older Safari and Android WebViews lack .size.
+  const search = query?.toString() ?? "";
+  const suffix = search ? `?${search}` : "";
   const response = await fetch(`/api/broka/${path}${suffix}`, {
     credentials: "same-origin",
     cache: "no-store",

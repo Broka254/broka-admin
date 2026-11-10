@@ -1,9 +1,23 @@
 import { downloadCSV, type CsvRow } from "@/lib/csv";
 import type { ReportDetail } from "@/lib/api/intelligence-schemas";
 
-/** broka-weekly-2026-11-02.md: kind and the period's first day. */
-export function reportFilename(report: Pick<ReportDetail, "kind" | "period_start" | "stored">, extension: "md" | "csv"): string {
-  const day = /^\d{4}-\d{2}-\d{2}/.test(report.period_start) ? report.period_start.slice(0, 10) : "period";
+/** Hours east of UTC in a label such as "EAT (UTC+3)" or "UTC-5". */
+function utcOffsetHours(label: string | undefined): number {
+  const match = label?.match(/UTC([+-]\d{1,2})/);
+  return match ? Number(match[1]) : 0;
+}
+
+type FilenameSource = Pick<ReportDetail, "kind" | "period_start" | "stored"> & { payload?: { period?: { timezone?: string } } };
+
+/**
+ * broka-weekly-2026-11-03.md: kind and the period's first local day. The
+ * stored start is UTC (21:00 the evening before, in EAT), so it is shifted
+ * by the report's timezone to match the period label.
+ */
+export function reportFilename(report: FilenameSource, extension: "md" | "csv"): string {
+  const start = Date.parse(report.period_start);
+  const offset = utcOffsetHours(report.payload?.period?.timezone);
+  const day = Number.isFinite(start) ? new Date(start + offset * 3_600_000).toISOString().slice(0, 10) : "period";
   return `broka-${report.kind}-${day}${report.stored ? "" : "-to-date"}.${extension}`;
 }
 

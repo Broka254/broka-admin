@@ -24,6 +24,41 @@ Added in the working tree: `/admin/ops-snapshot`, `/admin/deals`, `/admin/deals/
 
 The frontend allowlist, dynamic detail patterns, and Zod schemas mirror these return dictionaries; contract drift fails closed with a 502 and a structured log line.
 
+## Founder intelligence, reports and complaint triage
+
+Served by `api/domains/admin/intelligence.py` and `api/domains/feedback/router.py`
+in the `broka` backend (branch `feat/founder-intelligence`). Contracts live in
+`lib/api/intelligence-schemas.ts`; open enumerations (category signals, insight
+areas) are plain strings so a new value renders instead of failing the page.
+
+| Operation | Path | Notes |
+|---|---|---|
+| Pulse | `GET /admin/intelligence/pulse?window_days=1..90` | Period against the one before; liquidity, seller replies, balance, complaints, money, Day-30 targets, break-even |
+| Insights | `GET /admin/intelligence/insights?window_days=1..90` | Deterministic, ranked rules with evidence and a dashboard link |
+| Categories / counties | `GET /admin/intelligence/categories`, `/geography` `?window_days=7..180` | Demand against live supply, signal and recommendation |
+| Funnel | `GET /admin/intelligence/funnel?from=&to=` | Signups in range, followed through both journeys (max 366 days) |
+| Cohorts | `GET /admin/intelligence/cohorts?weeks=2..12` | Weekly activity retention, report-local weeks |
+| Sellers | `GET /admin/intelligence/sellers?limit=1..100` | Buyers waiting over 24h, busiest sellers, stale listings |
+| Report archive | `GET /admin/reports?kind=&limit=&offset=` | Stored reports and the schedule |
+| Live preview | `GET /admin/reports/preview?kind=` | The period in progress; never stored |
+| Report | `GET /admin/reports/{id}` | Payload plus a Markdown rendering |
+| Generate | `POST /admin/reports/generate` `{kind, period_date?}` | Closed periods only; replaces that period's report |
+| Complaint queue | `GET /admin/feedback?queue=&kind=&category=&severity=&search=&user_id=&related_user_id=&sort=` | Reporter, age, deadline and breach per row |
+| Complaint stats | `GET /admin/feedback/stats` | Deadlines, unanswered complaints, repeat-reported accounts |
+| Complaint | `GET /admin/feedback/{id}` | Related listing, user and deal, reporter history, audit timeline |
+| Triage | `PATCH /admin/feedback/{id}` `{status?, admin_response?}` | Pushes the reporter; returns `notified_devices` |
+
+Proxy rules added with these routes:
+
+- A path containing a `.` or `..` segment (also percent-encoded) is refused for
+  reads and writes: `fetch()` would resolve it out of the allowlisted prefix.
+- Mutations forward only the validated body. The browser's query string is no
+  longer appended to the upstream URL.
+- An upstream `204` passes through as an empty `204`.
+- When only the refresh cookie is left, the proxy refreshes before calling the
+  API; a refused refresh token expires both cookies with their original
+  attributes.
+
 ## Administrative writes
 
 - `POST /admin/users/{user_id}/flag` — requires `reason` (3-500 chars), no-op when already flagged, creates a fraud event on first flag.

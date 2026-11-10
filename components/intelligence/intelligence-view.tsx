@@ -47,7 +47,8 @@ export function IntelligenceView() {
   function setRange(value: IntelWindow) {
     const next = new URLSearchParams(searchParams.toString());
     if (value === "30") next.delete("window"); else next.set("window", value);
-    router.replace(next.size ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+    const search = next.toString();
+    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
   }
 
   const totals = categories.data?.totals ?? {};

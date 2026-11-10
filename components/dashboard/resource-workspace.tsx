@@ -211,7 +211,9 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
       if (value === null || value === "" || value === "all") next.delete(param); else next.set(param, value);
     }
     if (Object.keys(updates).some((param) => param !== "page")) next.delete("page");
-    router.replace(next.size ? `?${next.toString()}` : "?", { scroll: false });
+    // Not next.size: older Safari and Android WebViews lack it.
+    const search = next.toString();
+    router.replace(search ? `?${search}` : "?", { scroll: false });
   }
 
   function setParam(param: string, value: string | null) {

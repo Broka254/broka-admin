@@ -68,7 +68,11 @@ export function isEndpointMissing(error: unknown): boolean {
 }
 
 async function fetchAdminPath<T>(path: string, query?: URLSearchParams, signal?: AbortSignal): Promise<T> {
-  const suffix = query?.size ? `?${query.toString()}` : "";
+  // toString(), not .size: URLSearchParams.size is missing in Safari before 17
+  // and older Android WebViews (the admin APK), which silently dropped every
+  // query string - filters, pages and windows.
+  const search = query?.toString() ?? "";
+  const suffix = search ? `?${search}` : "";
   const response = await fetch(`/api/broka/${path}${suffix}`, { credentials: "same-origin", cache: "no-store", signal });
   const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
   if (!response.ok) throw new AdminRequestError(payload.message ?? "Unable to load BROKA data.", response.status, payload.code);

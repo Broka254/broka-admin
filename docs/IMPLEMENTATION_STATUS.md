@@ -27,6 +27,16 @@
 | Derived alerts | `/alerts` | `/admin/ops-snapshot` + `/admin/health/services` rendered as severity/link items, no unread or acknowledgement state | `ADMIN_SUMMARY` | Integrated as a derived view |
 | Service Communications | `/communications` | Draft CRUD, title-only server search, pagination, current-definition preview, timezone-safe expiry, schedule/publish/cancel/complete, targeted retry, worker diagnostics | `VIEW_COMMUNICATIONS` / `MANAGE_COMMUNICATIONS` | Frontend complete; production blocked by backend guarantees |
 
+### Founder intelligence (backend branch `feat/founder-intelligence`)
+
+| Endpoint | Frontend surface | Authorization | Status |
+|---|---|---|---|
+| `/admin/intelligence/pulse`, `/insights` | Command Center cockpit, decision feed, `/intelligence` | `ADMIN_SUMMARY` | Integrated |
+| `/admin/intelligence/categories`, `/geography`, `/sellers` | `/intelligence` | `ADMIN_SUMMARY` | Integrated |
+| `/admin/intelligence/funnel`, `/cohorts` | `/growth` | `ADMIN_SUMMARY` | Integrated |
+| `/admin/reports`, `/preview`, `/{id}`, `POST /generate` | `/reports` | `ADMIN_SUMMARY` | Integrated; reports are written by the backend sweep |
+| `/admin/feedback`, `/stats`, `/{id}`, `PATCH /{id}` | `/complaints`, rail and header badge | `VIEW_FEEDBACK` / `MANAGE_FEEDBACK` | Integrated; triage pushes the reporter |
+
 ## Write surface
 
 | Endpoint | Backend behavior |

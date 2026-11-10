@@ -147,16 +147,24 @@ describe("session refresh", () => {
   });
 
   it("ends the session, with the cookies' own attributes, when the refresh token is refused", async () => {
-    state.cookies = { broka_admin_refresh: "refresh-revoked-1" };
-    state.respond = (path) => path === "/auth/token/refresh" ? json({ detail: "Invalid refresh token" }, 401) : json({});
-    const response = await GET(new Request("http://localhost/api/broka/admin/feedback/stats"), context("admin", "feedback", "stats"));
-    expect(response.status).toBe(401);
-    expect(upstream("/admin/feedback/stats")).toHaveLength(0);
-    const cookies = (response.headers.get("set-cookie") ?? "").toLowerCase();
-    expect(cookies).toContain("broka_admin_access=;");
-    expect(cookies).toContain("max-age=0");
-    expect(cookies).toContain("samesite=none");
-    expect(cookies).toContain("secure");
+    // The production (embedded, HTTPS) setting; CI itself runs with secure cookies off.
+    vi.stubEnv("BROKA_COOKIE_SECURE", "true");
+    try {
+      state.cookies = { broka_admin_refresh: "refresh-revoked-1" };
+      state.respond = (path) => path === "/auth/token/refresh" ? json({ detail: "Invalid refresh token" }, 401) : json({});
+      const response = await GET(new Request("http://localhost/api/broka/admin/feedback/stats"), context("admin", "feedback", "stats"));
+      expect(response.status).toBe(401);
+      expect(upstream("/admin/feedback/stats")).toHaveLength(0);
+      const cookies = (response.headers.get("set-cookie") ?? "").toLowerCase();
+      expect(cookies).toContain("broka_admin_access=;");
+      expect(cookies).toContain("broka_admin_refresh=;");
+      expect(cookies).toContain("max-age=0");
+      // A bare delete sends neither; the embedded browser then ignores it.
+      expect(cookies).toContain("samesite=none");
+      expect(cookies).toContain("secure");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("spends a refresh token once when several requests need it at the same time", async () => {

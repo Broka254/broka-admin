@@ -2,12 +2,55 @@
 
 import type { AdminResourcePayloads } from "@/lib/api/schemas";
 import Link from "next/link";
-import { formatLocalDate } from "@/lib/utils";
+import { formatDateTime } from "@/lib/format";
+import { StatusBadge } from "@/components/ui/primitives";
+import { DataTable, type Column } from "@/components/dashboard/data-table";
 
 type AdminUser = AdminResourcePayloads["users"][number];
 
 export function UsersTable({ users, filter = "all" }: { users: AdminUser[]; filter?: string }) {
   const visibleUsers = filter === "admin" ? users.filter((user) => user.is_admin) : users;
   if (!visibleUsers.length) return <div className="p-5 text-sm text-slate-500">No users matched the backend response.</div>;
-  return <div className="divide-y divide-white/[0.06]">{visibleUsers.map((user) => <div key={user.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(190px,1.4fr)_120px_120px_120px_minmax(150px,1fr)] sm:items-center"><div><Link href={`/users/${encodeURIComponent(user.id)}`} className="text-sm font-semibold text-slate-100 hover:text-amber-200">{user.name}</Link><p className="mt-1 truncate text-xs text-slate-500">{user.email ?? user.phone ?? "No contact supplied"}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Trust</p><p className="mt-1 text-sm text-slate-300">{user.trust_score} · {user.trust_band}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Deals</p><p className="mt-1 text-sm text-slate-300">{user.completed_deals.toLocaleString()}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Status</p><p className="mt-1 text-sm text-slate-300">{user.is_flagged ? "Flagged" : user.is_admin ? "Admin" : user.is_verified ? "Verified" : "Standard"}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Registered</p><p className="mt-1 text-sm text-slate-400">{user.created_at ? formatLocalDate(new Date(user.created_at)) : "—"}</p></div></div>)}</div>;
+  const columns: Column<AdminUser>[] = [
+    {
+      key: "identity",
+      header: "User",
+      primary: true,
+      render: (user) => (
+        <div className="min-w-0">
+          <Link href={`/users/${encodeURIComponent(user.id)}`} className="focus-ring cell-primary hover:text-[#ded8ff]">{user.name}</Link>
+          <p className="cell-secondary truncate">{user.email ?? user.phone ?? "No contact supplied"}</p>
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      render: (user) => <StatusBadge tone={user.is_admin ? "warning" : user.is_flagged ? "danger" : user.is_verified ? "info" : "neutral"}>{user.is_admin ? "Admin" : user.is_flagged ? "Flagged" : user.is_verified ? "Verified" : "Standard"}</StatusBadge>,
+    },
+    {
+      key: "trust",
+      header: "Trust",
+      align: "right",
+      render: (user) => <div className="text-right"><span className="text-[12px] font-semibold tabular-nums text-slate-200">{user.trust_score}</span><span className="block text-[10px] text-slate-500">{user.trust_band}</span></div>,
+    },
+    {
+      key: "deals",
+      header: "Completed deals",
+      align: "right",
+      render: (user) => <span className="tabular-nums text-slate-300">{user.completed_deals.toLocaleString("en-KE")}</span>,
+    },
+    {
+      key: "rating",
+      header: "Rating",
+      align: "right",
+      render: (user) => <span className="tabular-nums text-slate-300">{user.rating ?? "—"}</span>,
+    },
+    {
+      key: "registered",
+      header: "Registered",
+      render: (user) => <span className="text-[11px] text-slate-400">{user.created_at ? formatDateTime(user.created_at) : "—"}</span>,
+    },
+  ];
+  return <DataTable rows={visibleUsers} columns={columns} label="Users" rowKey={(user) => user.id} />;
 }

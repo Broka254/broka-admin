@@ -14,6 +14,19 @@ export function formatKES(minor: number, currency: string = KES_CURRENCY): strin
   return `${sign}${currency} ${formatted}`;
 }
 
+/** Format a major-unit KES amount (whole shillings), e.g. `KES 68,000`.
+ * Operational deal, payment and ledger payloads use major units; revenue
+ * endpoints explicitly use `_minor` fields and must keep using formatKES. */
+export function formatKesAmount(amount: number, currency: string = KES_CURRENCY): string {
+  if (!Number.isFinite(amount)) return `${currency} 0`;
+  const hasCents = Math.abs(amount) % 1 !== 0;
+  const formatted = new Intl.NumberFormat("en-KE", {
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
+  }).format(amount);
+  return `${currency} ${formatted}`;
+}
+
 /** Compact axis-friendly money label, e.g. `KES 12K`. Input is minor units. */
 export function formatCompact(minor: number, currency: string = KES_CURRENCY): string {
   if (!Number.isFinite(minor)) return `${currency} 0`;

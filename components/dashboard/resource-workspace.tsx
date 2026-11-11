@@ -6,7 +6,8 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AdminRequestError, useAdminResource, useAdminUsers } from "@/hooks/use-admin-resource";
-import { ResourceState, SectionEyebrow, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
+import { PageHeader } from "@/components/intelligence/visuals";
+import { Skeleton, ResourceState, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import { UsersTable } from "@/components/dashboard/users-table";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
 import { MarketplaceAnalytics } from "@/components/dashboard/analytics/marketplace-analytics";
@@ -157,7 +158,7 @@ function DebouncedSearchInput({ placeholder, initialValue, onCommit }: { placeho
     if ((initialValue ?? "") !== (committed ?? "")) onCommit(committed);
   }, [committed]);
   useEffect(() => { setValue(initialValue); }, [initialValue]);
-  return <div className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden="true" /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} aria-label={placeholder} className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-600" /></div>;
+  return <div className="relative min-w-0 flex-1 basis-[220px]"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden="true" /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} aria-label={placeholder} className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-600" /></div>;
 }
 
 function FilterToolbar({ definition, params, onSet, onSetMany }: { definition: WorkspaceDefinition; params: URLSearchParams; onSet: (param: string, value: string | null) => void; onSetMany: (updates: Record<string, string | null>) => void }) {
@@ -170,20 +171,20 @@ function FilterToolbar({ definition, params, onSet, onSetMany }: { definition: W
   // threw the cursor out of the search box mid-word.
   const formKey = Array.from(params.entries()).filter(([param]) => param !== "search" && param !== "page").map(([param, value]) => `${param}=${value}`).join("&");
   return <section className="data-panel p-4">
-    <form key={formKey} className="flex flex-col gap-3 lg:flex-row lg:items-center" onSubmit={(event) => event.preventDefault()}>
+    <form key={formKey} className="flex flex-wrap items-center gap-3" onSubmit={(event) => event.preventDefault()}>
       {(definition.filters ?? []).map((filter) => {
         if (filter.kind === "search" && filter.param === "search") {
           return <DebouncedSearchInput key={filter.param} placeholder={filter.placeholder} initialValue={params.get(filter.param) ?? ""} onCommit={(value) => onSet("search", value)} />;
         }
         return null;
       })}
-      {(definition.filters ?? []).filter((filter): filter is Extract<WsFilter, { kind: "search" }> => filter.kind === "search" && filter.param !== "search").map((filter) => <input key={filter.param} defaultValue={params.get(filter.param) ?? ""} placeholder={filter.placeholder} aria-label={filter.placeholder} onBlur={(event) => onSet(filter.param, event.target.value.trim() || null)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onSet(filter.param, event.currentTarget.value.trim() || null); } }} className="h-10 rounded-lg border border-white/[0.08] bg-black/15 px-3 text-xs text-slate-200 placeholder:text-slate-600" />)}
+      {(definition.filters ?? []).filter((filter): filter is Extract<WsFilter, { kind: "search" }> => filter.kind === "search" && filter.param !== "search").map((filter) => <input key={filter.param} defaultValue={params.get(filter.param) ?? ""} placeholder={filter.placeholder} aria-label={filter.placeholder} onBlur={(event) => onSet(filter.param, event.target.value.trim() || null)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onSet(filter.param, event.currentTarget.value.trim() || null); } }} className="h-10 w-full min-w-0 rounded-lg border border-white/[0.08] bg-black/15 px-3 text-xs text-slate-200 placeholder:text-slate-600 sm:w-auto sm:min-w-[180px]" />)}
       {(definition.filters ?? []).filter((filter) => filter.kind === "select").map((filter) => {
         const dynamicOptions = filter.param === "status" && definition.resource === "payments" ? (source === "mpesa" ? options(MPESA_STATUSES) : source === "zetupay" ? options(ZETUPAY_STATUSES) : []) : filter.options;
         if (!dynamicOptions.length) return null;
-        return <label key={filter.param} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-slate-400"><SlidersHorizontal size={14} aria-hidden="true" /><span className="text-slate-500">{filter.label}</span><select defaultValue={params.get(filter.param) ?? definition.defaults?.[filter.param] ?? "all"} onChange={(event) => { if (filter.param === "source") onSetMany({ status: null, [filter.param]: event.target.value }); else onSet(filter.param, event.target.value); }} className="bg-transparent text-xs font-semibold text-slate-200 outline-none [&>option]:bg-[#0b0e1a]">{dynamicOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={13} aria-hidden="true" /></label>;
+        return <label key={filter.param} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-slate-400"><SlidersHorizontal size={14} aria-hidden="true" /><span className="text-slate-500">{filter.label}</span><select defaultValue={params.get(filter.param) ?? definition.defaults?.[filter.param] ?? "all"} onChange={(event) => { if (filter.param === "source") onSetMany({ status: null, [filter.param]: event.target.value }); else onSet(filter.param, event.target.value); }} className="bg-transparent text-xs font-semibold text-slate-200 outline-none [&>option]:bg-[#0b0e1a]">{dynamicOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={13} aria-hidden="true" /></label>;
       })}
-      <button type="submit" className="focus-ring h-10 rounded-lg border border-[#8b75ff]/35 bg-[#8b75ff]/10 px-4 text-xs font-semibold text-[#ded8ff] transition hover:bg-[#8b75ff]/20">Apply search</button>
+      <button type="submit" className="focus-ring h-10 shrink-0 rounded-lg border border-[#8b75ff]/35 bg-[#8b75ff]/10 px-4 text-xs font-semibold text-[#ded8ff] transition hover:bg-[#8b75ff]/20">Apply search</button>
       {active.length ? <button type="button" onClick={() => onSetMany(Object.fromEntries(active.map((filter) => [filter.param, null])))} className="focus-ring inline-flex h-10 items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 text-xs font-semibold text-slate-400 transition hover:text-slate-200"><X size={13} aria-hidden="true" />Clear</button> : null}
     </form>
   </section>;
@@ -222,14 +223,14 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
 
   if (definition.custom) {
     return <div className="space-y-6">
-      <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between"><div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p></div><StatusBadge tone="neutral">Time-series surface</StatusBadge></section>
+      <PageHeader eyebrow={definition.eyebrow} title={definition.title} description={definition.description} actions={<StatusBadge tone="neutral">Time-series surface</StatusBadge>} />
       {definition.custom === "marketplaceAnalytics" ? <MarketplaceAnalytics /> : <UsersAnalytics />}
     </div>;
   }
 
   if (!definition.resource) {
     return <div className="space-y-6">
-      <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between"><div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p></div><StatusBadge tone="neutral">{definition.endpoint ? "Read-only surface" : "Endpoint required"}</StatusBadge></section>
+      <PageHeader eyebrow={definition.eyebrow} title={definition.title} description={definition.description} actions={<StatusBadge tone="neutral">{definition.endpoint ? "Read-only surface" : "Endpoint required"}</StatusBadge>} />
       <UnavailablePanel title={definition.endpoint ? "Redirected surface" : "Backend endpoint not present"} detail={definition.missing} />
     </div>;
   }
@@ -248,18 +249,20 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
   const empty = state === "ready" && data ? (isUsers ? (usersQuery.data?.rows.length ?? 0) === 0 : isEmptyList(data)) : false;
 
   return <div className="space-y-6">
-    <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-end lg:justify-between">
-      <div><SectionEyebrow>{definition.eyebrow}</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{definition.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{definition.description}</p></div>
-      <div className="flex flex-wrap items-center gap-2">
+    <PageHeader
+      eyebrow={definition.eyebrow}
+      title={definition.title}
+      description={definition.description}
+      actions={<>
         {typeof total === "number" ? <StatusBadge tone="info">{total.toLocaleString()} matching record{total === 1 ? "" : "s"}</StatusBadge> : null}
         <StatusBadge tone={state === "ready" ? "success" : state === "loading" || endpointMissing ? "warning" : "danger"}>{state === "ready" ? "Live backend data" : state === "loading" ? "Loading" : endpointMissing ? "Awaiting backend upgrade" : "Unavailable"}</StatusBadge>
-      </div>
-    </section>
+      </>}
+    />
 
     <FilterToolbar definition={definition} params={params} onSet={setParam} onSetMany={setParams} />
 
     <section className="data-panel overflow-hidden">
-      {state !== "ready" || !data ? <div className="p-5"><ResourceState state={endpointMissing ? "unavailable" : state === "ready" ? "loading" : state} message={stateMessage} /></div> : empty ? <div className="p-5"><ResourceState state="empty" message="No records match the current backend filters." /></div> : isUsers ? <UsersTable users={usersQuery.data?.rows ?? []} /> : <ValidatedResourceView resource={definition.resource} data={data} />}
+      {state === "loading" ? <div className="space-y-2 p-4" aria-busy="true">{[0, 1, 2, 3, 4, 5].map((row) => <Skeleton key={row} className="h-12" />)}</div> : state !== "ready" || !data ? <div className="p-5"><ResourceState state={endpointMissing ? "unavailable" : state === "ready" ? "loading" : state} message={stateMessage} /></div> : empty ? <div className="p-5"><ResourceState state="empty" message="No records match the current backend filters." /></div> : isUsers ? <UsersTable users={usersQuery.data?.rows ?? []} /> : <ValidatedResourceView resource={definition.resource} data={data} />}
       {paginated && state === "ready" ? <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 text-xs text-slate-500"><span>Page {page}{typeof total === "number" ? ` · ${total.toLocaleString()} total` : isUsers ? " · filtered total unavailable" : ""}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setParam("page", String(page - 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Previous</button><button disabled={!hasNext} onClick={() => setParam("page", String(page + 1))} className="focus-ring rounded-lg border border-white/[0.08] px-3 py-1.5 font-semibold text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div> : null}
     </section>
   </div>;

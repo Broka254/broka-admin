@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* ───────────────────────────────────────────────────────────────────────────
+   BROKA command design system
+   Ink-navy surfaces, violet primary actions, cyan system signals, restrained
+   amber commerce cues. Tokens are the single source of truth for colour,
+   elevation, typography and motion across every admin surface.
+   ─────────────────────────────────────────────────────────────────────────── */
+
 :root {
   --broka-bg: #05060d;
   --broka-surface: #080a14;
@@ -7,73 +14,105 @@
   --broka-surface-3: #13182b;
   --broka-surface-4: #1a2035;
   --broka-text: #f7f7fc;
-  --broka-muted: #c5cada;
-  --broka-subtle: #9ba4bc;
+  --broka-muted: #c3c9da;
+  --broka-subtle: #98a2ba;
   --broka-violet: #8b75ff;
   --broka-violet-soft: #ded8ff;
+  --broka-indigo: #6366f1;
   --broka-cyan: #54d7e9;
+  --broka-blue: #60a5fa;
   --broka-amber: #dbb75d;
-  --broka-outline: rgba(195, 202, 226, 0.13);
+  --broka-emerald: #34d399;
+  --broka-rose: #fb7185;
+  --broka-outline: rgba(195, 202, 226, 0.12);
   --broka-outline-strong: rgba(195, 202, 226, 0.22);
+  --broka-glow-violet: 0 0 32px rgb(139 117 255 / 0.22);
+  --broka-radius: 1.15rem;
   --background: var(--broka-bg);
   --foreground: var(--broka-text);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: var(--broka-bg); }
+html { min-width: 320px; background: var(--broka-bg); scroll-behavior: smooth; }
 body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(ellipse 70% 45% at 8% -8%, rgb(139 117 255 / 0.13), transparent 68%),
+    radial-gradient(ellipse 70% 45% at 8% -8%, rgb(139 117 255 / 0.14), transparent 68%),
     radial-gradient(ellipse 55% 42% at 96% 100%, rgb(84 215 233 / 0.08), transparent 70%),
-    var(--broka-bg);
+    linear-gradient(180deg, #05060d 0%, #05060d 60%, #06070f 100%);
   color: var(--broka-text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans), Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "cv02" 1, "cv03" 1, "cv04" 1, "ss01" 1;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 a { color: inherit; text-decoration: none; }
-::selection { background: rgb(139 117 255 / 0.3); color: #fff; }
-.font-display { font-family: Montserrat, Inter, ui-sans-serif, system-ui, sans-serif; }
+::selection { background: rgb(139 117 255 / 0.32); color: #fff; }
+.font-display { font-family: var(--font-display), Montserrat, Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.02em; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Fine constellation lattice, drawn in CSS so nothing animates continuously. */
+.constellation {
+  background-image:
+    radial-gradient(circle at 18% 22%, rgb(139 117 255 / 0.55) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 64% 12%, rgb(84 215 233 / 0.5) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 42% 58%, rgb(195 202 226 / 0.35) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 82% 72%, rgb(139 117 255 / 0.4) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 9% 82%, rgb(84 215 233 / 0.32) 0 1px, transparent 1.6px),
+    linear-gradient(115deg, transparent 24%, rgb(139 117 255 / 0.07) 24.1%, transparent 24.6%),
+    linear-gradient(28deg, transparent 62%, rgb(84 215 233 / 0.06) 62.1%, transparent 62.6%);
+  background-size: 340px 300px, 420px 360px, 300px 280px, 380px 340px, 260px 240px, 100% 100%, 100% 100%;
+  mask-image: radial-gradient(ellipse 92% 80% at 32% 24%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 92% 80% at 32% 24%, #000 20%, transparent 78%);
+}
+
+/* ── Surfaces ─────────────────────────────────────────────────────────────── */
 
 .data-panel {
   border: 1px solid var(--broka-outline);
-  border-radius: 1.1rem;
-  background: linear-gradient(145deg, rgb(19 24 43 / 0.88), rgb(8 10 20 / 0.94));
-  box-shadow: 0 22px 70px rgb(0 0 0 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.025);
+  border-radius: var(--broka-radius);
+  background: linear-gradient(145deg, rgb(19 24 43 / 0.82), rgb(8 10 20 / 0.94));
+  box-shadow: 0 22px 70px rgb(0 0 0 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.028);
 }
-.metric-card {
-  display: block;
-  border: 1px solid var(--broka-outline);
-  border-radius: 1rem;
-  background: linear-gradient(145deg, rgb(19 24 43 / 0.78), rgb(8 10 20 / 0.92));
-  padding: 1.1rem;
-  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
-}
-.metric-card:hover { border-color: rgb(139 117 255 / 0.42); background: linear-gradient(145deg, rgb(26 32 53 / 0.9), rgb(10 13 27 / 0.96)); transform: translateY(-2px); }
-.contract-panel { border: 1px solid rgb(84 215 233 / 0.16); border-radius: 1rem; background: linear-gradient(110deg, rgb(84 215 233 / 0.07), rgb(139 117 255 / 0.04)); }
-
-.dashboard-grid { display: grid; gap: 1rem; }
-.dashboard-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.focus-ring:focus-visible { outline: 2px solid var(--broka-violet); outline-offset: 3px; }
-
-@media (max-width: 900px) { .dashboard-grid-2 { grid-template-columns: 1fr; } }
-
-/* ── Founder intelligence surfaces ─────────────────────────────────────── */
-
-/* Glass panel with a hairline gradient edge (violet → cyan). */
 .holo-panel {
   position: relative;
   border-radius: 1.25rem;
   background:
-    linear-gradient(150deg, rgb(19 24 43 / 0.9), rgb(8 10 20 / 0.95)) padding-box,
-    linear-gradient(135deg, rgb(139 117 255 / 0.32), rgb(195 202 226 / 0.08) 38%, rgb(84 215 233 / 0.22)) border-box;
+    linear-gradient(150deg, rgb(19 24 43 / 0.88), rgb(8 10 20 / 0.95)) padding-box,
+    linear-gradient(135deg, rgb(139 117 255 / 0.3), rgb(195 202 226 / 0.07) 38%, rgb(84 215 233 / 0.22)) border-box;
   border: 1px solid transparent;
   box-shadow: 0 24px 80px rgb(0 0 0 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.03);
 }
+.glass-panel {
+  border: 1px solid rgb(195 202 226 / 0.1);
+  border-radius: 1rem;
+  background: rgb(8 10 20 / 0.55);
+  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+.contract-panel { border: 1px solid rgb(84 215 233 / 0.16); border-radius: 1rem; background: linear-gradient(110deg, rgb(84 215 233 / 0.06), rgb(139 117 255 / 0.04)); }
+.raised-panel { border: 1px solid var(--broka-outline); border-radius: 0.9rem; background: linear-gradient(150deg, rgb(19 24 43 / 0.78), rgb(8 10 20 / 0.9)); }
+.inset-panel { border: 1px solid rgb(195 202 226 / 0.07); border-radius: 0.85rem; background: rgb(5 6 13 / 0.38); }
+
+/* Hairline instrument rail used above panels and in section headers. */
+.hud-rule { height: 1px; border: 0; background: linear-gradient(90deg, transparent, rgb(139 117 255 / 0.35), rgb(84 215 233 / 0.22), transparent); }
+.hud-label { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--broka-subtle); }
+
+.metric-card {
+  display: block;
+  border: 1px solid var(--broka-outline);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgb(19 24 43 / 0.72), rgb(8 10 20 / 0.92));
+  padding: 1.1rem;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+.metric-card:hover { border-color: rgb(139 117 255 / 0.42); background: linear-gradient(145deg, rgb(26 32 53 / 0.9), rgb(10 13 27 / 0.96)); transform: translateY(-2px); box-shadow: 0 18px 44px rgb(0 0 0 / 0.28); }
+.metric-card:focus-visible { outline: 2px solid var(--broka-violet); outline-offset: 3px; }
 
 .stat-tile {
   position: relative;
@@ -96,13 +135,11 @@ a.stat-tile:hover { border-color: rgb(139 117 255 / 0.45); transform: translateY
 
 .hero-cockpit {
   background:
-    radial-gradient(120% 140% at 0% 0%, rgb(139 117 255 / 0.16), transparent 55%),
+    radial-gradient(120% 140% at 0% 0%, rgb(139 117 255 / 0.17), transparent 55%),
     radial-gradient(90% 120% at 100% 100%, rgb(84 215 233 / 0.1), transparent 60%),
     linear-gradient(125deg, rgb(19 24 43 / 0.97), rgb(8 10 20 / 0.94));
-  box-shadow: 0 30px 90px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  box-shadow: 0 30px 90px rgb(0 0 0 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.045);
 }
-
-/* Faint instrument grid behind hero and report headers. */
 .cockpit-grid {
   background-image:
     linear-gradient(rgb(139 117 255 / 0.07) 1px, transparent 1px),
@@ -117,12 +154,14 @@ a.stat-tile:hover { border-color: rgb(139 117 255 / 0.45); transform: translateY
   flex-direction: column;
   align-items: center;
   text-align: center;
-  border: 1px solid rgb(195 202 226 / 0.08);
+  border: 1px solid rgb(195 202 226 / 0.09);
   border-radius: 1.1rem;
-  background: rgb(5 6 13 / 0.45);
+  background: linear-gradient(160deg, rgb(13 17 32 / 0.72), rgb(5 6 13 / 0.55));
   padding: 1rem 0.75rem;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  transition: border-color 180ms ease, transform 180ms ease;
 }
+a.gauge-card:hover { border-color: rgb(139 117 255 / 0.4); transform: translateY(-2px); }
 
 .ring-arc { transition: stroke-dasharray 900ms cubic-bezier(0.22, 1, 0.36, 1); }
 
@@ -148,13 +187,68 @@ a.stat-tile:hover { border-color: rgb(139 117 255 / 0.45); transform: translateY
   100% { transform: scale(1.8); opacity: 0; }
 }
 
-.insight-card { transition: border-color 180ms ease, transform 180ms ease; }
-.insight-card:hover { border-color: rgb(139 117 255 / 0.3); transform: translateY(-1px); }
+.insight-card { transition: border-color 180ms ease, transform 180ms ease, background 180ms ease; }
+.insight-card:hover { border-color: rgb(139 117 255 / 0.34); transform: translateY(-1px); }
+
+/* ── Data tables ──────────────────────────────────────────────────────────── */
+
+.table-shell { width: 100%; overflow-x: auto; border-radius: 0.9rem; border: 1px solid var(--broka-outline); }
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 12px; }
+.data-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: rgb(12 16 32 / 0.96);
+  border-bottom: 1px solid var(--broka-outline);
+  padding: 0.7rem 0.85rem;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #8e98b2;
+  white-space: nowrap;
+}
+.data-table tbody td, .data-table tbody th { border-bottom: 1px solid rgb(195 202 226 / 0.055); padding: 0.8rem 0.85rem; vertical-align: middle; }
+.data-table tbody tr:last-child td, .data-table tbody tr:last-child th { border-bottom: 0; }
+.data-table tbody tr { transition: background 140ms ease; }
+.data-table tbody tr:hover { background: rgb(139 117 255 / 0.045); }
+.data-table tbody tr[aria-selected="true"], .data-table tbody tr[aria-current="true"] { background: rgb(139 117 255 / 0.1); }
+.data-table .cell-primary { font-size: 13px; font-weight: 600; color: #f0f1fa; }
+.data-table .cell-secondary { margin-top: 2px; font-size: 10.5px; color: #7d87a0; }
+.data-table .cell-number { font-variant-numeric: tabular-nums; text-align: right; color: #d5d9e6; }
+
+/* ── Chrome ───────────────────────────────────────────────────────────────── */
+
+.focus-ring:focus-visible { outline: 2px solid var(--broka-violet); outline-offset: 3px; border-radius: 6px; }
+.skip-link { position: fixed; left: 1rem; top: -4rem; z-index: 100; border-radius: 0.6rem; background: var(--broka-violet); padding: 0.6rem 1rem; color: #fff; font-size: 12px; font-weight: 700; transition: top 120ms ease; }
+.skip-link:focus { top: 1rem; }
 
 .drawer-panel { animation: drawer-in 220ms cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes drawer-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 .palette-panel { animation: palette-in 160ms ease-out; }
 @keyframes palette-in { from { transform: translateY(-8px) scale(0.985); opacity: 0; } to { transform: none; opacity: 1; } }
+.fade-up { animation: fade-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: rgb(195 202 226 / 0.055);
+}
+.skeleton::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(195 202 226 / 0.07), transparent);
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+.scroll-thin { scrollbar-width: thin; scrollbar-color: rgb(139 117 255 / 0.28) transparent; }
+.scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: rgb(139 117 255 / 0.25); border-radius: 999px; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+.dashboard-grid { display: grid; gap: 1rem; }
+.dashboard-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .dashboard-grid-2 { grid-template-columns: 1fr; } }
 
 /* Reports print as plain documents: shell hidden, light ink, no glow. */
 @media print {
@@ -171,5 +265,11 @@ a.stat-tile:hover { border-color: rgb(139 117 255 / 0.45); transform: translateY
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  html { scroll-behavior: auto !important; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

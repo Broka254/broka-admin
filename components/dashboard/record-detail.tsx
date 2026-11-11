@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAdminDetail } from "@/hooks/use-admin-resource";
 import { ResourceState, SectionEyebrow, StatusBadge } from "@/components/ui/primitives";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
+import { formatDateTime } from "@/lib/format";
 import { formatRouteLabel } from "@/lib/utils";
 
 const copy = {
@@ -24,14 +25,62 @@ type UserAction = "flag" | "unflag" | "recompute-trust" | "promote-admin";
 const ACTION_LABELS: Record<UserAction, string> = { flag: "Flag user", unflag: "Clear flag", "recompute-trust": "Recompute trust", "promote-admin": "Promote to admin" };
 const REASON_REQUIRED: Record<UserAction, boolean> = { flag: true, unflag: false, "recompute-trust": false, "promote-admin": true };
 
+const RELATION_PATHS: Record<string, string> = {
+  buyer_id: "users", seller_id: "users", owner_id: "users", user_id: "users", reporter_id: "users",
+  listing_id: "listings", deal_id: "deals", store_id: "stores", dispute_id: "disputes",
+};
+
+function looseFieldGroup(key: string): "Identity & status" | "Money" | "Relationships" | "Timestamps" | "Other" {
+  if (["id", "name", "title", "slug", "status", "category", "county", "location_name", "listing_type", "dispute_type", "type", "is_active", "is_featured", "is_premium", "is_flagged"].includes(key)) return "Identity & status";
+  if (/(price|amount|commission|fund|fee|revenue|cost|profit|balance|payout|escrow)/.test(key) && !key.endsWith("_id")) return "Money";
+  if (key.endsWith("_id")) return "Relationships";
+  if (key.endsWith("_at") || key === "created" || key === "updated" || key === "date") return "Timestamps";
+  return "Other";
+}
+
+function looseFieldValue(key: string, value: unknown): React.ReactNode {
+  if (value === null || value === undefined || value === "") return <span className="text-slate-600">—</span>;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") {
+    if (looseFieldGroup(key) === "Money") return new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 2 }).format(value);
+    return value.toLocaleString("en-KE");
+  }
+  if (typeof value === "string") {
+    const related = RELATION_PATHS[key];
+    if (related && value.length > 2) return <Link href={`/${related}/${encodeURIComponent(value)}`} className="focus-ring font-mono text-[11px] font-semibold text-[#c9beff] hover:text-white">{value.slice(0, 8)}…</Link>;
+    if (key.endsWith("_at") && !Number.isNaN(Date.parse(value))) return <span className="tabular-nums">{formatDateTime(value)}</span>;
+    if (key === "status") return <StatusBadge tone={["active", "released", "completed", "success"].includes(value) ? "success" : ["failed", "cancelled", "closed_refunded"].includes(value) ? "danger" : ["pending", "disputed", "escalated"].includes(value) ? "warning" : "info"}>{value.replaceAll("_", " ")}</StatusBadge>;
+    return <span className="break-words">{value}</span>;
+  }
+  return <code className="block max-h-32 overflow-auto whitespace-pre-wrap break-words rounded bg-black/20 p-2 text-[10px] text-slate-400">{JSON.stringify(value, null, 2)}</code>;
+}
+
 function LooseDetail({ resource, resourceId }: { resource: "listings" | "disputes" | "stores"; resourceId: string }) {
   const detailResource = resource === "listings" ? "listingDetail" : resource === "disputes" ? "disputeDetail" : "storeDetail";
   const detail = useAdminDetail(detailResource, resourceId, true);
   if (detail.isLoading) return <div className="data-panel p-5"><ResourceState state="loading" message={`Loading ${resource.slice(0, -1)} detail`} /></div>;
   if (detail.isError) return <div className="data-panel p-5"><ResourceState state={detail.error && "status" in detail.error && (detail.error as { status: number }).status === 404 ? "empty" : "error"} message={detail.error instanceof Error ? detail.error.message : `Unable to load this ${resource.slice(0, -1)}.`} /></div>;
   if (!detail.data) return null;
-  const entries = Object.entries(detail.data as Record<string, unknown>);
-  return <section className="data-panel p-5"><p className="text-sm font-semibold text-slate-200">Record fields ({entries.length})</p><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">{entries.map(([key, value]) => <div key={key} className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><dt className="text-[10px] uppercase tracking-[0.1em] text-slate-600">{key.replaceAll("_", " ")}</dt><dd className="mt-1 break-words font-mono text-xs text-slate-200">{typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : value === null || value === undefined ? "—" : JSON.stringify(value)}</dd></div>)}</dl></section>;
+  const record = detail.data as Record<string, unknown>;
+  const entries = Object.entries(record);
+  const groups = ["Identity & status", "Money", "Relationships", "Timestamps", "Other"] as const;
+  const status = typeof record.status === "string" ? record.status : null;
+  return <section className="data-panel p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><p className="text-sm font-semibold text-slate-200">Verified record fields ({entries.length})</p><p className="mt-1 text-[11px] text-slate-500">Read-only payload from the authenticated admin detail endpoint. Relationships link to their record pages; money is shown exactly as the backend returns it.</p></div>
+      {status ? <StatusBadge tone={["active", "released", "completed", "success"].includes(status) ? "success" : ["failed", "cancelled", "closed_refunded"].includes(status) ? "danger" : ["pending", "disputed", "escalated"].includes(status) ? "warning" : "info"}>{status.replaceAll("_", " ")}</StatusBadge> : null}
+    </div>
+    <div className="mt-4 space-y-4">
+      {groups.map((group) => {
+        const rows = entries.filter(([key]) => looseFieldGroup(key) === group);
+        if (!rows.length) return null;
+        return <div key={group}>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{group}</p>
+          <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{rows.map(([key, value]) => <div key={key} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><dt className="text-[9px] uppercase tracking-[0.1em] text-slate-600">{key.replaceAll("_", " ")}</dt><dd className="mt-1 text-[12px] text-slate-200">{looseFieldValue(key, value)}</dd></div>)}</dl>
+        </div>;
+      })}
+    </div>
+  </section>;
 }
 
 export function RecordDetail({ resource, resourceId }: { resource: DetailResource; resourceId: string }) {
@@ -102,10 +151,11 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
   const user = userDetail.data?.user;
 
   return <div className="space-y-6">
-    <section className="border-b border-white/[0.07] pb-6">
-      <Link href={`/${resource}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-amber-200"><ArrowLeft size={14} />Back to {formatRouteLabel(resource)}</Link>
-      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div><SectionEyebrow>{formatRouteLabel(resource)} operations</SectionEyebrow><h1 className="font-display text-3xl font-semibold tracking-[-0.05em] text-white">{user ? user.name : config.title}</h1><p className="mt-2 text-sm text-slate-500">{config.description} <code className="ml-1 rounded bg-white/[0.05] px-1.5 py-0.5 text-slate-300">{resourceId.slice(0, 8)}</code></p></div>
+    <section className="relative overflow-hidden rounded-2xl border border-white/[0.075] bg-[linear-gradient(125deg,rgba(19,24,43,0.8),rgba(8,10,20,0.92))] px-5 py-5">
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-60 constellation" aria-hidden="true" />
+      <Link href={`/${resource}`} className="focus-ring relative inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-amber-200"><ArrowLeft size={14} aria-hidden="true" />Back to {formatRouteLabel(resource)}</Link>
+      <div className="relative mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div><SectionEyebrow>{formatRouteLabel(resource)} operations</SectionEyebrow><h1 className="font-display text-2xl font-semibold tracking-[-0.05em] text-white sm:text-3xl">{user ? user.name : config.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{config.description} <code className="ml-1 rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[11px] text-slate-300">{resourceId.slice(0, 12)}</code></p></div>
         {user ? <div className="flex flex-col items-start gap-3 md:items-end"><div className="flex flex-wrap gap-2"><StatusBadge tone={user.is_flagged ? "danger" : "success"}>{user.is_flagged ? "Flagged" : "Not flagged"}</StatusBadge><StatusBadge tone="info">Trust {user.trust_score} · {user.trust_band}</StatusBadge>{user.is_admin ? <StatusBadge tone="warning">Admin</StatusBadge> : null}</div><div className="flex flex-wrap gap-3 text-xs font-semibold"><Link href={`/complaints?about=${encodeURIComponent(resourceId)}&queue=all`} className="focus-ring text-amber-200 hover:text-amber-100">Complaints about them</Link><Link href={`/complaints?user=${encodeURIComponent(resourceId)}&queue=all`} className="focus-ring text-[#a895ff] hover:text-[#ded8ff]">What they reported</Link></div></div> : null}
       </div>
     </section>

@@ -6,8 +6,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ComplaintDrawer } from "@/components/complaints/complaint-drawer";
-import { Chip, DeltaChip, Panel, StatTile } from "@/components/intelligence/visuals";
-import { ResourceState, SectionEyebrow, StatusBadge } from "@/components/ui/primitives";
+import { Chip, DeltaChip, PageHeader, Panel, StatTile } from "@/components/intelligence/visuals";
+import { ResourceState, StatusBadge } from "@/components/ui/primitives";
 import { isEndpointMissing, useAdminResource } from "@/hooks/use-admin-resource";
 import { buildFeedbackParams, COMPLAINT_PAGE_SIZE, complaintQueue, complaintSort, type ComplaintQueue } from "@/hooks/use-complaints";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -174,17 +174,16 @@ export function ComplaintsDesk() {
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <SectionEyebrow>Trust desk</SectionEyebrow>
-          <h1 className="font-display text-3xl font-bold tracking-[-0.05em] text-white">Complaints & feedback</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Everything users report from the BROKA app, with first-reply deadlines by severity. A reply or a status change is pushed to the reporter&apos;s phone and appears in their Feedback &amp; complaints screen.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        eyebrow="Trust desk"
+        title="Complaints & feedback"
+        description="Everything users report from the BROKA app, with first-reply deadlines by severity. A reply or a status change is pushed to the reporter's phone and appears in their Feedback & complaints screen."
+        icon={<Inbox size={14} />}
+        actions={<>
           {s ? <StatusBadge tone={s.sla_breached ? "danger" : "success"}>{s.sla_breached ? `${s.sla_breached} past deadline` : "All inside deadlines"}</StatusBadge> : null}
           <button type="button" onClick={() => { void list.refetch(); void stats.refetch(); }} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white"><RefreshCw size={12} aria-hidden="true" />Refresh</button>
-        </div>
-      </section>
+        </>}
+      />
 
       {missing ? <ResourceState state="unavailable" message="The complaints desk needs the upgraded BROKA API (GET /admin/feedback with triage fields). It activates after the backend deploy." /> : null}
 

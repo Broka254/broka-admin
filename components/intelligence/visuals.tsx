@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Minus, X } from "lucide-react";
 import Link from "next/link";
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { InfoTip } from "@/components/ui/tooltip";
 import { changeTone, formatChange, isInternalHref, type GoodDirection, type Tone } from "@/lib/intelligence";
 
 const TONE_TEXT: Record<Tone, string> = {
@@ -40,6 +41,36 @@ export function DeltaChip({ change, good = "up", label = "vs previous period", c
     <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums", TONE_CHIP[tone], className)} title={`${text} ${label}`}>
       <Icon size={12} aria-hidden="true" />
       <span>{text}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+/**
+ * A numeric change expressed in absolute units (users, listings, KES) rather
+ * than a percentage. Used where a percent would overstate a tiny base.
+ */
+export function AbsoluteDelta({ current, previous, format, good = "up", label = "vs previous window" }: {
+  current: number | null | undefined;
+  previous: number | null | undefined;
+  format: (value: number) => string;
+  good?: GoodDirection;
+  label?: string;
+}) {
+  if (current === null || current === undefined || previous === null || previous === undefined) {
+    return <span className="text-[11px] text-slate-500">No comparison</span>;
+  }
+  const delta = current - previous;
+  const pct = previous === 0 ? null : (delta / previous) * 100;
+  const tone = changeTone(delta, good);
+  const Icon = delta === 0 ? Minus : delta > 0 ? ArrowUpRight : ArrowDownRight;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+      <span className={cn("inline-flex items-center gap-1 font-semibold tabular-nums", toneText(tone))}>
+        <Icon size={12} aria-hidden="true" />
+        {delta > 0 ? "+" : ""}{format(delta)}
+      </span>
+      {pct !== null ? <span className="tabular-nums">({formatChange(pct)})</span> : <span>from zero</span>}
       <span className="sr-only">{label}</span>
     </span>
   );
@@ -105,13 +136,60 @@ export function Ring({ value, target, size = 136, stroke = 10, label, caption, f
 }
 
 /** Horizontal progress toward a target. */
-export function ProgressBar({ value, max = 100, tone = "info", label }: { value: number | null | undefined; max?: number; tone?: Tone; label: string }) {
-  const pct = value === null || value === undefined || !Number.isFinite(value) || max <= 0 ? 0 : Math.max(0, Math.min(100, (value / max) * 100));
+export function ProgressBar({ value, max = 100, tone = "info", label, target }: { value: number | null | undefined; max?: number; tone?: Tone; label: string; target?: number }) {
+  const known = value !== null && value !== undefined && Number.isFinite(value) && max > 0;
+  const pct = known ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  const targetPct = target === undefined || max <= 0 ? null : Math.max(0, Math.min(100, (target / max) * 100));
   const fill = tone === "success" ? "from-emerald-400 to-cyan-300" : tone === "warning" ? "from-amber-300 to-[#dbb75d]" : tone === "danger" ? "from-rose-400 to-amber-300" : "from-[#8b75ff] to-[#54d7e9]";
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+    <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/[0.06]" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={known ? Math.round(pct) : undefined}>
       <div className={cn("h-full rounded-full bg-gradient-to-r transition-[width] duration-700", fill)} style={{ width: `${pct}%` }} />
+      {targetPct !== null ? <span className="absolute inset-y-[-2px] w-[2px] rounded-full bg-[#dbb75d]/90" style={{ left: `calc(${targetPct}% - 1px)` }} aria-hidden="true" /> : null}
     </div>
+  );
+}
+
+/**
+ * Two-bar comparison for a snapshot metric. The previous bar is deliberately
+ * muted: it is context, not a second headline number.
+ */
+export function ComparisonBars({ current, previous, format, label, currentLabel = "This window", previousLabel = "Previous" }: {
+  current: number;
+  previous: number;
+  format: (value: number) => string;
+  label: string;
+  currentLabel?: string;
+  previousLabel?: string;
+}) {
+  const max = Math.max(1, current, previous);
+  return (
+    <figure aria-label={`${label}: ${currentLabel} ${format(current)}, ${previousLabel} ${format(previous)}`} className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="w-14 shrink-0 text-[10px] uppercase tracking-[0.1em] text-slate-500">{currentLabel}</span>
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.05]"><div className="h-full rounded-full bg-gradient-to-r from-[#8b75ff] to-[#54d7e9]" style={{ width: `${(current / max) * 100}%` }} /></div>
+        <span className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-white">{format(current)}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-14 shrink-0 text-[10px] uppercase tracking-[0.1em] text-slate-600">{previousLabel}</span>
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.04]"><div className="h-full rounded-full bg-slate-500/60" style={{ width: `${(previous / max) * 100}%` }} /></div>
+        <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{format(previous)}</span>
+      </div>
+    </figure>
+  );
+}
+
+/** A dependency-free sparkline for compact trend context. */
+export function Sparkline({ values, label, height = 34, tone = "#8b75ff" }: { values: number[]; label: string; height?: number; tone?: string }) {
+  if (values.length < 2) return <div className="h-[34px] rounded-md border border-dashed border-white/[0.07]" aria-hidden="true" />;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const span = max - min || 1;
+  const points = values.map((value, index) => `${(index / (values.length - 1)) * 100},${height - ((value - min) / span) * (height - 4) - 2}`).join(" ");
+  return (
+    <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="h-[34px] w-full" role="img" aria-label={label}>
+      <polyline points={points} fill="none" stroke={tone} strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={`0,${height} ${points} 100,${height}`} fill={tone} opacity="0.08" stroke="none" />
+    </svg>
   );
 }
 
@@ -134,9 +212,31 @@ export function Panel({ id, eyebrow, title, description, actions, children, clas
   );
 }
 
+/** The consistent page header used by every operational workspace. */
+export function PageHeader({ eyebrow, title, description, actions, icon }: {
+  eyebrow: string; title: ReactNode; description?: ReactNode; actions?: ReactNode; icon?: ReactNode;
+}) {
+  return (
+    <header className="relative overflow-hidden rounded-2xl border border-white/[0.075] bg-[linear-gradient(125deg,rgba(19,24,43,0.78),rgba(8,10,20,0.9))] px-5 py-5 sm:px-6">
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-60 constellation" aria-hidden="true" />
+      <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            {icon ? <span className="grid h-7 w-7 place-items-center rounded-lg border border-[#8b75ff]/30 bg-[#8b75ff]/10 text-[#c9beff]" aria-hidden="true">{icon}</span> : null}
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#a895ff]">{eyebrow}</p>
+          </div>
+          <h1 className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-white sm:text-[1.9rem]">{title}</h1>
+          {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{description}</p> : null}
+        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      </div>
+    </header>
+  );
+}
+
 /** One metric with its change; links into the surface that explains it. */
-export function StatTile({ label, value, change, good = "up", caption, hint, icon, href, accent = "text-[#a895ff]" }: {
-  label: string; value: string; change?: number | null; good?: GoodDirection; caption?: ReactNode; hint?: string; icon?: ReactNode; href?: string; accent?: string;
+export function StatTile({ label, value, change, good = "up", caption, hint, icon, href, accent = "text-[#a895ff]", unavailable = false }: {
+  label: string; value: string; change?: number | null; good?: GoodDirection; caption?: ReactNode; hint?: string; icon?: ReactNode; href?: string; accent?: string; unavailable?: boolean;
 }) {
   const body = (
     <>
@@ -144,7 +244,7 @@ export function StatTile({ label, value, change, good = "up", caption, hint, ico
         <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">{label}</p>
         {icon ? <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.035]", accent)} aria-hidden="true">{icon}</span> : null}
       </div>
-      <p className="mt-3 font-display text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-white tabular-nums">{value}</p>
+      <p className={cn("mt-3 font-display text-[1.6rem] font-bold leading-none tracking-[-0.04em] tabular-nums", unavailable ? "text-slate-600" : "text-white")}>{value}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
         {change !== undefined ? <DeltaChip change={change} good={good} /> : null}
         {caption ? <span className="min-w-0 truncate">{caption}</span> : null}
@@ -154,6 +254,54 @@ export function StatTile({ label, value, change, good = "up", caption, hint, ico
   const className = "stat-tile group focus-ring block";
   if (href && isInternalHref(href)) return <Link href={href} className={className} title={hint}>{body}</Link>;
   return <div className={className} title={hint}>{body}</div>;
+}
+
+/**
+ * A compact metric card with a definition, optional comparison and a route.
+ * Used for the marketplace pulse and the North Star indicators.
+ */
+export function MetricCard({ label, value, caption, change, good = "up", hint, icon, href, accent = "text-[#a895ff]", footer, badge }: {
+  label: string;
+  value: string;
+  caption?: ReactNode;
+  change?: number | null;
+  good?: GoodDirection;
+  hint?: string;
+  icon?: ReactNode;
+  href?: string;
+  accent?: string;
+  footer?: ReactNode;
+  badge?: ReactNode;
+}) {
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+          {hint ? <span className="pointer-events-auto"><InfoTip label={`How ${label} is calculated`}>{hint}</InfoTip></span> : null}
+        </div>
+        {icon ? <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.04]", accent)} aria-hidden="true">{icon}</span> : null}
+      </div>
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
+        <p className="font-display text-[1.55rem] font-bold leading-none tracking-[-0.04em] text-white tabular-nums">{value}</p>
+        {badge}
+      </div>
+      {caption ? <div className="mt-2 text-[11px] leading-4 text-slate-500">{caption}</div> : null}
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.055] pt-2.5">
+        {change !== undefined ? <DeltaChip change={change} good={good} /> : <span className="text-[10px] text-slate-600">point in time</span>}
+        {footer ?? (href ? <span className="text-[10px] font-semibold text-slate-600 transition group-hover:text-[#a895ff]">Open →</span> : null)}
+      </div>
+    </>
+  );
+  // The navigation target is a stretched link behind the content, so the
+  // definition button remains a valid sibling button rather than a button
+  // nested inside an anchor.
+  return (
+    <div className="stat-tile group relative h-full">
+      <div className="pointer-events-none relative z-10">{content}</div>
+      {href && isInternalHref(href) ? <Link href={href} className="focus-ring absolute inset-0 z-0 rounded-[1rem]" aria-label={`Open ${label}`} /> : null}
+    </div>
+  );
 }
 
 export function Chip({ tone = "neutral", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
@@ -179,6 +327,54 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
           {option.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * A contextual side panel. It keeps the analytical page visible, traps no
+ * global state, closes on Escape and returns focus to the opener.
+ */
+export function DetailDrawer({ open, onClose, title, subtitle, children, footer }: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onCloseRef.current();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      restoreRef.current?.focus();
+    };
+  }, [open]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-[2px]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <aside role="dialog" aria-modal="true" aria-label={title} className="drawer-panel flex h-full w-full max-w-md flex-col border-l border-[#8b75ff]/25 bg-[#080a14] shadow-[-30px_0_90px_rgba(0,0,0,0.55)]">
+        <div className="flex items-start justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#a895ff]">Context</p>
+            <h2 className="mt-1 font-display text-lg font-bold text-white">{title}</h2>
+            {subtitle ? <div className="mt-1 text-xs leading-5 text-slate-400">{subtitle}</div> : null}
+          </div>
+          <button ref={closeRef} type="button" onClick={onClose} className="focus-ring rounded-lg border border-white/[0.09] p-2 text-slate-400 hover:text-white" aria-label="Close panel"><X size={16} aria-hidden="true" /></button>
+        </div>
+        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        {footer ? <div className="border-t border-white/[0.07] px-5 py-4">{footer}</div> : null}
+      </aside>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-type Tone = "neutral" | "success" | "warning" | "danger" | "info";
+export type Tone = "neutral" | "success" | "warning" | "danger" | "info";
 
 const toneClasses: Record<Tone, string> = {
   neutral: "border-white/10 bg-white/[0.035] text-slate-300",
@@ -14,11 +14,11 @@ const toneClasses: Record<Tone, string> = {
 };
 
 export function StatusBadge({ children, tone = "neutral", className }: { children: ReactNode; tone?: Tone; className?: string }) {
-  return <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]", toneClasses[tone], className)}><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />{children}</span>;
+  return <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]", toneClasses[tone], className)}><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />{children}</span>;
 }
 
 export function SectionEyebrow({ children }: { children: ReactNode }) {
-  return <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#a895ff]">{children}</p>;
+  return <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#a895ff]">{children}</p>;
 }
 
 export function UnavailablePanel({ title, detail, action, compact = false }: { title: string; detail: string; action?: ReactNode; compact?: boolean }) {
@@ -37,5 +37,23 @@ export function ResourceState({ state, message, action }: { state: ResourceState
     forbidden: <ShieldX size={18} aria-hidden="true" />,
   }[state];
   const tone = state === "error" || state === "forbidden" ? "danger" : state === "unavailable" ? "warning" : "info";
-  return <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-white/10 bg-black/10 p-5 text-center"><div><div className={cn("mx-auto grid h-10 w-10 place-items-center rounded-full", toneClasses[tone])}>{icon}</div><p className="mt-3 text-sm font-medium text-slate-200">{message}</p>{action ? <div className="mt-3">{action}</div> : null}</div></div>;
+  return <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-white/10 bg-black/10 p-5 text-center" role={state === "loading" ? "status" : undefined} aria-busy={state === "loading" || undefined}><div><div className={cn("mx-auto grid h-10 w-10 place-items-center rounded-full", toneClasses[tone])}>{icon}</div><p className="mt-3 text-sm font-medium text-slate-200">{message}</p>{action ? <div className="mt-3">{action}</div> : null}</div></div>;
 }
+
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("skeleton", className)} aria-hidden="true" />;
+}
+
+export function SkeletonPanel({ rows = 3, className }: { rows?: number; className?: string }) {
+  return (
+    <div className={cn("data-panel space-y-3 p-5", className)} aria-hidden="true">
+      <Skeleton className="h-4 w-40" />
+      <Skeleton className="h-3 w-72 max-w-full" />
+      <div className="grid gap-3 pt-2 sm:grid-cols-2">
+        {Array.from({ length: rows }, (_, index) => <Skeleton key={index} className="h-20" />)}
+      </div>
+    </div>
+  );
+}
+
+export { toneClasses };

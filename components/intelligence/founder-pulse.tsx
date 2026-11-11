@@ -1,9 +1,11 @@
 "use client";
 
-import { Coins, Gauge, Handshake, Layers, MessageCircle, MessageSquareWarning, PackageOpen, Scale, ShieldAlert, ShoppingBag, Sparkles, Store, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronUp, Clock3, Coins, Gauge, Handshake, Layers, MessageCircle, MessageSquareWarning, PackageOpen, Scale, ShieldAlert, ShoppingBag, Sparkles, Store, Target, TrendingUp, Users } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Chip, Panel, ProgressBar, Ring, Segmented, StatTile } from "@/components/intelligence/visuals";
+import { Chip, DeltaChip, MetricCard, Panel, ProgressBar, Ring, Segmented, StatTile } from "@/components/intelligence/visuals";
+import { InfoTip } from "@/components/ui/tooltip";
 import type { Pulse } from "@/lib/api/intelligence-schemas";
 import { formatKES } from "@/lib/format";
 import { formatCount, formatDuration, formatMinutes, formatPctValue, formatUnitValue, greetingFor, relativeTime, type GoodDirection } from "@/lib/intelligence";
@@ -24,23 +26,27 @@ type TileSpec = {
   unit?: "count" | "kes_minor";
   definition?: string;
   noChange?: boolean;
+  primary?: boolean;
 };
 
+// The complete pulse set the backend returns. Cards outside the opening view
+// remain one click away instead of being dropped or crowded into the hero.
 const TILES: TileSpec[] = [
-  { key: "new_users", label: "New users", icon: Users, good: "up", href: "/users" },
-  { key: "new_sellers", label: "New sellers", icon: Store, good: "up", href: "/growth", definition: "new_sellers" },
-  { key: "new_listings", label: "New listings", icon: PackageOpen, good: "up", href: "/listings" },
-  { key: "live_listings", label: "Live now", icon: Layers, good: "up", href: "/listings?status=active", noChange: true },
-  { key: "active_buyers", label: "Active buyers", icon: ShoppingBag, good: "up", href: "/intelligence", definition: "active_buyers" },
-  { key: "active_sellers", label: "Active sellers", icon: Store, good: "up", href: "/intelligence#sellers", definition: "active_sellers" },
-  { key: "conversations_started", label: "Buyer conversations", icon: MessageCircle, good: "up", href: "/intelligence#sellers" },
-  { key: "deals_agreed", label: "Deals agreed", icon: Handshake, good: "up", href: "/deals", definition: "deals_agreed" },
-  { key: "buy_agent_requests", label: "Buying Agent asks", icon: Sparkles, good: "up", href: "/intelligence" },
+  { key: "new_users", label: "New users", icon: Users, good: "up", href: "/users", primary: true },
+  { key: "new_sellers", label: "New sellers", icon: Store, good: "up", href: "/growth", definition: "new_sellers", primary: true },
+  { key: "new_listings", label: "New listings", icon: PackageOpen, good: "up", href: "/listings", primary: true },
+  { key: "live_listings", label: "Live listings", icon: Layers, good: "up", href: "/listings?status=active", noChange: true, primary: true },
+  { key: "active_buyers", label: "Active buyers", icon: ShoppingBag, good: "up", href: "/intelligence", definition: "active_buyers", primary: true },
+  { key: "active_sellers", label: "Active sellers", icon: Store, good: "up", href: "/intelligence#sellers", definition: "active_sellers", primary: true },
+  { key: "conversations_started", label: "Buyer conversations", icon: MessageCircle, good: "up", href: "/intelligence#sellers", primary: true },
+  { key: "deals_agreed", label: "Deals agreed", icon: Handshake, good: "up", href: "/deals", definition: "deals_agreed", primary: true },
+  { key: "buy_agent_requests", label: "Buying Agent asks", icon: Sparkles, good: "up", href: "/intelligence", primary: true },
+  { key: "buy_agent_unmet_open", label: "Unmatched asks", icon: Sparkles, good: "down", href: "/intelligence?category=", primary: true },
   { key: "complaints_filed", label: "Complaints filed", icon: MessageSquareWarning, good: "down", href: "/complaints" },
   { key: "disputes_opened", label: "Disputes opened", icon: Scale, good: "down", href: "/disputes" },
   { key: "fraud_flags", label: "Fraud flags", icon: ShieldAlert, good: "down", href: "/fraud?state=open" },
-  { key: "income_minor", label: "Income", icon: Coins, good: "up", href: "/revenue", unit: "kes_minor" },
-  { key: "profit_minor", label: "Profit", icon: TrendingUp, good: "up", href: "/revenue", unit: "kes_minor" },
+  { key: "income_minor", label: "Platform income", icon: Coins, good: "up", href: "/revenue", unit: "kes_minor" },
+  { key: "profit_minor", label: "Reported profit", icon: TrendingUp, good: "up", href: "/revenue", unit: "kes_minor" },
 ];
 
 function useClientNow(): Date | null {
@@ -49,8 +55,60 @@ function useClientNow(): Date | null {
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
   return now;
+}
+
+function NorthStarPercent({ label, href, rate, target, numerator, denominator, previous, median, definition, accent }: {
+  label: string;
+  href: string;
+  rate: number | null | undefined;
+  target: number;
+  numerator: number | null | undefined;
+  denominator: number | null | undefined;
+  previous: number | null | undefined;
+  median?: number | null;
+  definition?: string;
+  accent: "violet" | "cyan";
+}) {
+  const met = rate !== null && rate !== undefined && rate >= target;
+  return (
+    <article className="gauge-card relative !items-stretch text-left">
+      <div className="pointer-events-none relative z-10">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+          {definition ? <span className="pointer-events-auto"><InfoTip label={`How ${label} is calculated`}>{definition}</InfoTip></span> : null}
+        </div>
+        <div className="mt-2 flex items-center gap-3">
+          <Ring
+            value={rate}
+            target={target}
+            size={92}
+            stroke={8}
+            label={label}
+            from={accent === "violet" ? "#8b75ff" : "#54d7e9"}
+            to={accent === "violet" ? "#54d7e9" : "#34d399"}
+          />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-slate-200">Target {formatPctValue(target, 0)}</p>
+            <p className="mt-1 text-[11px] tabular-nums text-slate-400">{formatCount(numerator)} / {formatCount(denominator)}</p>
+            <p className="mt-1 text-[10px] text-slate-600">previous {formatPctValue(previous)}</p>
+            {median !== undefined ? <p className="mt-1 text-[10px] text-slate-600">median {formatMinutes(median)}</p> : null}
+          </div>
+        </div>
+        <div className="mt-3">
+          <ProgressBar value={rate} max={Math.max(100, target)} target={target} tone={met ? "success" : "warning"} label={`${label} progress toward target`} />
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <Chip tone={met ? "success" : "warning"}>{met ? "Target met" : rate === null || rate === undefined ? "No cohort yet" : "Below target"}</Chip>
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500">Explore <ArrowUpRight size={11} aria-hidden="true" /></span>
+        </div>
+      </div>
+      <Link href={href} className="focus-ring absolute inset-0 z-0 rounded-[1.1rem]" aria-label={`Open the analysis behind ${label}`} />
+    </article>
+  );
 }
 
 export function PulseHero({ pulse, adminName, range, onRangeChange, status }: {
@@ -63,23 +121,30 @@ export function PulseHero({ pulse, adminName, range, onRangeChange, status }: {
   const periodWord = range === "7" ? "This week" : "These 30 days";
   const liquidityRate = liquidity?.current.rate_pct ?? null;
   const liquidityTarget = liquidity?.target_pct ?? 50;
+  const replyRate = reply?.current.rate_pct ?? null;
+  const replyTarget = reply?.target_pct ?? 50;
   return (
-    <section className="hero-cockpit relative overflow-hidden rounded-[1.4rem] border border-[#8b75ff]/25 px-5 py-6 sm:px-8 sm:py-8" aria-labelledby="pulse-hero-title">
+    <section className="hero-cockpit relative overflow-hidden rounded-[1.4rem] border border-[#8b75ff]/25 px-5 py-6 sm:px-7 sm:py-7" aria-labelledby="pulse-hero-title">
       <div className="cockpit-grid pointer-events-none absolute inset-0" aria-hidden="true" />
+      <div className="constellation pointer-events-none absolute inset-0 opacity-70" aria-hidden="true" />
       <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-[#8b75ff]/15 blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-36 left-[30%] h-72 w-72 rounded-full bg-[#54d7e9]/10 blur-3xl" aria-hidden="true" />
-      <div className="relative grid gap-8 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:items-center">
+      <div className="relative grid gap-7 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,1.18fr)] xl:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="live-dot" aria-hidden="true" />
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#a895ff]">Founder cockpit · Kenya</p>
-            {pulse ? <span className="text-[10px] text-slate-600">updated {relativeTime(pulse.generated_at)}</span> : null}
+            {pulse ? <span className="text-[10px] text-slate-500">last data update {relativeTime(pulse.generated_at)}</span> : null}
           </div>
-          <h1 id="pulse-hero-title" className="mt-3 font-display text-3xl font-bold tracking-[-0.05em] text-white sm:text-4xl">
+          <h1 id="pulse-hero-title" className="mt-3 font-display text-3xl font-bold tracking-[-0.055em] text-white sm:text-[2.35rem]">
             {now ? greetingFor(now) : "Welcome back"}, {adminName}
           </h1>
-          <p className="mt-2 text-sm text-slate-400">{now ? formatLocalDate(now) : "\u00a0"}</p>
-          <p className="mt-5 max-w-2xl text-[15px] leading-7 text-slate-200">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+            <span className="inline-flex items-center gap-1.5"><Clock3 size={12} className="text-[#a895ff]" aria-hidden="true" />{now ? `${formatLocalDate(now)} · ${now.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}` : "\u00a0"}</span>
+            <span className="hidden h-3 w-px bg-white/10 sm:block" aria-hidden="true" />
+            <span>{range === "7" ? "7-day pulse window" : "30-day pulse window"}</span>
+          </div>
+          <p className="mt-4 max-w-2xl text-[14px] leading-7 text-slate-200">
             {metrics ? (
               <>
                 {periodWord}: <strong className="text-white">{formatCount(metrics.new_users?.current)}</strong> new users,{" "}
@@ -97,36 +162,60 @@ export function PulseHero({ pulse, adminName, range, onRangeChange, status }: {
               <span className="text-slate-500">Reading the marketplace…</span>
             )}
           </p>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
             <Segmented label="Pulse window" value={range} options={PULSE_WINDOWS} onChange={onRangeChange} />
             {status}
           </div>
+          <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
+            <span>Every figure excludes administrator accounts.</span>
+            <Link href="/service-health" className="focus-ring inline-flex items-center gap-1 font-semibold text-amber-200/80 hover:text-amber-100">Service health <ArrowUpRight size={10} aria-hidden="true" /></Link>
+            <span className="hidden sm:inline">·</span>
+            <span title={pulse?.generated_at}>Generated {pulse ? relativeTime(pulse.generated_at) : "—"}</span>
+          </p>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="gauge-card">
-            <Ring value={liquidity?.current.rate_pct} target={liquidity?.target_pct} label="Liquidity" caption="liquidity" />
-            <p className="mt-3 text-xs font-semibold text-slate-200">North star · target {formatPctValue(liquidity?.target_pct ?? 50, 0)}</p>
-            <p className="mt-1 text-[11px] leading-4 text-slate-500" title={pulse?.definitions.liquidity}>
-              {liquidity ? `${formatCount(liquidity.current.with_buyer_contact)} of ${formatCount(liquidity.current.eligible)} listings · prev ${formatPctValue(liquidity.previous.rate_pct)}` : "—"}
-            </p>
-          </div>
-          <div className="gauge-card">
-            <Ring value={reply?.current.rate_pct} target={reply?.target_pct} label="Seller replies within 24 hours" caption="replied 24h" from="#54d7e9" to="#34d399" />
-            <p className="mt-3 text-xs font-semibold text-slate-200">Seller response · target {formatPctValue(reply?.target_pct ?? 50, 0)}</p>
-            <p className="mt-1 text-[11px] leading-4 text-slate-500" title={pulse?.definitions.seller_reply}>
-              {reply ? `median ${formatMinutes(reply.current.median_reply_minutes)} · prev ${formatPctValue(reply.previous.rate_pct)}` : "—"}
-            </p>
-          </div>
-          <div className="gauge-card">
-            <div className="grid h-[136px] w-[136px] place-items-center rounded-full border border-white/[0.07] bg-[radial-gradient(circle,rgba(219,183,93,0.12),transparent_70%)]">
-              <div className="text-center">
-                <p className="font-display text-[1.65rem] font-bold leading-none tracking-[-0.04em] text-white tabular-nums">{pulse?.balance.buyers_per_seller ?? "—"}</p>
-                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">buyers / seller</p>
+
+        <div className="grid gap-3 sm:grid-cols-3" aria-label="Marketplace North Star indicators">
+          <NorthStarPercent
+            label="Marketplace liquidity"
+            href="/intelligence#categories"
+            rate={liquidityRate}
+            target={liquidityTarget}
+            numerator={liquidity?.current.with_buyer_contact}
+            denominator={liquidity?.current.eligible}
+            previous={liquidity?.previous.rate_pct}
+            median={liquidity?.current.median_hours_to_first_contact}
+            definition={pulse?.definitions.liquidity ?? "The share of new listings in the cohort that received a human buyer contact within seven days. Target 50%."}
+            accent="violet"
+          />
+          <NorthStarPercent
+            label="Seller response · 24h"
+            href="/intelligence#sellers"
+            rate={replyRate}
+            target={replyTarget}
+            numerator={reply?.current.replied_24h}
+            denominator={reply?.current.eligible}
+            previous={reply?.previous.rate_pct}
+            median={reply?.current.median_reply_minutes}
+            definition={pulse?.definitions.seller_reply ?? "The share of buyer conversations that received a human seller reply within 24 hours. Zeno replies do not count. Target 50%."}
+            accent="cyan"
+          />
+          <article className="gauge-card relative !items-stretch text-left">
+            <div className="pointer-events-none relative z-10">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Buyer ↔ seller balance</p>
+                <span className="pointer-events-auto"><InfoTip label="How market balance is calculated">{pulse?.definitions.active_buyers ?? "Distinct buyers active in the window, divided by distinct sellers active in the same window. A ratio above 1 means more buyers than sellers."}</InfoTip></span>
               </div>
+              <div className="mt-3 grid place-items-center rounded-2xl border border-[#dbb75d]/15 bg-[radial-gradient(circle,rgba(219,183,93,0.12),transparent_70%)] py-3">
+                <p className="font-display text-[2.1rem] font-bold leading-none tracking-[-0.04em] text-white tabular-nums">{pulse?.balance.buyers_per_seller ?? "—"}</p>
+                <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500">buyers per seller</p>
+              </div>
+              <p className="mt-3 text-[11px] leading-5 text-slate-400">
+                {pulse ? <>{formatCount(pulse.balance.active_buyers)} active buyers<br />{formatCount(pulse.balance.active_sellers)} active sellers</> : "—"}
+              </p>
+              <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-600">Point-in-time demand balance <ArrowUpRight size={10} aria-hidden="true" /></p>
             </div>
-            <p className="mt-3 text-xs font-semibold text-slate-200">Market balance</p>
-            <p className="mt-1 text-[11px] leading-4 text-slate-500">{pulse ? `${formatCount(pulse.balance.active_buyers)} buyers · ${formatCount(pulse.balance.active_sellers)} sellers active` : "—"}</p>
-          </div>
+            <Link href="/intelligence#geography" className="focus-ring absolute inset-0 z-0 rounded-[1.1rem]" aria-label="Open county market balance analysis" />
+          </article>
         </div>
       </div>
     </section>
@@ -134,34 +223,59 @@ export function PulseHero({ pulse, adminName, range, onRangeChange, status }: {
 }
 
 export function PulseTiles({ pulse }: { pulse: Pulse }) {
+  const [expanded, setExpanded] = useState(false);
   const metrics = pulse.metrics;
+  const available = TILES.filter((tile) => metrics[tile.key] !== undefined);
+  const primary = available.filter((tile) => tile.primary);
+  const rest = available.filter((tile) => !tile.primary);
+  const shown = expanded ? available : primary;
   return (
-    <section aria-label="Marketplace pulse" className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-      {TILES.map((tile) => {
-        const metric = metrics[tile.key];
-        if (!metric) return null;
-        const Icon = tile.icon;
-        const caption = tile.key === "buy_agent_requests"
-          ? `${formatCount(metrics.buy_agent_unmet_open?.current)} unmatched`
-          : tile.noChange
-            ? "point in time"
-            : metric.previous !== null
-              ? `prev ${formatUnitValue(metric.previous, tile.unit ?? "count")}`
-              : undefined;
-        return (
-          <StatTile
-            key={tile.key}
-            label={tile.label}
-            value={formatUnitValue(metric.current, tile.unit ?? "count")}
-            change={tile.noChange ? undefined : metric.change_pct}
-            good={tile.good}
-            caption={caption}
-            hint={tile.definition ? pulse.definitions[tile.definition] : undefined}
-            icon={<Icon size={14} />}
-            href={tile.href}
-          />
-        );
-      })}
+    <section aria-labelledby="pulse-metrics-title">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#a895ff]">Marketplace intelligence</p>
+          <h2 id="pulse-metrics-title" className="mt-1 font-display text-lg font-bold tracking-[-0.03em] text-white">Marketplace KPI intelligence</h2>
+          <p className="mt-1 text-xs text-slate-500">Compared with the previous {pulse.window.days}-day window. Live counts are point-in-time.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200/70">{shown.length} of {available.length} metrics</span>
+          {rest.length ? (
+            <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] bg-white/[0.025] px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-[#8b75ff]/40 hover:text-white">
+              {expanded ? <>Fewer metrics <ChevronUp size={13} aria-hidden="true" /></> : <>Show all {available.length} <ChevronDown size={13} aria-hidden="true" /></>}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {shown.map((tile) => {
+          const metric = metrics[tile.key];
+          const Icon = tile.icon;
+          const unmatched = metrics.buy_agent_unmet_open?.current;
+          const caption = metric === undefined
+            ? "Not reported by this backend"
+            : tile.key === "buy_agent_requests"
+              ? `${formatCount(unmatched)} unmatched asks`
+              : tile.noChange
+                ? "point in time"
+                : metric.previous !== null
+                  ? `prev ${formatUnitValue(metric.previous, tile.unit ?? "count")}`
+                  : "no previous value";
+          return (
+            <MetricCard
+              key={tile.key}
+              label={tile.label}
+              value={metric ? formatUnitValue(metric.current, tile.unit ?? "count") : "—"}
+              change={tile.noChange || metric === undefined ? undefined : metric.change_pct}
+              good={tile.good}
+              caption={caption}
+              hint={tile.definition ? pulse.definitions[tile.definition] : undefined}
+              icon={<Icon size={14} />}
+              href={tile.href}
+              accent={tile.good === "down" ? "text-amber-200" : "text-[#a895ff]"}
+            />
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -193,7 +307,7 @@ export function TargetsPanel({ pulse }: { pulse: Pulse }) {
             </li>
           ))}
         </ul>
-        <div className="rounded-2xl border border-white/[0.07] bg-black/20 p-4">
+        <div className="inset-panel p-4">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-200"><Gauge size={14} className="text-[#dbb75d]" aria-hidden="true" />Break-even (trailing 30 days)</div>
           <p className="mt-3 font-display text-3xl font-bold tracking-[-0.04em] text-white tabular-nums">{coverage === null ? "—" : formatPctValue(Math.max(-999, coverage), 0)}</p>
           <p className="mt-1 text-xs text-slate-400">of the {formatKES(breakEven.fixed_monthly_cost_minor)} monthly running cost covered</p>
@@ -227,3 +341,5 @@ export function TrustStrip({ pulse }: { pulse: Pulse }) {
     </div>
   );
 }
+
+export { DeltaChip };

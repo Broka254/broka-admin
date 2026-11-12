@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/ui/tooltip";
-import { changeTone, formatChange, isInternalHref, type GoodDirection, type Tone } from "@/lib/intelligence";
+import { changeTone, formatChange, isInternalHref, relativeTime, type GoodDirection, type Tone } from "@/lib/intelligence";
 
 const TONE_TEXT: Record<Tone, string> = {
   neutral: "text-slate-300",
@@ -213,12 +213,12 @@ export function Panel({ id, eyebrow, title, description, actions, children, clas
 }
 
 /** The consistent page header used by every operational workspace. */
-export function PageHeader({ eyebrow, title, description, actions, icon }: {
-  eyebrow: string; title: ReactNode; description?: ReactNode; actions?: ReactNode; icon?: ReactNode;
+export function PageHeader({ eyebrow, title, description, actions, icon, meta }: {
+  eyebrow: string; title: ReactNode; description?: ReactNode; actions?: ReactNode; icon?: ReactNode; meta?: ReactNode;
 }) {
   return (
-    <header className="relative overflow-hidden rounded-2xl border border-white/[0.075] bg-[linear-gradient(125deg,rgba(19,24,43,0.78),rgba(8,10,20,0.9))] px-5 py-5 sm:px-6">
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-60 constellation" aria-hidden="true" />
+    <header className="instrument-panel px-5 py-5 sm:px-6">
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-50 constellation" aria-hidden="true" />
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -227,10 +227,55 @@ export function PageHeader({ eyebrow, title, description, actions, icon }: {
           </div>
           <h1 className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-white sm:text-[1.9rem]">{title}</h1>
           {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{description}</p> : null}
+          {meta ? <div className="mt-3 flex flex-wrap items-center gap-2">{meta}</div> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
     </header>
+  );
+}
+
+/**
+ * Provenance for an analytical view: what the numbers are, when they were
+ * computed and over which window. Never claims a live feed when a snapshot
+ * is what the endpoint returned.
+ */
+export function DataFreshness({ generatedAt, windowLabel, source, state = "ready", className }: {
+  generatedAt?: string | null;
+  windowLabel?: string;
+  source?: string;
+  state?: "loading" | "ready" | "error" | "unavailable";
+  className?: string;
+}) {
+  const label = state === "loading" ? "Loading data" : state === "error" ? "Refresh failed" : state === "unavailable" ? "Data unavailable" : "Snapshot data";
+  return (
+    <span className={cn("freshness-chip", className)}>
+      <span className="freshness-dot" data-state={state} aria-hidden="true" />
+      <span className="font-semibold text-slate-300">{label}</span>
+      {generatedAt ? <span className="text-slate-500">· generated {relativeTime(generatedAt)}</span> : null}
+      {windowLabel ? <span className="hidden text-slate-600 sm:inline">· {windowLabel}</span> : null}
+      {source ? <InfoTip label="Data provenance">{`${source}${generatedAt ? ` Generated at ${generatedAt}.` : ""}`}</InfoTip> : null}
+    </span>
+  );
+}
+
+/** The band that introduces a major dashboard section outside a panel. */
+export function SectionHeading({ id, eyebrow, title, description, meta, actions, className }: {
+  id?: string; eyebrow: string; title: ReactNode; description?: ReactNode; meta?: ReactNode; actions?: ReactNode; className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}>
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#a895ff]">
+          <span className="h-1 w-1 rounded-full bg-[#54d7e9] shadow-[0_0_8px_rgba(84,215,233,0.8)]" aria-hidden="true" />
+          {eyebrow}
+        </p>
+        <h2 id={id} className="mt-1.5 font-display text-lg font-bold tracking-[-0.03em] text-white">{title}</h2>
+        {description ? <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">{description}</p> : null}
+        {meta ? <div className="mt-2 flex flex-wrap items-center gap-2">{meta}</div> : null}
+      </div>
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+    </div>
   );
 }
 

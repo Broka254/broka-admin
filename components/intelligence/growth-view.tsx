@@ -3,13 +3,13 @@
 import { ArrowRight, CalendarDays, RefreshCw, Timer, TrendingDown } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { PageHeader, Panel, Segmented, StatTile } from "@/components/intelligence/visuals";
+import { DataFreshness, PageHeader, Panel, Segmented, StatTile } from "@/components/intelligence/visuals";
 import { InfoTip } from "@/components/ui/tooltip";
-import { ResourceState, StatusBadge } from "@/components/ui/primitives";
+import { ResourceState } from "@/components/ui/primitives";
 import { isEndpointMissing, useAdminResource } from "@/hooks/use-admin-resource";
 import type { CohortsResponse, FunnelStep } from "@/lib/api/intelligence-schemas";
 import { formatShortDate } from "@/lib/format";
-import { formatCount, formatDuration, formatPctValue, relativeTime } from "@/lib/intelligence";
+import { formatCount, formatDuration, formatPctValue } from "@/lib/intelligence";
 import { cn } from "@/lib/utils";
 
 const RANGES = [
@@ -192,10 +192,13 @@ export function GrowthView() {
         eyebrow="Growth engine"
         title="Who arrives, who acts, who comes back"
         description="People who signed up in the range, followed through both sides of the marketplace to today, and weekly cohorts by how many stay active."
-        actions={<>
-          <Segmented label="Signup range" value={range} options={[...RANGES]} onChange={setRange} />
-          {funnel.data ? <StatusBadge tone="success">Computed {relativeTime(funnel.data.generated_at)}</StatusBadge> : null}
-        </>}
+        meta={<DataFreshness
+          state={funnel.isLoading ? "loading" : funnel.isError ? "error" : funnel.data ? "ready" : "unavailable"}
+          generatedAt={funnel.data?.generated_at}
+          windowLabel="signups since the range start"
+          source="GET /admin/intelligence/funnel for journeys and timing; GET /admin/intelligence/cohorts for weekly retention."
+        />}
+        actions={<Segmented label="Signup range" value={range} options={[...RANGES]} onChange={setRange} />}
       />
 
       {funnel.data ? (

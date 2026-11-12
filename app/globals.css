@@ -165,6 +165,92 @@ a.gauge-card:hover { border-color: rgb(139 117 255 / 0.4); transform: translateY
 
 .ring-arc { transition: stroke-dasharray 900ms cubic-bezier(0.22, 1, 0.36, 1); }
 
+/* ── Instrument panels, freshness and priority signals ────────────────────── */
+
+.instrument-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--broka-outline);
+  border-radius: var(--broka-radius);
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgb(139 117 255 / 0.075), transparent 58%),
+    linear-gradient(150deg, rgb(15 20 37 / 0.92), rgb(7 9 18 / 0.96));
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.24), inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+.instrument-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(139 117 255 / 0.55), rgb(84 215 233 / 0.4), transparent);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.freshness-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(195 202 226 / 0.1);
+  border-radius: 999px;
+  background: rgb(5 6 13 / 0.45);
+  padding: 0.22rem 0.6rem;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.freshness-dot { width: 6px; height: 6px; border-radius: 999px; flex: none; }
+.freshness-dot[data-state="ready"] { background: var(--broka-cyan); box-shadow: 0 0 8px rgb(84 215 233 / 0.7); }
+.freshness-dot[data-state="loading"] { background: var(--broka-amber); box-shadow: 0 0 8px rgb(219 183 93 / 0.55); }
+.freshness-dot[data-state="error"] { background: var(--broka-rose); box-shadow: 0 0 8px rgb(251 113 133 / 0.55); }
+.freshness-dot[data-state="unavailable"] { background: #64748b; }
+
+.priority-row {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgb(195 202 226 / 0.08);
+  border-radius: 0.95rem;
+  background: linear-gradient(140deg, rgb(17 22 40 / 0.86), rgb(8 10 20 / 0.92));
+  padding: 0.9rem 1rem 0.9rem 1.15rem;
+  transition: border-color 170ms ease, transform 170ms ease, background 170ms ease;
+}
+.priority-row::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--priority-rail, rgb(148 163 184 / 0.45));
+}
+.priority-row[data-tone="danger"] { --priority-rail: var(--broka-rose); }
+.priority-row[data-tone="warning"] { --priority-rail: var(--broka-amber); }
+.priority-row[data-tone="info"] { --priority-rail: var(--broka-violet); }
+.priority-row[data-tone="success"] { --priority-rail: var(--broka-emerald); }
+.priority-row:hover { border-color: rgb(139 117 255 / 0.35); background: linear-gradient(140deg, rgb(24 30 50 / 0.9), rgb(9 12 23 / 0.95)); transform: translateY(-1px); }
+.priority-row:focus-within { border-color: rgb(139 117 255 / 0.5); box-shadow: inset 0 0 0 1px rgb(139 117 255 / 0.22); }
+
+.metric-rail { display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 768px) { .metric-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .metric-rail { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 639px) {
+  /* A swipeable KPI band beats four stacked cards on a phone. */
+  .metric-rail {
+    grid-auto-flow: column;
+    grid-auto-columns: 78%;
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(139 117 255 / 0.28) transparent;
+  }
+  .metric-rail > * { scroll-snap-align: start; }
+}
+
+.nav-group-label { display: flex; align-items: center; gap: 0.4rem; }
+.nav-group-label::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, rgb(195 202 226 / 0.12), transparent); }
+
 .live-dot {
   position: relative;
   display: inline-block;
@@ -259,7 +345,7 @@ a.gauge-card:hover { border-color: rgb(139 117 255 / 0.4); transform: translateY
   [data-print-root], [data-print-root] * { visibility: visible; }
   [data-print-root] { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0 !important; box-shadow: none !important; background: #fff !important; }
   [data-print-root] * { color: #111 !important; background: transparent !important; box-shadow: none !important; text-shadow: none !important; border-color: #d4d4d8 !important; }
-  [data-print-root] .cockpit-grid { display: none !important; }
+  [data-print-root] .cockpit-grid, [data-print-root] .constellation { display: none !important; }
   [data-print-root] [role="progressbar"] { border: 1px solid #d4d4d8 !important; }
   [data-print-root] [role="progressbar"] > div { background: #6d5ce0 !important; }
 }

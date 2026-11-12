@@ -7,11 +7,11 @@ import { useMemo, useState } from "react";
 import { CategoryDetail, CategoryScatter, CategoryTable, SignalLegend } from "@/components/intelligence/category-matrix";
 import { InsightFeed } from "@/components/intelligence/insight-feed";
 import { GeographyTable, BusiestSellers, StaleListings, WaitingSellers } from "@/components/intelligence/sellers-board";
-import { DetailDrawer, PageHeader, Panel, Segmented, StatTile } from "@/components/intelligence/visuals";
+import { DataFreshness, DetailDrawer, PageHeader, Panel, Segmented, StatTile } from "@/components/intelligence/visuals";
 import { InfoTip } from "@/components/ui/tooltip";
-import { ResourceState, StatusBadge } from "@/components/ui/primitives";
+import { ResourceState } from "@/components/ui/primitives";
 import { isEndpointMissing, useAdminResource } from "@/hooks/use-admin-resource";
-import { formatCount, relativeTime } from "@/lib/intelligence";
+import { formatCount } from "@/lib/intelligence";
 
 const WINDOWS = [
   { value: "30", label: "30 days" },
@@ -72,10 +72,13 @@ export function IntelligenceView() {
         eyebrow="Founder intelligence"
         title="Where demand meets supply"
         description="Which categories and counties need sellers, which sellers leave buyers waiting, and which listings no one wants. Staff accounts are excluded from every figure; rules are deterministic."
-        actions={<>
-          <Segmented label="Analysis window" value={range} options={[...WINDOWS]} onChange={setRange} />
-          {categories.data ? <StatusBadge tone="success">Computed {relativeTime(categories.data.generated_at)}</StatusBadge> : null}
-        </>}
+        meta={<DataFreshness
+          state={categories.isLoading ? "loading" : categories.isError ? "error" : categories.data ? "ready" : "unavailable"}
+          generatedAt={categories.data?.generated_at}
+          windowLabel={`last ${range} days`}
+          source="GET /admin/intelligence/categories, /admin/intelligence/geography and /admin/intelligence/sellers. Rule signals use /admin/intelligence/insights."
+        />}
+        actions={<Segmented label="Analysis window" value={range} options={[...WINDOWS]} onChange={setRange} />}
       />
 
       {categories.data ? (

@@ -79,7 +79,7 @@ function RailContent({ onNavigate, complaints, collapsed = false }: { onNavigate
           {collapsed ? (
             <div className="mx-auto mb-2 h-px w-6 bg-white/[0.08]" aria-hidden="true" />
           ) : (
-            <p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-slate-600">{group.label}</p>
+            <p className="nav-group-label px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-slate-500">{group.label}</p>
           )}
           <div className="space-y-0.5">
             {group.entries.map((entry) => {
@@ -141,7 +141,18 @@ function UserFooter({ admin, collapsed = false }: { admin: AdminIdentity; collap
   );
 }
 
-type PaletteItem = { key: string; label: string; hint: string; href: string; icon: NavEntry["icon"] };
+type PaletteItem = { key: string; label: string; hint: string; href: string; icon: NavEntry["icon"]; group: string };
+type RecentRoute = { href: string; label: string };
+
+// Session-only: the authenticated shell forbids browser storage, so recent
+// destinations live in memory and disappear with the tab.
+const recentRoutes: RecentRoute[] = [];
+function rememberRoute(route: RecentRoute) {
+  const existing = recentRoutes.findIndex((entry) => entry.href === route.href);
+  if (existing >= 0) recentRoutes.splice(existing, 1);
+  recentRoutes.unshift(route);
+  if (recentRoutes.length > 5) recentRoutes.length = 5;
+}
 
 /** Ctrl/⌘+K: jump to any surface, or search users and complaints. */
 function CommandPalette({ onClose }: { onClose: () => void }) {
@@ -160,21 +171,35 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
     const needle = q.toLowerCase();
     const pages = allEntries
       .filter((entry) => !needle || entry.label.toLowerCase().includes(needle) || entry.group.toLowerCase().includes(needle))
-      .map((entry) => ({ key: entry.href, label: entry.label, hint: entry.group, href: entry.href, icon: entry.icon }));
+      .map((entry) => ({ key: entry.href, label: entry.label, hint: entry.group, href: entry.href, icon: entry.icon, group: entry.group }));
     if (!q) {
+      const recents: PaletteItem[] = recentRoutes.map((route) => {
+        const match = allEntries.find((entry) => entry.href === route.href);
+        return { key: `recent-${route.href}`, label: route.label, hint: route.href, href: route.href, icon: match?.icon ?? LayoutDashboard, group: "Jump back in" };
+      });
       const quick: PaletteItem[] = [
-        { key: "quick-overdue", label: "Complaints past their deadline", hint: "Trust desk", href: "/complaints?queue=overdue", icon: MessageSquareWarning },
-        { key: "quick-fraud", label: "Open fraud queue", hint: "Trust & Safety", href: "/fraud?state=open", icon: ShieldAlert },
-        { key: "quick-integrity", label: "Finance integrity controls", hint: "Money", href: "/finance-integrity", icon: BadgeDollarSign },
+        { key: "quick-overdue", label: "Complaints past their deadline", hint: "Trust desk", href: "/complaints?queue=overdue", icon: MessageSquareWarning, group: "Quick actions" },
+        { key: "quick-fraud", label: "Open fraud queue", hint: "Trust & Safety", href: "/fraud?state=open", icon: ShieldAlert, group: "Quick actions" },
+        { key: "quick-integrity", label: "Finance integrity controls", hint: "Money", href: "/finance-integrity", icon: BadgeDollarSign, group: "Quick actions" },
       ];
-      return [...quick, ...pages];
+      return [...recents, ...quick, ...pages];
     }
     const searches: PaletteItem[] = [
-      { key: "search-users", label: `Search users for “${q}”`, hint: "Name, email or phone", href: `/users?search=${encodeURIComponent(q)}`, icon: Users },
-      { key: "search-complaints", label: `Search complaints for “${q}”`, hint: /^#?[0-9a-f]{6}$/i.test(q) ? "Complaint reference" : "Subject or reference", href: `/complaints?search=${encodeURIComponent(q)}&queue=all`, icon: MessageSquareWarning },
+      { key: "search-users", label: `Search users for “${q}”`, hint: "Name, email or phone", href: `/users?search=${encodeURIComponent(q)}`, icon: Users, group: "Search records" },
+      { key: "search-complaints", label: `Search complaints for “${q}”`, hint: /^#?[0-9a-f]{6}$/i.test(q) ? "Complaint reference" : "Subject or reference", href: `/complaints?search=${encodeURIComponent(q)}&queue=all`, icon: MessageSquareWarning, group: "Search records" },
     ];
     return [...pages, ...searches];
   }, [query]);
+
+  const groups = useMemo(() => {
+    const buckets = new Map<string, PaletteItem[]>();
+    for (const item of items) {
+      const bucket = buckets.get(item.group);
+      if (bucket) bucket.push(item); else buckets.set(item.group, [item]);
+    }
+    return Array.from(buckets.entries());
+  }, [items]);
+  const positionOf = useMemo(() => new Map(items.map((item, position) => [item.key, position])), [items]);
 
   useEffect(() => { setIndex(0); }, [query]);
 
@@ -202,23 +227,34 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
           <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-500">Esc</kbd>
         </div>
         <ul id="palette-results" role="listbox" aria-label="Results" className="scroll-thin max-h-[54vh] overflow-y-auto p-2">
-          {items.map((item, position) => {
-            const Icon = item.icon;
-            const active = position === index;
-            return (
-              <li key={item.key} id={`palette-${item.key}`} role="option" aria-selected={active}>
-                <button type="button" tabIndex={-1} onMouseEnter={() => setIndex(position)} onClick={() => go(item)} className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition", active ? "bg-[#8b75ff]/15 text-white" : "text-slate-300")}>
-                  <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg border", active ? "border-[#8b75ff]/40 bg-[#8b75ff]/15 text-[#ded8ff]" : "border-white/[0.07] bg-white/[0.03] text-slate-400")} aria-hidden="true"><Icon size={15} /></span>
-                  <span className="min-w-0 flex-1"><span className="block truncate font-medium">{item.label}</span><span className="block truncate text-[11px] text-slate-500">{item.hint}</span></span>
-                  {active ? <CornerDownLeft size={14} className="text-slate-500" aria-hidden="true" /> : null}
-                </button>
-              </li>
-            );
-          })}
+          {groups.map(([group, entries]) => (
+            <li key={group} role="presentation">
+              <p className="px-3 pb-1 pt-2 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">{group}</p>
+              <ul role="group" aria-label={group}>
+                {entries.map((item) => {
+                  const Icon = item.icon;
+                  const position = positionOf.get(item.key) ?? -1;
+                  const active = position === index;
+                  return (
+                    <li key={item.key} id={`palette-${item.key}`} role="option" aria-selected={active}>
+                      <button type="button" tabIndex={-1} onMouseEnter={() => setIndex(position)} onClick={() => go(item)} className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition", active ? "bg-[#8b75ff]/15 text-white" : "text-slate-300")}>
+                        <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg border", active ? "border-[#8b75ff]/40 bg-[#8b75ff]/15 text-[#ded8ff]" : "border-white/[0.07] bg-white/[0.03] text-slate-400")} aria-hidden="true"><Icon size={15} /></span>
+                        <span className="min-w-0 flex-1"><span className="block truncate font-medium">{item.label}</span><span className="block truncate text-[11px] text-slate-500">{item.hint}</span></span>
+                        {active ? <CornerDownLeft size={14} className="text-slate-500" aria-hidden="true" /> : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
           {!items.length ? <li className="px-3 py-6 text-center text-xs text-slate-500">No page matches. Type a name to search users.</li> : null}
         </ul>
-        <div className="flex items-center gap-3 border-t border-white/[0.06] px-4 py-2 text-[10px] text-slate-600">
-          <span>↑↓ navigate</span><span>↵ open</span><span className="ml-auto">Search covers users and complaints only where the backend supports it.</span>
+        <div className="flex flex-wrap items-center gap-3 border-t border-white/[0.06] px-4 py-2 text-[10px] text-slate-600">
+          <span className="inline-flex items-center gap-1"><kbd className="rounded border border-white/10 px-1">↑</kbd><kbd className="rounded border border-white/10 px-1">↓</kbd> navigate</span>
+          <span className="inline-flex items-center gap-1"><kbd className="rounded border border-white/10 px-1">↵</kbd> open</span>
+          <span className="inline-flex items-center gap-1"><kbd className="rounded border border-white/10 px-1">Esc</kbd> close</span>
+          <span className="ml-auto">Users and complaints only, where the backend supports the search. Nothing is stored.</span>
         </div>
       </div>
     </div>
@@ -294,6 +330,12 @@ export function AdminShell({ children, admin, apiConfigured }: { children: React
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
+  // Record the destination for the palette's in-memory "Jump back in" group.
+  useEffect(() => {
+    const query = searchParams.toString();
+    rememberRoute({ href: query ? `${pathname}?${query}` : pathname, label: pageTitle });
+  }, [pathname, searchParams, pageTitle]);
+
   return (
     <div className="min-h-screen bg-[#05060d] text-slate-100">
       <a className="skip-link print-hidden" href="#admin-main">Skip to main content</a>
@@ -331,22 +373,25 @@ export function AdminShell({ children, admin, apiConfigured }: { children: React
 
       <div className={cn("min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[76px]" : "lg:pl-[268px]")}>
         <header className="print-hidden sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-white/[0.07] bg-[#05060d]/88 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
-          <button className="focus-ring rounded-lg border border-white/[0.08] p-2 text-slate-300 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen}><Menu size={18} /></button>
-          <div className="hidden min-w-0 flex-1 lg:block">
+          <button className="focus-ring shrink-0 rounded-lg border border-white/[0.08] p-2 text-slate-300 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen}><Menu size={18} /></button>
+          <div className="min-w-0 flex-1">
             <Breadcrumbs pathname={pathname} group={groupLabel} title={pageTitle} />
-            <div className="mt-0.5 flex items-baseline gap-2">
+            <div className="mt-0.5 flex min-w-0 items-center gap-2">
               <p className="truncate font-display text-[13px] font-semibold tracking-[-0.01em] text-slate-200">{pageTitle}</p>
-              <span className="hidden text-[10px] uppercase tracking-[0.16em] text-slate-600 xl:inline">{groupLabel ?? "BROKA operations"}</span>
+              <span className="hidden shrink-0 items-center gap-1 rounded-full border border-[#8b75ff]/20 bg-[#8b75ff]/[0.07] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-[#b7a9ff] sm:inline-flex">
+                <span className="h-1 w-1 rounded-full bg-[#54d7e9]" aria-hidden="true" />
+                {groupLabel ?? "BROKA operations"}
+              </span>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <button type="button" onClick={() => setPaletteOpen(true)} className="focus-ring hidden min-w-[230px] items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-left text-xs text-slate-500 transition hover:border-[#8b75ff]/35 hover:text-slate-300 xl:flex" aria-label="Open command palette"><Search size={15} aria-hidden="true" /><span className="flex-1">Search or jump to…</span><kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-500">Ctrl K</kbd></button>
             <button type="button" onClick={() => setPaletteOpen(true)} className="focus-ring rounded-lg border border-white/[0.07] p-2 text-slate-400 xl:hidden" aria-label="Search or jump"><Search size={17} aria-hidden="true" /></button>
-            <span className="hidden items-center gap-1 sm:inline-flex">
+            <span className="hidden items-center gap-1 rounded-lg border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 sm:inline-flex">
+              <span className="pl-0.5 pr-1 text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">System</span>
               <StatusBadge tone={apiBadge.tone}>{apiBadge.label}</StatusBadge>
               <InfoTip label="Backend connectivity">{apiBadge.detail}</InfoTip>
-            </span>
-            <span className="hidden items-center gap-1.5 md:inline-flex">
+              <span className="mx-0.5 h-3 w-px bg-white/10" aria-hidden="true" />
               <StatusBadge tone={streamBadge.tone}>{streamBadge.label}</StatusBadge>
               <InfoTip label="Live alert stream">{streamBadge.detail}</InfoTip>
             </span>

@@ -143,6 +143,8 @@ export function PulseHero({ pulse, adminName, range, onRangeChange, status }: {
             <span className="inline-flex items-center gap-1.5"><Clock3 size={12} className="text-[#a895ff]" aria-hidden="true" />{now ? `${formatLocalDate(now)} · ${now.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}` : "\u00a0"}</span>
             <span className="hidden h-3 w-px bg-white/10 sm:block" aria-hidden="true" />
             <span>{range === "7" ? "7-day pulse window" : "30-day pulse window"}</span>
+            <span className="hidden h-3 w-px bg-white/10 sm:block" aria-hidden="true" />
+            <span>Africa/Nairobi · EAT (UTC+3)</span>
           </div>
           <p className="mt-4 max-w-2xl text-[14px] leading-7 text-slate-200">
             {metrics ? (
@@ -246,7 +248,7 @@ export function PulseTiles({ pulse }: { pulse: Pulse }) {
           ) : null}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="metric-rail">
         {shown.map((tile) => {
           const metric = metrics[tile.key];
           const Icon = tile.icon;

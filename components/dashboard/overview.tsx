@@ -9,8 +9,8 @@ import { KpiGrid } from "@/components/dashboard/kpi-grid";
 import { FinancialIntelligence } from "@/components/dashboard/financial-intelligence";
 import { MarketplaceMovement } from "@/components/dashboard/marketplace-movement";
 import { OperationsAndRisk } from "@/components/dashboard/operations-risk";
+import { PriorityQueue } from "@/components/dashboard/priority-queue";
 import { PulseHero, PulseTiles, TargetsPanel, TrustStrip, type PulseWindow } from "@/components/intelligence/founder-pulse";
-import { InsightFeed } from "@/components/intelligence/insight-feed";
 import { Panel } from "@/components/intelligence/visuals";
 import { StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import { isEndpointMissing, useAdminResource } from "@/hooks/use-admin-resource";
@@ -74,33 +74,38 @@ function OverviewBody({ admin }: { admin: AdminIdentity }) {
         : <UnavailablePanel title="The marketplace pulse could not be loaded" detail={pulse.error.message} action={<button type="button" onClick={() => void pulse.refetch()} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-200"><RefreshCw size={12} aria-hidden="true" />Retry</button>} />) : null}
       {pulse.data ? <PulseTiles pulse={pulse.data} /> : null}
 
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.32fr)_minmax(0,1fr)]">
-        <Panel
-          id="insights"
-          eyebrow="Decision intelligence"
-          title="What needs you, and why"
-          description="Deterministic rules over the same verified figures. Each card names its evidence and the workspace where you can act; no generative confidence score is implied."
-          actions={<Link href="/intelligence" className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white">Open intelligence <ArrowRight size={12} aria-hidden="true" /></Link>}
-        >
-          <InsightFeed data={insights.data} isLoading={insights.isLoading} error={insights.error} onRetry={() => void insights.refetch()} limit={6} columns={2} />
-        </Panel>
-        <div className="space-y-6">
-          {pulse.data ? <FinancialIntelligence pulse={pulse.data} /> : (
-            <Panel eyebrow="Financial intelligence" title="Platform economics">
-              <div className="space-y-2" aria-busy="true"><div className="skeleton h-20" /><div className="skeleton h-20" /></div>
-            </Panel>
-          )}
-          {pulse.data ? (
-            <Panel eyebrow="Trust" title="Complaints desk" description="First-reply deadlines: urgent 4h, high 24h, normal 72h, low 5 days." actions={<Link href="/complaints" className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white">Open desk <ArrowRight size={12} aria-hidden="true" /></Link>}>
-              <TrustStrip pulse={pulse.data} />
-            </Panel>
-          ) : null}
-        </div>
+      <PriorityQueue
+        insights={insights.data}
+        insightsLoading={insights.isLoading}
+        insightsError={insights.error}
+        onRetryInsights={() => void insights.refetch()}
+        snapshot={snapshot.data}
+        health={serviceHealth.data}
+        snapshotState={snapshotState}
+        windowDays={Number(range)}
+      />
+
+      <MarketplaceMovement snapshot={snapshot.data} state={snapshotState} />
+
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        {pulse.data ? <FinancialIntelligence pulse={pulse.data} /> : (
+          <Panel eyebrow="Financial intelligence" title="Platform economics">
+            <div className="space-y-2" aria-busy="true"><div className="skeleton h-20" /><div className="skeleton h-20" /></div>
+          </Panel>
+        )}
+        {pulse.data ? (
+          <Panel
+            eyebrow="Trust"
+            title="Complaints desk"
+            description="First-reply deadlines: urgent 4h, high 24h, normal 72h, low 5 days. Age and deadline, not colour alone."
+            actions={<Link href="/complaints" className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white">Open desk <ArrowRight size={12} aria-hidden="true" /></Link>}
+          >
+            <TrustStrip pulse={pulse.data} />
+          </Panel>
+        ) : null}
       </div>
 
       <OperationsAndRisk snapshot={snapshot.data} health={serviceHealth.data} pulse={pulse.data} snapshotState={snapshotState} healthState={healthState} />
-
-      <MarketplaceMovement snapshot={snapshot.data} state={snapshotState} />
 
       {pulse.data ? <TargetsPanel pulse={pulse.data} /> : null}
 

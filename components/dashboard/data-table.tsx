@@ -58,8 +58,15 @@ export function DataTable<T>({ rows, columns, rowKey, label, empty, selectedKey,
                 <tr
                   key={key}
                   aria-selected={selected || undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={cn(onRowClick && "cursor-pointer")}
+                  onKeyDown={onRowClick ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+                  } : undefined}
+                  className={cn(onRowClick && "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b75ff]")}
                 >
                   {columns.map((column) => {
                     const content = column.render(row);
@@ -81,8 +88,15 @@ export function DataTable<T>({ rows, columns, rowKey, label, empty, selectedKey,
           return (
             <li key={key}>
               <article
-                className={cn("rounded-xl border p-3.5 transition", selected ? "border-[#8b75ff]/45 bg-[#8b75ff]/[0.08]" : "border-white/[0.07] bg-white/[0.025]")}
+                tabIndex={onRowClick ? 0 : undefined}
+                className={cn("rounded-xl border p-3.5 transition", selected ? "border-[#8b75ff]/45 bg-[#8b75ff]/[0.08]" : "border-white/[0.07] bg-white/[0.025]", onRowClick && "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b75ff]")}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={onRowClick ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onRowClick(row);
+                  }
+                } : undefined}
               >
                 <div className="flex items-start justify-between gap-2">{primary.render(row)}</div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">

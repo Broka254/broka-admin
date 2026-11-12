@@ -14,6 +14,13 @@ beforeAll(() => {
   }
 });
 
+// The revenue window now lives in the URL; supply a router in tests.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/revenue",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock("@/hooks/use-revenue", () => ({
   useRevenue: vi.fn(),
   useTimeseries: vi.fn(),

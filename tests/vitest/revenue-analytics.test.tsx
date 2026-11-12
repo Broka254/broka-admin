@@ -14,6 +14,13 @@ beforeAll(() => {
   }
 });
 
+// The analytics window now lives in the URL; supply a router in tests.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/analytics/marketplace",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock("@/hooks/use-timeseries", () => ({
   useTimeseries: vi.fn(),
 }));

@@ -3,12 +3,9 @@
 import { useMemo } from "react";
 
 import type { RevenueBucket } from "@/lib/api/revenue";
+import type { DateRangeSelection } from "@/lib/date-range";
 
-export interface DateRangeSelection {
-  from: string;
-  to: string;
-  bucket: RevenueBucket;
-}
+export type { DateRangeSelection };
 
 interface DateRangePickerProps extends DateRangeSelection {
   onChange: (selection: DateRangeSelection) => void;

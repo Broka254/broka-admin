@@ -240,18 +240,21 @@ export function PageHeader({ eyebrow, title, description, actions, icon, meta }:
  * computed and over which window. Never claims a live feed when a snapshot
  * is what the endpoint returned.
  */
-export function DataFreshness({ generatedAt, windowLabel, source, state = "ready", className }: {
+export function DataFreshness({ generatedAt, windowLabel, source, state = "ready", label, className }: {
   generatedAt?: string | null;
   windowLabel?: string;
   source?: string;
   state?: "loading" | "ready" | "error" | "unavailable";
+  /** Overrides the default provenance wording, e.g. "Live query". */
+  label?: string;
   className?: string;
 }) {
-  const label = state === "loading" ? "Loading data" : state === "error" ? "Refresh failed" : state === "unavailable" ? "Data unavailable" : "Snapshot data";
+  const wording = label ?? "Snapshot data";
+  const statusLabel = state === "loading" ? "Loading data" : state === "error" ? "Refresh failed" : state === "unavailable" ? "Data unavailable" : wording;
   return (
     <span className={cn("freshness-chip", className)}>
       <span className="freshness-dot" data-state={state} aria-hidden="true" />
-      <span className="font-semibold text-slate-300">{label}</span>
+      <span className="font-semibold text-slate-300">{statusLabel}</span>
       {generatedAt ? <span className="text-slate-500">· generated {relativeTime(generatedAt)}</span> : null}
       {windowLabel ? <span className="hidden text-slate-600 sm:inline">· {windowLabel}</span> : null}
       {source ? <InfoTip label="Data provenance">{`${source}${generatedAt ? ` Generated at ${generatedAt}.` : ""}`}</InfoTip> : null}

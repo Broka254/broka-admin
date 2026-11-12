@@ -6,7 +6,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AdminRequestError, useAdminResource, useAdminUsers } from "@/hooks/use-admin-resource";
-import { PageHeader } from "@/components/intelligence/visuals";
+import { Chip, DataFreshness, PageHeader } from "@/components/intelligence/visuals";
 import { Skeleton, ResourceState, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import { UsersTable } from "@/components/dashboard/users-table";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
@@ -197,6 +197,10 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
   const params = useMemo(() => new URLSearchParams(searchParams.toString()), [searchParams]);
   const page = Math.max(1, Number(params.get("page") ?? "1") || 1);
   const query = useMemo(() => buildQuery(params, definition, page), [params, definition, page]);
+  const activeFilters = (definition.filters ?? []).filter((filter) => {
+    const value = params.get(filter.param);
+    return value && value !== "all" && value !== definition.defaults?.[filter.param];
+  });
 
   const isUsers = definition.resource === "users";
   const resourceQuery = useAdminResource(definition.resource ?? "summary", query, Boolean(definition.resource) && !isUsers);
@@ -223,7 +227,12 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
 
   if (definition.custom) {
     return <div className="space-y-6">
-      <PageHeader eyebrow={definition.eyebrow} title={definition.title} description={definition.description} actions={<StatusBadge tone="neutral">Time-series surface</StatusBadge>} />
+      <PageHeader
+        eyebrow={definition.eyebrow}
+        title={definition.title}
+        description={definition.description}
+        actions={<StatusBadge tone="neutral">Time-series surface</StatusBadge>}
+      />
       {definition.custom === "marketplaceAnalytics" ? <MarketplaceAnalytics /> : <UsersAnalytics />}
     </div>;
   }
@@ -253,6 +262,17 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
       eyebrow={definition.eyebrow}
       title={definition.title}
       description={definition.description}
+      meta={<>
+        <DataFreshness
+          label="Server-filtered query"
+          state={state === "ready" ? "ready" : state === "loading" ? "loading" : endpointMissing ? "unavailable" : "error"}
+          windowLabel={typeof total === "number" ? `${total.toLocaleString()} matching record${total === 1 ? "" : "s"}` : "filtered list"}
+          source={`GET ${definition.endpoint}. Filters and the page are stored in the URL; totals come from the backend, never from the visible rows.`}
+        />
+        {activeFilters.map((filter) => (
+          <Chip key={filter.param} tone="info">{filter.kind === "select" ? filter.label : filter.placeholder}: {params.get(filter.param)}</Chip>
+        ))}
+      </>}
       actions={<>
         {typeof total === "number" ? <StatusBadge tone="info">{total.toLocaleString()} matching record{total === 1 ? "" : "s"}</StatusBadge> : null}
         <StatusBadge tone={state === "ready" ? "success" : state === "loading" || endpointMissing ? "warning" : "danger"}>{state === "ready" ? "Live backend data" : state === "loading" ? "Loading" : endpointMissing ? "Awaiting backend upgrade" : "Unavailable"}</StatusBadge>

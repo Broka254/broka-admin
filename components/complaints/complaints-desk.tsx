@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ComplaintDrawer } from "@/components/complaints/complaint-drawer";
-import { Chip, DeltaChip, PageHeader, Panel, StatTile } from "@/components/intelligence/visuals";
+import { Chip, DataFreshness, DeltaChip, PageHeader, Panel, StatTile } from "@/components/intelligence/visuals";
 import { ResourceState, StatusBadge } from "@/components/ui/primitives";
 import { isEndpointMissing, useAdminResource } from "@/hooks/use-admin-resource";
 import { buildFeedbackParams, COMPLAINT_PAGE_SIZE, complaintQueue, complaintSort, type ComplaintQueue } from "@/hooks/use-complaints";
@@ -179,6 +179,12 @@ export function ComplaintsDesk() {
         title="Complaints & feedback"
         description="Everything users report from the BROKA app, with first-reply deadlines by severity. A reply or a status change is pushed to the reporter's phone and appears in their Feedback & complaints screen."
         icon={<Inbox size={14} />}
+        meta={<DataFreshness
+          label="Live queue"
+          state={missing ? "unavailable" : list.isLoading || stats.isLoading ? "loading" : list.isError || stats.isError ? "error" : "ready"}
+          windowLabel={`${QUEUES.find((entry) => entry.value === queue)?.label ?? queue} queue`}
+          source="GET /admin/feedback with triage fields and /admin/feedback/stats. First-reply deadlines: urgent 4h, high 24h, normal 72h, low 5 days."
+        />}
         actions={<>
           {s ? <StatusBadge tone={s.sla_breached ? "danger" : "success"}>{s.sla_breached ? `${s.sla_breached} past deadline` : "All inside deadlines"}</StatusBadge> : null}
           <button type="button" onClick={() => { void list.refetch(); void stats.refetch(); }} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white"><RefreshCw size={12} aria-hidden="true" />Refresh</button>

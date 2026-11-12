@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { ReportViewer } from "@/components/reports/report-viewer";
-import { Chip, Segmented } from "@/components/intelligence/visuals";
+import { Chip, DataFreshness, Segmented } from "@/components/intelligence/visuals";
 import { ResourceState, SectionEyebrow, StatusBadge } from "@/components/ui/primitives";
 import { isEndpointMissing, useAdminDetail, useAdminResource } from "@/hooks/use-admin-resource";
 import { useGenerateReport } from "@/hooks/use-intelligence";
@@ -101,11 +101,19 @@ export function ReportsCenter() {
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 xl:flex-row xl:items-end xl:justify-between">
+      <section className="instrument-panel flex flex-col gap-4 px-5 py-5 sm:px-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <SectionEyebrow>Founder reports</SectionEyebrow>
           <h1 className="font-display text-3xl font-bold tracking-[-0.05em] text-white">The business, in writing</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Daily, weekly and monthly reports written automatically when each period closes, with the figures frozen as they stood. Weekly and monthly reports are announced in the Alert Centre. Download, print or paste the digest into your team chat.</p>
+          <div className="mt-3">
+            <DataFreshness
+              label="Report archive"
+              state={archive.isLoading ? "loading" : missing ? "unavailable" : archive.isError ? "error" : "ready"}
+              windowLabel={`${kind} reports`}
+              source="GET /admin/reports for stored reports. A live preview is computed now and is never stored."
+            />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Segmented label="Report kind" value={kind} options={KINDS} onChange={(value) => update({ kind: value === "weekly" ? null : value, id: null })} />

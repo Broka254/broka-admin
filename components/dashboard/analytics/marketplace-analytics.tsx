@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -12,31 +14,45 @@ import {
 } from "recharts";
 
 import { DateRangePicker, type DateRangeSelection } from "@/components/dashboard/date-range-picker";
+import { DataFreshness } from "@/components/intelligence/visuals";
 import { ResourceState, UnavailablePanel } from "@/components/ui/primitives";
 import { AdminRequestError, isEndpointMissing } from "@/hooks/use-admin-resource";
 import { useTimeseries } from "@/hooks/use-timeseries";
+import { useUrlDateRange } from "@/hooks/use-url-date-range";
 import { formatCompact, formatShortDate } from "@/lib/format";
 import type { TimeseriesPoint } from "@/lib/api/revenue";
 
-// Self-fetching marketplace charts. The parent registry wires this in later,
-// so this component takes no required props. It renders whatever series keys
-// the backend returns and skips missing ones gracefully. GMV is labelled
-// precisely as GMV and never as revenue.
+function defaultRange(): DateRangeSelection {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - 30);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), bucket: "day" };
+}
+
+export function AnalyticsWindowNote({ selection }: { selection: DateRangeSelection }) {
+  return (
+    <p className="text-[10px] leading-4 text-slate-600">
+      Window {formatShortDate(selection.from)} → {formatShortDate(selection.to)} · {selection.bucket} buckets · stored in the URL so a reload or a shared link reopens it.
+    </p>
+  );
+}
+
 export function MarketplaceAnalytics() {
-  const [selection, setSelection] = useState<DateRangeSelection>(() => {
-    const to = new Date();
-    const from = new Date();
-    from.setDate(to.getDate() - 30);
-    return {
-      from: from.toISOString().slice(0, 10),
-      to: to.toISOString().slice(0, 10),
-      bucket: "day",
-    };
-  });
+  const fallback = useMemo(defaultRange, []);
+  const [selection, setSelection] = useUrlDateRange(fallback);
   const query = useTimeseries(selection);
   return (
     <section aria-label="Marketplace analytics" className="space-y-4">
-      <DateRangePicker {...selection} onChange={setSelection} />
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <DateRangePicker {...selection} onChange={setSelection} />
+        <DataFreshness
+          label="Server-computed series"
+          state={query.isLoading ? "loading" : query.isError ? "error" : "ready"}
+          windowLabel={`${selection.from} → ${selection.to} · ${selection.bucket}`}
+          source="GET /admin/analytics/timeseries. Buckets with no recorded activity are absent; this view never fills them with zeros."
+        />
+      </div>
+      <AnalyticsWindowNote selection={selection} />
       <TimeseriesBody
         isLoading={query.isLoading}
         isError={query.isError}
@@ -54,13 +70,16 @@ export interface AnalyticsChartDef {
   title: string;
   subtitle: string;
   money?: boolean;
+  /** Verified workspace where the same records can be inspected. */
+  href?: string;
+  linkLabel?: string;
 }
 
 export const MARKETPLACE_CHARTS: AnalyticsChartDef[] = [
-  { key: "gmv_minor", title: "GMV", subtitle: "Gross merchandise value agreed per bucket", money: true },
-  { key: "deals_agreed", title: "Deals agreed", subtitle: "Agreed deals per bucket" },
-  { key: "listings_created", title: "Listings created", subtitle: "New listings per bucket" },
-  { key: "disputes_opened", title: "Disputes opened", subtitle: "New disputes per bucket" },
+  { key: "gmv_minor", title: "GMV", subtitle: "Gross merchandise value agreed per bucket", money: true, href: "/deals", linkLabel: "Open deals" },
+  { key: "deals_agreed", title: "Deals agreed", subtitle: "Agreed deals per bucket", href: "/deals", linkLabel: "Open deals" },
+  { key: "listings_created", title: "Listings created", subtitle: "New listings per bucket", href: "/listings", linkLabel: "Open listings" },
+  { key: "disputes_opened", title: "Disputes opened", subtitle: "New disputes per bucket", href: "/disputes", linkLabel: "Open disputes" },
 ];
 
 export function TimeseriesBody({
@@ -105,14 +124,19 @@ export function TimeseriesBody({
   const available = charts.filter((chart) => (series?.[chart.key]?.length ?? 0) > 0);
   if (available.length === 0) return <ResourceState state="empty" message={emptyMessage} />;
   return (
-    <div className="grid gap-3 xl:grid-cols-2">
-      {available.map((chart) => (
-        <SeriesChart
-          key={chart.key}
-          def={chart}
-          points={series?.[chart.key] ?? []}
-        />
-      ))}
+    <div className="space-y-3">
+      <div className="grid gap-3 xl:grid-cols-2">
+        {available.map((chart) => (
+          <SeriesChart
+            key={chart.key}
+            def={chart}
+            points={series?.[chart.key] ?? []}
+          />
+        ))}
+      </div>
+      <p className="text-[10px] leading-4 text-slate-600">
+        {available.length} of {charts.length} series returned data. A missing series is shown as unavailable, never as a flat zero line.
+      </p>
     </div>
   );
 }
@@ -124,14 +148,34 @@ export function SeriesChart({ def, points }: { def: AnalyticsChartDef; points: T
   );
   const formatValue = (value: number) =>
     def.money ? formatCompact(value) : new Intl.NumberFormat("en", { notation: "compact" }).format(value);
+  const first = points[0];
+  const last = points[points.length - 1];
+  const total = points.reduce((sum, point) => sum + point.v, 0);
+  const summary = `${def.title}: ${points.length} ${points.length === 1 ? "bucket" : "buckets"} from ${formatShortDate(first.t)} to ${formatShortDate(last.t)}. Total ${formatValue(total)}. Highest ${formatValue(Math.max(...points.map((point) => point.v)))}.`;
   return (
-    <div className="rounded-xl border border-white/10 bg-[#0c1020] p-4">
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{def.title}</p>
-      <h3 className="mt-1 font-display text-base font-bold text-white">{def.subtitle}</h3>
-      <div className="mt-3 h-52" data-testid={`timeseries-chart-${def.key}`}>
+    <figure className="data-panel flex flex-col p-4 transition-colors hover:border-[#8b75ff]/30">
+      <figcaption className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#a895ff]">{def.title}</p>
+          <h3 className="mt-1 font-display text-[15px] font-bold tracking-[-0.02em] text-white">{def.subtitle}</h3>
+        </div>
+        <span className="shrink-0 rounded-full border border-white/[0.08] bg-black/25 px-2 py-0.5 text-[10px] tabular-nums text-slate-500">{points.length} pts</span>
+      </figcaption>
+      <div
+        className="mt-3 h-52"
+        data-testid={`timeseries-chart-${def.key}`}
+        role="img"
+        aria-label={summary}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="rgba(195,202,226,0.12)" vertical={false} />
+            <defs>
+              <linearGradient id={`fill-${def.key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#54d7e9" stopOpacity={0.32} />
+                <stop offset="100%" stopColor="#54d7e9" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="rgba(195,202,226,0.1)" vertical={false} />
             <XAxis
               dataKey="t"
               tickFormatter={(value: string) => formatShortDate(value)}
@@ -166,12 +210,23 @@ export function SeriesChart({ def, points }: { def: AnalyticsChartDef; points: T
               dataKey="v"
               name={def.title}
               stroke="#54d7e9"
-              fill="rgba(84,215,233,0.18)"
+              fill={`url(#fill-${def.key})`}
               strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 3, fill: "#54d7e9" }}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
-    </div>
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/[0.055] pt-2">
+        <span className="text-[10px] tabular-nums text-slate-600">Total {formatValue(total)} · units from the backend series</span>
+        {def.href ? (
+          <Link href={def.href} className="focus-ring inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 transition hover:text-[#ded8ff]">
+            {def.linkLabel ?? "Open workspace"}
+            <ArrowUpRight size={10} aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+    </figure>
   );
 }

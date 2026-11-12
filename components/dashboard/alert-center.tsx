@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useAdminAlerts, useAcknowledgeAlert, useResolveAlert } from "@/hooks/use-alerts";
 import { useAlertsStream } from "@/hooks/use-alerts-stream";
 import { AdminRequestError, isEndpointMissing } from "@/hooks/use-admin-resource";
-import { PageHeader, Panel } from "@/components/intelligence/visuals";
+import { DataFreshness, PageHeader, Panel } from "@/components/intelligence/visuals";
 import { InfoTip } from "@/components/ui/tooltip";
 import { ResourceState, StatusBadge, UnavailablePanel } from "@/components/ui/primitives";
 import type { AdminAlert } from "@/lib/api/schemas";
@@ -105,7 +105,7 @@ export function AlertCenter() {
     if (isEndpointMissing(alerts.error)) {
       return (
         <div className="space-y-6">
-          <PageHeader eyebrow="Operational awareness" title="Alert Centre" description="Persisted admin alerts with acknowledgement and resolution." icon={<BellRing size={14} />} actions={<StatusBadge tone="warning">Backend upgrade required</StatusBadge>} />
+          <PageHeader eyebrow="Operational awareness" title="Alert Centre" description="Persisted admin alerts with acknowledgement and resolution." icon={<BellRing size={14} />} meta={<DataFreshness label="Persisted alert feed" state="unavailable" source="GET /admin/alerts is not served by this backend yet." />} actions={<StatusBadge tone="warning">Backend upgrade required</StatusBadge>} />
           <UnavailablePanel title="Alert source not deployed" detail="The deployed backend does not expose GET /admin/alerts yet (HTTP 404). The feed activates automatically after the backend upgrade." />
         </div>
       );
@@ -126,6 +126,12 @@ export function AlertCenter() {
         title="Alert Centre"
         description="Persisted admin alerts from the backend reconciliation bridge. Acknowledgement and resolution are audited; an unacknowledged alert is never the same as a resolved one."
         icon={<BellRing size={14} />}
+        meta={<DataFreshness
+          label="Persisted alert feed"
+          state={alerts.isLoading ? "loading" : alerts.isError ? "error" : "ready"}
+          windowLabel={`${items.length} in view · ${status} / ${severity}`}
+          source="GET /admin/alerts for the persisted ledger. SSE stream state is reported separately and does not prove backend health."
+        />}
         actions={<>
           <span className="inline-flex items-center gap-1"><StatusBadge tone={stream.status === "connected" ? "success" : stream.status === "connecting" ? "warning" : "neutral"}>{stream.status === "connected" ? "Live" : stream.status === "connecting" ? "Connecting" : "Offline"}</StatusBadge><InfoTip label="Live alert stream">Alerts stream over SSE and replay on reconnect. Offline falls back to polling; it does not mean the backend is healthy or unhealthy.</InfoTip></span>
           {unread > 0 ? <StatusBadge tone="info">{unread} unread</StatusBadge> : <StatusBadge tone="success">All read</StatusBadge>}

@@ -35,6 +35,11 @@ import {
   ReportDetailSchema,
   ReportGenerateInSchema,
 } from "@/lib/api/intelligence-schemas";
+import {
+  AdminEmailSendInSchema,
+  AdminEmailSendOutSchema,
+  EMAIL_ERROR_CODES,
+} from "@/lib/api/email-schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,7 +68,18 @@ type MutationOperation = {
   requestSchema: ZodType | null;
   responseSchema: ZodType;
   requiresIdempotencyKey?: boolean;
+  // Error codes the backend gives this operation's failures, each with a
+  // fixed message the backend writes. A failure body that carries one of
+  // these is relayed - code and message - whatever its status, 5xx included.
+  // Without this a 5xx body is never passed on (it can hold a stack trace or
+  // an internal payload); the allowlist is what lets "the email provider
+  // refused the sender" reach an administrator instead of "temporarily
+  // unavailable". Anything else, and any body without a listed code, is
+  // still replaced by the generic message.
+  relayErrorCodes?: ReadonlySet<string>;
 };
+
+const EMAIL_ERROR_CODE_SET: ReadonlySet<string> = new Set(EMAIL_ERROR_CODES);
 
 const MUTATION_OPERATIONS: MutationOperation[] = [
   {
@@ -173,6 +189,18 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/reports\/generate$/,
     requestSchema: ReportGenerateInSchema,
     responseSchema: ReportDetailSchema,
+  },
+  // Email Reply: one message to one address from the BROKA admin address. The
+  // request schema is strict and names no sender, Reply-To or HTML, so none
+  // can be supplied. An email cannot be recalled, so a key is required: a
+  // retry of a send the dashboard timed out on must not become a second email.
+  {
+    method: "POST",
+    pattern: /^admin\/email\/send$/,
+    requestSchema: AdminEmailSendInSchema,
+    responseSchema: AdminEmailSendOutSchema,
+    requiresIdempotencyKey: true,
+    relayErrorCodes: EMAIL_ERROR_CODE_SET,
   },
 ];
 
@@ -419,21 +447,28 @@ async function handleMutation(
     if (!upstream.ok) {
       // Only a client-error body is relayed to the browser, and only after it
       // is length-capped. A 5xx body can contain an upstream stack trace or
-      // internal payload, so it is replaced with a generic message.
+      // internal payload, so it is replaced with a generic message - unless
+      // the operation lists the error codes its backend gives, and the body
+      // carries one of them (see MutationOperation.relayErrorCodes).
       let upstreamErrDetail: string | undefined;
-      if (upstream.status < 500) {
+      let relayedCode: string | undefined;
+      if (upstream.status < 500 || operation.relayErrorCodes) {
         try {
-          const errJson = (await upstream.json()) as { detail?: string; message?: string };
+          const errJson = (await upstream.json()) as { detail?: unknown; message?: unknown; code?: unknown };
           const detail = errJson.detail || errJson.message;
-          if (typeof detail === "string" && detail.trim() !== "") {
+          const listed = typeof errJson.code === "string" && operation.relayErrorCodes?.has(errJson.code);
+          if (typeof detail === "string" && detail.trim() !== "" && (upstream.status < 500 || listed)) {
             upstreamErrDetail = detail.trim().slice(0, 300);
+            if (listed) relayedCode = errJson.code as string;
           }
         } catch {
           upstreamErrDetail = undefined;
         }
       }
       const code =
-        upstream.status === 409
+        relayedCode
+          ? relayedCode
+          : upstream.status === 409
           ? "conflict"
           : upstream.status === 422
           ? "validation_failed"

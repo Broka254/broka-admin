@@ -67,6 +67,8 @@ instead of failing.
   in progress, generation for any past period, and Markdown, CSV, print/PDF and a
   copyable digest.
 
+- **Email Reply (`/email-reply`)**: write to a customer from the BROKA admin address (`Broka Admin <admin@broka.co.ke>`); replies come back to `admin@broka.co.ke`. A recipient, a subject and a plain-text message, with progress, a confirmation carrying the provider's reference, and the server's own wording when something fails. The sender is the backend's `BROKA_ADMIN_EMAIL_FROM` and is shown, never editable; the Resend key stays in the backend and never reaches this application or the browser. This is for sending only: it shows no inbox and no list of sent messages. Needs a backend with `POST /admin/email/send`; the administrator needs the `can_send_admin_email` permission.
+
 Press **Ctrl+K** (⌘K on macOS) anywhere to jump to a page or search users and
 complaints.
 

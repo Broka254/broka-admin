@@ -66,6 +66,10 @@ Proxy rules added with these routes:
 - `POST /admin/users/{user_id}/recompute-trust`
 - `POST /admin/users/{user_id}/promote-admin` — requires `reason`.
 - `POST /admin/fraud-events/{event_id}/resolve` — records `reviewed_by_admin` and an audit row.
+- `POST /admin/email/send` — Email Reply (`/email-reply`): one message to one address, sent from the BROKA admin address. Body `{ to, subject, message }`, all plain text; the request schema is strict, so a sender, Reply-To, HTML, cc or bcc is refused (`422`) before anything is forwarded. The sender and `Reply-To` are the backend's `BROKA_ADMIN_EMAIL_FROM` setting; the dashboard shows them but cannot change them. Requires the `can_send_admin_email` permission, is limited to 30 sends an hour per administrator, and answers `{ status: "sent", message_id, sender, reply_to }` once the provider has accepted the message (acceptance, not inbox delivery). Sending only: there is no endpoint that reads a mailbox or lists what was sent.
+  - **Idempotency:** the proxy requires `X-Idempotency-Key`. An email cannot be recalled, so the browser keeps one key per message, reuses it for every retry after a failure that may have sent it (no answer, a 5xx, a request still in flight) and takes a new one after a refusal that sent nothing or a changed message. The backend hashes the key into the provider's own `Idempotency-Key`, so a retry after a timeout returns the first result instead of a second email.
+  - **Failures** carry a fixed message written by the backend, never the provider's own error text (which can echo the recipient): `email_rejected` (422, check the address), `email_sender_refused` (502, the Resend key or the sending domain), `email_provider_limit` (429), `email_duplicate_request` (409), `email_provider_unavailable` (502, may not have been sent; retrying is safe) and `email_not_configured` (503).
+  - **Audit:** each attempt writes `admin_email_sent` or `admin_email_failed` with the administrator, the provider's message id, the recipient's domain and the lengths of the subject and message. Neither the address, the subject nor the message is logged or audited.
 
 The admin-domain user/fraud mutations above are guarded by
 `idempotency_guard`, which reads **`X-Idempotency-Key`**, and record audit rows.
@@ -159,7 +163,12 @@ browser to the protected API:
   `422 validation_failed` instead of being forwarded or silently dropped.
 - A 5xx upstream body is never relayed to the browser (it may contain a stack trace
   or an internal payload); a 4xx detail is relayed after being length-capped; a 404
-  upstream is reported as `endpoint_unavailable`.
+  upstream is reported as `endpoint_unavailable`. The one exception is an operation
+  that lists the error codes its backend gives (`relayErrorCodes`, used by
+  `admin/email/send`): a failure body carrying one of those codes is relayed with its
+  code and fixed message whatever its status, so "the email provider refused the
+  sender" is not shown as "temporarily unavailable". A 5xx without a listed code is
+  still replaced by the generic message, and so is any 5xx on another operation.
 - Responses are validated against the registered response contract. Contract drift
   returns `502 contract_validation_failed` and is logged as a structured event.
 - Every proxy response is sent with `Cache-Control: no-store`, and the route is

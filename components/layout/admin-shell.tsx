@@ -2,7 +2,7 @@
 
 import {
   Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronDown, ChevronLeft, ChevronRight, ClipboardList,
-  CornerDownLeft, FileSearch, FileText, Gauge, Landmark, LayoutDashboard, LogOut, Megaphone, Menu,
+  CornerDownLeft, FileSearch, FileText, Gauge, Landmark, LayoutDashboard, LogOut, Mail, Megaphone, Menu,
   MessageSquareWarning, Network, Radar, Receipt, Search, ShieldAlert, Store, TrendingUp, Users, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -22,7 +22,7 @@ type NavGroup = { label: string; entries: NavEntry[] };
 
 const navGroups: NavGroup[] = [
   { label: "Founder", entries: [{ label: "Command Center", href: "/", icon: LayoutDashboard }, { label: "Intelligence", href: "/intelligence", icon: Radar }, { label: "Growth", href: "/growth", icon: TrendingUp }, { label: "Reports", href: "/reports", icon: FileText }] },
-  { label: "Respond", entries: [{ label: "Complaints", href: "/complaints", icon: MessageSquareWarning, badge: "complaints" }, { label: "Alert Centre", href: "/alerts", icon: Bell }] },
+  { label: "Respond", entries: [{ label: "Complaints", href: "/complaints", icon: MessageSquareWarning, badge: "complaints" }, { label: "Email Reply", href: "/email-reply", icon: Mail }, { label: "Alert Centre", href: "/alerts", icon: Bell }] },
   { label: "Marketplace", entries: [{ label: "Listings", href: "/listings", icon: Store }, { label: "Deals", href: "/deals", icon: ClipboardList }, { label: "Stores", href: "/stores", icon: Store }] },
   { label: "Identity", entries: [{ label: "All Users", href: "/users", icon: Users }, { label: "Admins", href: "/users?type=admin", icon: Users }] },
   { label: "Trust & Safety", entries: [{ label: "Fraud", href: "/fraud", icon: ShieldAlert }, { label: "Disputes", href: "/disputes", icon: FileSearch }] },

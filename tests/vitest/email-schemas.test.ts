@@ -7,6 +7,7 @@ import {
   EMAIL_MESSAGE_MAX,
   EMAIL_SUBJECT_MAX,
   isValidRecipient,
+  type AdminEmailSendIn,
 } from "@/lib/api/email-schemas";
 
 // The same cases as the backend's rules for the recipient
@@ -47,19 +48,20 @@ describe("AdminEmailSendInSchema", () => {
     expect(AdminEmailSendInSchema.safeParse({ ...good, to }).success).toBe(true);
   });
 
-  it.each([
-    [{ to: "" }, "recipient"],
-    [{ to: "   " }, "recipient"],
-    [{ to: "not-an-address" }, "recipient"],
+  const REFUSED: Array<[Partial<AdminEmailSendIn>, string]> = [
+    [{ to: "" }, "no recipient"],
+    [{ to: "   " }, "a blank recipient"],
+    [{ to: "not-an-address" }, "a recipient that is not an address"],
     [{ to: "a@b.com, c@d.com" }, "two recipients"],
-    [{ subject: "" }, "blank subject"],
+    [{ subject: "" }, "a blank subject"],
     [{ subject: "line one\nBcc: x@y.com" }, "a header smuggled through the subject"],
     [{ subject: "a\u2028b" }, "a line separator in the subject"],
-    [{ subject: "x".repeat(EMAIL_SUBJECT_MAX + 1) }, "long subject"],
-    [{ message: "  \n " }, "blank message"],
+    [{ subject: "x".repeat(EMAIL_SUBJECT_MAX + 1) }, "a long subject"],
+    [{ message: "  \n " }, "a blank message"],
     [{ message: "a\u0000b" }, "a NUL byte"],
-    [{ message: "x".repeat(EMAIL_MESSAGE_MAX + 1) }, "long message"],
-  ])("refuses %j (%s)", (patch) => {
+    [{ message: "x".repeat(EMAIL_MESSAGE_MAX + 1) }, "a long message"],
+  ];
+  it.each(REFUSED)("refuses %j (%s)", (patch) => {
     expect(AdminEmailSendInSchema.safeParse({ ...good, ...patch }).success).toBe(false);
   });
 

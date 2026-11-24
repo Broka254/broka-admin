@@ -35,7 +35,6 @@ import {
   ReportDetailSchema,
   ReportGenerateInSchema,
 } from "@/lib/api/intelligence-schemas";
-import { MarketScanResultSchema } from "@/lib/api/market-schemas";
 import {
   AdminEmailSendInSchema,
   AdminEmailSendOutSchema,
@@ -183,14 +182,6 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/feedback\/([A-Za-z0-9-]+)$/,
     requestSchema: FeedbackTriageInSchema,
     responseSchema: FeedbackAdminItemSchema,
-  },
-  // Run the anomaly scan: raises deduplicated alerts only, never changes an
-  // account or payment. Re-running is naturally idempotent.
-  {
-    method: "POST",
-    pattern: /^admin\/intelligence\/market\/anomalies\/scan$/,
-    requestSchema: null,
-    responseSchema: MarketScanResultSchema,
   },
   // Build or rebuild one closed period's founder report: an upsert.
   {

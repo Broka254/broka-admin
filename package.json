@@ -13,6 +13,7 @@
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:contracts": "node --test tests/*.test.mjs",
+    "prepare": "git config core.hooksPath .githooks && chmod +x .githooks/pre-push || true",
     "check": "pnpm typecheck && pnpm lint",
     "zip": "rm -f ../broka-admin.zip && zip -r ../broka-admin.zip . -x 'node_modules/*' '.next/*' '.git/*' '.env' '.env.local' '.env.development' '.env.production' '*.log' '*.tsbuildinfo'"
   },

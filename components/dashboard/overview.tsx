@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { KpiGrid } from "@/components/dashboard/kpi-grid";
 import { FinancialIntelligence } from "@/components/dashboard/financial-intelligence";
+import { MarketplaceActivity } from "@/components/dashboard/analytics/marketplace-activity";
 import { MarketplaceMovement } from "@/components/dashboard/marketplace-movement";
 import { OperationsAndRisk } from "@/components/dashboard/operations-risk";
 import { PriorityQueue } from "@/components/dashboard/priority-queue";
@@ -86,6 +87,8 @@ function OverviewBody({ admin }: { admin: AdminIdentity }) {
       />
 
       <MarketplaceMovement snapshot={snapshot.data} state={snapshotState} />
+
+      <MarketplaceActivity windowDays={Number(range)} />
 
       <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         {pulse.data ? <FinancialIntelligence pulse={pulse.data} /> : (

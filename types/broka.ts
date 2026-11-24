@@ -12,13 +12,13 @@ export type ApiResource =
   | "communications" | "workerDiagnostics" | "communicationDetail" | "communicationRecipients" | "communicationStats"
   | "alerts" | "revenue" | "timeseries" | "productionCosts" | "productionCostSummary" | "productionCostUsage" | "productionCostEntries" | "productionCostAdjustments" | "productionCostPricing" | "listingDetail" | "disputeDetail" | "storeDetail"
   | "intelligencePulse" | "intelligenceInsights" | "intelligenceCategories" | "intelligenceGeography" | "intelligenceFunnel"
-  | "intelligenceCohorts" | "intelligenceSellers" | "reports" | "reportPreview" | "reportDetail"
+  | "intelligenceCohorts" | "intelligenceSellers" | "marketRankings" | "marketPerformance" | "marketAnomalies" | "marketModels" | "marketListingDetail" | "reports" | "reportPreview" | "reportDetail"
   | "feedback" | "feedbackStats" | "feedbackDetail";
 
 export type StaticAdminResource = Exclude<
   ApiResource,
   "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats"
-  | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail"
+  | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail" | "marketListingDetail"
 >;
 
 export type AdminActionName = "flag" | "unflag" | "recompute-trust" | "promote-admin" | "resolve-fraud-event";

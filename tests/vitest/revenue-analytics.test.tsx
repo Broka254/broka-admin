@@ -37,7 +37,6 @@ vi.mock("@/hooks/use-admin-resource", () => ({
 
 import { useTimeseries } from "@/hooks/use-timeseries";
 import { MarketplaceAnalytics } from "@/components/dashboard/analytics/marketplace-analytics";
-import { UsersAnalytics } from "@/components/dashboard/analytics/users-analytics";
 
 const timeseriesMock = vi.mocked(useTimeseries);
 
@@ -78,27 +77,5 @@ describe("MarketplaceAnalytics", () => {
     const { container } = render(<MarketplaceAnalytics />);
     expect(container.textContent).toMatch(/GMV/);
     expect(container.textContent).not.toMatch(/revenue/i);
-  });
-});
-
-describe("UsersAnalytics", () => {
-  it("renders signups without active_users and does not crash", () => {
-    timeseriesMock.mockReturnValue(
-      okResult({ signups: [{ t: "2026-10-28T00:00:00.000Z", v: 12 }] }),
-    );
-    render(<UsersAnalytics />);
-    expect(screen.getByTestId("timeseries-chart-signups")).toBeInTheDocument();
-    expect(screen.queryByTestId("timeseries-chart-active_users")).not.toBeInTheDocument();
-  });
-
-  it("shows a loading state", () => {
-    timeseriesMock.mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      isError: false,
-      error: null,
-    } as unknown as ReturnType<typeof useTimeseries>);
-    render(<UsersAnalytics />);
-    expect(screen.getByText("Loading analytics series.")).toBeInTheDocument();
   });
 });

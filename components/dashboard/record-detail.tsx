@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAdminDetail } from "@/hooks/use-admin-resource";
 import { ResourceState, SectionEyebrow, StatusBadge } from "@/components/ui/primitives";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
+import { UserActivityPanel } from "@/components/dashboard/user-intelligence/user-activity-panel";
 import { formatDateTime } from "@/lib/format";
 import { formatRouteLabel } from "@/lib/utils";
 
@@ -161,6 +162,7 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
     </section>
 
     {resource === "users" ? <>
+      <UserActivityPanel userId={resourceId} />
       {userDetail.isLoading ? <div className="data-panel p-5"><ResourceState state="loading" message="Loading user detail" /></div> : userDetail.isError ? <div className="data-panel p-5"><ResourceState state={userDetail.error && "status" in userDetail.error && userDetail.error.status === 404 ? "empty" : "error"} message={userDetail.error instanceof Error ? userDetail.error.message : "Unable to load this user."} /></div> : userDetail.data ? <div className="grid gap-4 lg:grid-cols-2">
         <section className="data-panel p-5"><p className="text-sm font-semibold text-slate-200">Identity</p><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
           <div><dt className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Name</dt><dd className="mt-1 text-slate-200">{userDetail.data.user.name}</dd></div>

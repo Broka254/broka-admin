@@ -714,13 +714,138 @@ export const RevenueResponseSchema = z.object({
 });
 export type RevenueResponse = z.infer<typeof RevenueResponseSchema>;
 
+// `v` is null for a bucket the system did not measure (active_users before
+// tracking began). Never render null as zero.
 export const TimeseriesResponseSchema = z.object({
   from: z.string(),
   to: z.string(),
   bucket: z.string(),
-  series: z.record(z.string(), z.array(z.object({ t: z.string(), v: z.number() }))),
+  coverage: z.object({ active_users_started_on: z.string().nullable() }).optional(),
+  series: z.record(z.string(), z.array(z.object({ t: z.string(), v: z.number().nullable() }))),
 });
 export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
+
+// ── Signed-in sessions and foreground activity (backend api/domains/admin/activity.py)
+
+const ActivityCountsSchema = z.object({ last_5m: z.number(), last_15m: z.number(), last_60m: z.number() });
+const ActivityPercentSchema = z.object({ last_5m: z.number().nullable(), last_15m: z.number().nullable(), last_60m: z.number().nullable() });
+
+export const ActivityLiveSchema = z.object({
+  generated_at: z.string(),
+  presence_window_seconds: z.number(),
+  active_users_now: z.number(),
+  active_sessions_now: z.number(),
+  active_users: ActivityCountsSchema,
+  registered_users: z.number(),
+  active_user_percentage: ActivityPercentSchema,
+  peak_concurrent_users_24h: z.object({
+    value: z.number().nullable(),
+    sampled_at: z.string().nullable(),
+    sample_interval_seconds: z.number(),
+    samples_in_window: z.number(),
+  }),
+  coverage_started_on: z.string().nullable(),
+});
+export type ActivityLive = z.infer<typeof ActivityLiveSchema>;
+
+export const ActivityEngagementSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  as_of_date: z.string(),
+  dau: z.number(),
+  wau: z.number(),
+  mau: z.number(),
+  dau_mau_ratio: z.number().nullable(),
+  active_users_in_range: z.number(),
+  eligible_registered_users: z.number(),
+  active_user_percentage: z.number().nullable(),
+  new_active_users: z.number(),
+  returning_active_users: z.number(),
+  sessions_started_in_range: z.number(),
+  closed_sessions_in_range: z.number(),
+  average_session_foreground_seconds: z.number().nullable(),
+  median_session_foreground_seconds: z.number().nullable(),
+  median_sample_truncated: z.boolean(),
+  average_daily_active_seconds_per_user: z.number().nullable(),
+  coverage_started_on: z.string().nullable(),
+});
+export type ActivityEngagement = z.infer<typeof ActivityEngagementSchema>;
+
+export const ActivityRetentionSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  horizons_days: z.array(z.number()),
+  cohorts: z.array(z.object({
+    cohort_date: z.string(),
+    registered: z.number(),
+    d1_retained: z.number().nullable(),
+    d1_pct: z.number().nullable(),
+    d7_retained: z.number().nullable(),
+    d7_pct: z.number().nullable(),
+    d30_retained: z.number().nullable(),
+    d30_pct: z.number().nullable(),
+  })),
+  coverage_started_on: z.string().nullable(),
+});
+export type ActivityRetention = z.infer<typeof ActivityRetentionSchema>;
+
+export const ActivityUsersSchema = z.array(z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  account_type: z.string().nullable(),
+  registered_at: z.string().nullable(),
+  last_seen: z.string().nullable(),
+  is_online: z.boolean(),
+  presence_label: z.string(),
+  listings: z.number(),
+  sessions_30d: z.number(),
+  active_days_30d: z.number(),
+  foreground_seconds_30d: z.number(),
+  is_flagged: z.boolean(),
+  is_admin: z.boolean(),
+  trust_score: z.number(),
+}));
+export type ActivityUserRow = z.infer<typeof ActivityUsersSchema>[number];
+
+export const ActivityUserProfileSchema = z.object({
+  generated_at: z.string(),
+  user: z.object({
+    id: z.string(),
+    name: z.string().nullable(),
+    account_type: z.string().nullable(),
+    is_flagged: z.boolean(),
+    is_admin: z.boolean(),
+    registered_at: z.string().nullable(),
+    last_seen: z.string().nullable(),
+    is_online: z.boolean(),
+    presence_label: z.string(),
+  }),
+  totals: z.object({
+    sessions: z.number(),
+    foreground_seconds: z.number(),
+    first_session_at: z.string().nullable(),
+    last_active_at: z.string().nullable(),
+    active_days: z.number(),
+    first_active_on: z.string().nullable(),
+  }),
+  last_30_days: z.object({ active_days: z.number(), foreground_seconds: z.number() }),
+  recent_sessions: z.array(z.object({
+    id: z.string(),
+    started_at: z.string().nullable(),
+    last_active_at: z.string().nullable(),
+    ended_at: z.string().nullable(),
+    end_reason: z.string().nullable(),
+    foreground_seconds: z.number(),
+    is_open: z.boolean(),
+  })),
+  daily: z.array(z.object({
+    date: z.string(),
+    foreground_seconds: z.number(),
+    first_active_at: z.string().nullable(),
+    last_active_at: z.string().nullable(),
+  })),
+});
+export type ActivityUserProfile = z.infer<typeof ActivityUserProfileSchema>;
 
 // ── Production service-cost API (verified against backend/api/domains/service_costs/router.py)
 
@@ -1005,6 +1130,9 @@ export const AdminResourceSchemas = {
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
   alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
+  activityLive: ActivityLiveSchema, activityEngagement: ActivityEngagementSchema,
+  activityRetention: ActivityRetentionSchema, activityUsers: ActivityUsersSchema,
+  activityUserProfile: ActivityUserProfileSchema,
   productionCosts: ProductionCostsResponseSchema,
   productionCostSummary: ProductionCostSummarySchema,
   productionCostUsage: ProductionCostUsageResponseSchema,

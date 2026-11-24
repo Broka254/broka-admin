@@ -150,8 +150,12 @@ export function SeriesChart({ def, points }: { def: AnalyticsChartDef; points: T
     def.money ? formatCompact(value) : new Intl.NumberFormat("en", { notation: "compact" }).format(value);
   const first = points[0];
   const last = points[points.length - 1];
-  const total = points.reduce((sum, point) => sum + point.v, 0);
-  const summary = `${def.title}: ${points.length} ${points.length === 1 ? "bucket" : "buckets"} from ${formatShortDate(first.t)} to ${formatShortDate(last.t)}. Total ${formatValue(total)}. Highest ${formatValue(Math.max(...points.map((point) => point.v)))}.`;
+  // A null bucket was not measured: it adds nothing to the total and can
+  // never be the highest value.
+  const measured = points.flatMap((point) => (point.v === null ? [] : [point.v]));
+  const total = measured.reduce((sum, value) => sum + value, 0);
+  const highest = measured.length ? Math.max(...measured) : 0;
+  const summary = `${def.title}: ${points.length} ${points.length === 1 ? "bucket" : "buckets"} from ${formatShortDate(first.t)} to ${formatShortDate(last.t)}. Total ${formatValue(total)}. Highest ${formatValue(highest)}.`;
   return (
     <figure className="data-panel flex flex-col p-4 transition-colors hover:border-[#8b75ff]/30">
       <figcaption className="flex items-start justify-between gap-2">

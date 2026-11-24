@@ -25,7 +25,7 @@ export function MarketplaceActivity({ windowDays }: { windowDays: number }) {
     <Panel
       eyebrow="Marketplace activity"
       title={`Last ${windowDays} days`}
-      description="GMV, agreed deals, new listings and disputes per day. Charts refresh when a live alert arrives. Missing days stay missing."
+      description="GMV, agreed deals, new listings and disputes per day. Missing days stay missing."
       actions={<>
         <StatusBadge tone={stream.status === "connected" ? "success" : "neutral"}>{stream.status === "connected" ? "Live alerts" : "Alerts offline"}</StatusBadge>
         <button type="button" onClick={() => void query.refetch()} disabled={query.isFetching} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white disabled:opacity-50"><RefreshCw size={12} className={query.isFetching ? "animate-spin" : ""} aria-hidden="true" />Refresh</button>

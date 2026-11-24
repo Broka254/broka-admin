@@ -21,7 +21,7 @@ type NavEntry = { label: string; href: string; icon: React.ComponentType<{ size?
 type NavGroup = { label: string; entries: NavEntry[] };
 
 const navGroups: NavGroup[] = [
-  { label: "Founder", entries: [{ label: "Command Center", href: "/", icon: LayoutDashboard }, { label: "Intelligence", href: "/intelligence", icon: Radar }, { label: "Growth", href: "/growth", icon: TrendingUp }, { label: "Market Intelligence", href: "/market", icon: Radar }, { label: "Reports", href: "/reports", icon: FileText }] },
+  { label: "Founder", entries: [{ label: "Command Center", href: "/", icon: LayoutDashboard }, { label: "Intelligence", href: "/intelligence", icon: Radar }, { label: "Growth", href: "/growth", icon: TrendingUp }, { label: "Reports", href: "/reports", icon: FileText }] },
   { label: "Respond", entries: [{ label: "Complaints", href: "/complaints", icon: MessageSquareWarning, badge: "complaints" }, { label: "Email Reply", href: "/email-reply", icon: Mail }, { label: "Alert Centre", href: "/alerts", icon: Bell }] },
   { label: "Marketplace", entries: [{ label: "Listings", href: "/listings", icon: Store }, { label: "Deals", href: "/deals", icon: ClipboardList }, { label: "Stores", href: "/stores", icon: Store }] },
   { label: "Identity", entries: [{ label: "All Users", href: "/users", icon: Users }, { label: "Admins", href: "/users?type=admin", icon: Users }] },

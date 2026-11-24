@@ -44,6 +44,7 @@ function openConnection(queryClient: QueryClient): Connection {
     void queryClient.invalidateQueries({ queryKey: ["broka-admin", "alerts"] });
     // A separate key, not a child of "alerts".
     void queryClient.invalidateQueries({ queryKey: ["broka-admin", "alerts-unread"] });
+    void queryClient.invalidateQueries({ queryKey: ["broka-admin", "analytics-timeseries"] });
   }
 
   function startPollingFallback() {
@@ -103,6 +104,9 @@ function openConnection(queryClient: QueryClient): Connection {
         },
       );
       void queryClient.invalidateQueries({ queryKey: ["broka-admin", "alerts-unread"] });
+      // A new alert means marketplace activity just changed; refresh the
+      // Command Center timeseries charts (separate key, not under "alerts").
+      void queryClient.invalidateQueries({ queryKey: ["broka-admin", "analytics-timeseries"] });
     });
 
     source.addEventListener("stats", (event) => {

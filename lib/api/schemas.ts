@@ -807,6 +807,52 @@ export const ActivityUsersSchema = z.array(z.object({
 }));
 export type ActivityUserRow = z.infer<typeof ActivityUsersSchema>[number];
 
+// ── Account restriction and suspension (backend api/domains/admin/moderation.py)
+
+export const AccountStatusValues = ["active", "restricted", "suspended"] as const;
+export const SuspensionDurations = ["24h", "7d", "30d", "permanent"] as const;
+
+export const AccountStatusStateSchema = z.object({
+  user_id: z.string(),
+  status: z.enum(AccountStatusValues),
+  suspended_until: z.string().nullable(),
+  status_reason: z.string().nullable(),
+  status_changed_at: z.string().nullable(),
+  status_changed_by: z.string().nullable(),
+  status_version: z.number(),
+});
+export type AccountStatusState = z.infer<typeof AccountStatusStateSchema>;
+
+export const AccountModerationEventSchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  from_status: z.string(),
+  to_status: z.string(),
+  suspended_until: z.string().nullable(),
+  reason: z.string(),
+  notes: z.string().nullable(),
+  evidence_refs: z.string().nullable(),
+  actor_id: z.string(),
+  request_id: z.string().nullable(),
+  created_at: z.string(),
+});
+export type AccountModerationEvent = z.infer<typeof AccountModerationEventSchema>;
+
+export const UserModerationSchema = AccountStatusStateSchema.extend({
+  history: z.array(AccountModerationEventSchema),
+});
+export type UserModeration = z.infer<typeof UserModerationSchema>;
+
+// The body the browser may send. Strict: nothing beyond these fields reaches the backend.
+export const AccountStatusChangeInSchema = z.object({
+  reason: z.string().min(3).max(500),
+  notes: z.string().max(2000).optional(),
+  expected_version: z.number().int().min(0),
+  duration: z.enum(SuspensionDurations).optional(),
+  evidence_refs: z.array(z.string().min(1).max(200)).max(20).optional(),
+}).strict();
+export type AccountStatusChangeIn = z.infer<typeof AccountStatusChangeInSchema>;
+
 export const ActivityUserProfileSchema = z.object({
   generated_at: z.string(),
   user: z.object({
@@ -1133,6 +1179,7 @@ export const AdminResourceSchemas = {
   activityLive: ActivityLiveSchema, activityEngagement: ActivityEngagementSchema,
   activityRetention: ActivityRetentionSchema, activityUsers: ActivityUsersSchema,
   activityUserProfile: ActivityUserProfileSchema,
+  userModeration: UserModerationSchema,
   productionCosts: ProductionCostsResponseSchema,
   productionCostSummary: ProductionCostSummarySchema,
   productionCostUsage: ProductionCostUsageResponseSchema,

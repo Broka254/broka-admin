@@ -67,6 +67,7 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
 const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   { pattern: /^admin\/users\/([^/]+)$/, resource: "userDetail" },
   { pattern: /^admin\/activity\/users\/([^/]+)$/, resource: "activityUserProfile" },
+  { pattern: /^admin\/users\/([^/]+)\/moderation$/, resource: "userModeration" },
   { pattern: /^admin\/deals\/([^/]+)$/, resource: "dealDetail" },
   { pattern: /^admin\/listings\/([^/]+)$/, resource: "listingDetail" },
   { pattern: /^admin\/disputes\/([^/]+)$/, resource: "disputeDetail" },

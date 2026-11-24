@@ -14,13 +14,14 @@ export type ApiResource =
   | "intelligencePulse" | "intelligenceInsights" | "intelligenceCategories" | "intelligenceGeography" | "intelligenceFunnel"
   | "intelligenceCohorts" | "intelligenceSellers" | "marketRankings" | "marketPerformance" | "marketAnomalies" | "marketModels" | "marketListingDetail" | "reports" | "reportPreview" | "reportDetail"
   | "feedback" | "feedbackStats" | "feedbackDetail"
-  | "activityLive" | "activityEngagement" | "activityRetention" | "activityUsers" | "activityUserProfile";
+  | "activityLive" | "activityEngagement" | "activityRetention" | "activityUsers" | "activityUserProfile"
+  | "userModeration";
 
 export type StaticAdminResource = Exclude<
   ApiResource,
   "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats"
   | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail" | "marketListingDetail"
-  | "activityUserProfile"
+  | "activityUserProfile" | "userModeration"
 >;
 
 export type AdminActionName = "flag" | "unflag" | "recompute-trust" | "promote-admin" | "resolve-fraud-event";

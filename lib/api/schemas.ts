@@ -15,6 +15,14 @@ import {
   SellersResponseSchema,
 } from "@/lib/api/intelligence-schemas";
 
+import {
+  MarketAnomaliesSchema,
+  MarketListingDetailSchema,
+  MarketModelsSchema,
+  MarketPerformanceSchema,
+  MarketRankingsSchema,
+} from "@/lib/api/market-schemas";
+
 const nullableString = z.string().nullable();
 const isoDate = nullableString;
 const money = z.number();
@@ -1011,6 +1019,11 @@ export const AdminResourceSchemas = {
   intelligenceFunnel: FunnelResponseSchema,
   intelligenceCohorts: CohortsResponseSchema,
   intelligenceSellers: SellersResponseSchema,
+  marketRankings: MarketRankingsSchema,
+  marketPerformance: MarketPerformanceSchema,
+  marketAnomalies: MarketAnomaliesSchema,
+  marketModels: MarketModelsSchema,
+  marketListingDetail: MarketListingDetailSchema,
   reports: ReportListSchema,
   reportPreview: ReportDetailSchema,
   reportDetail: ReportDetailSchema,

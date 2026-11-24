@@ -6,7 +6,7 @@ import { parseAdminResource, AdminActionResultSchema, type AdminActionResult, ty
 import { ZodError } from "zod";
 
 export type { StaticAdminResource };
-export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats" | "reportDetail" | "feedbackDetail">;
+export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats" | "reportDetail" | "feedbackDetail" | "marketListingDetail">;
 
 export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   summary: "/admin/summary",
@@ -49,6 +49,10 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   intelligenceFunnel: "/admin/intelligence/funnel",
   intelligenceCohorts: "/admin/intelligence/cohorts",
   intelligenceSellers: "/admin/intelligence/sellers",
+  marketRankings: "/admin/intelligence/market/rankings",
+  marketPerformance: "/admin/intelligence/market/performance",
+  marketAnomalies: "/admin/intelligence/market/anomalies",
+  marketModels: "/admin/intelligence/market/models",
   reports: "/admin/reports",
   reportPreview: "/admin/reports/preview",
   feedback: "/admin/feedback",
@@ -66,6 +70,7 @@ const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   { pattern: /^admin\/communications\/([^/]+)\/stats$/, resource: "communicationStats" },
   // Static paths under these prefixes (reports/preview, feedback/stats) are
   // resolved from RESOURCE_BY_PATH first; ids are UUIDs.
+  { pattern: /^admin\/intelligence\/market\/listings\/([A-Za-z0-9-]+)$/, resource: "marketListingDetail" },
   { pattern: /^admin\/reports\/([A-Za-z0-9-]+)$/, resource: "reportDetail" },
   { pattern: /^admin\/feedback\/([A-Za-z0-9-]+)$/, resource: "feedbackDetail" },
 ];

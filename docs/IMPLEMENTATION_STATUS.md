@@ -50,6 +50,20 @@ Definitions and limits: `ADMIN_INTELLIGENCE.md` in the backend repository.
 | `/admin/users/{id}/moderation` | User page account status panel | `MANAGE_USERS` | Integrated |
 | `POST /admin/users/{id}/restrict\|suspend\|reinstate` | Account status panel via `POST /api/broka/users/{id}/status/{change}` | `MANAGE_ACCOUNT_STATUS` | Integrated; reason, typed CONFIRM and `expected_version` required |
 
+### Marketplace intelligence (backend PR #25)
+
+Definitions and limits: `ADMIN_INTELLIGENCE.md` in the backend repository. Every stage counts distinct users per listing; staff and the listing's own seller are never counted. Searches are not recorded, so nothing here measures search.
+
+| Endpoint | Frontend surface | Authorization | Status |
+|---|---|---|---|
+| `/admin/intelligence/market/rankings?window_days=` or `?from=&to=`, `category`, `county` | `/market`: eight rankings (viewed, saved, liked, contacted, negotiated, converted, trending, growing), the score formula and weights, CSV export, four conversion lists, losing attention and buyers waiting for the seller | `ADMIN_SUMMARY` | Integrated; a custom range is whole UTC days, end day included, at most 90 days |
+| `/admin/intelligence/market/performance` (same window) | `/market` sellers (live listings, contacters against the window before, negotiated, completed, first-reply time) and buyers, with the buyer journey | `ADMIN_SUMMARY` | Integrated |
+| `/admin/intelligence/market/demand?window_days=7..180` | `/market` demand by category and county against the window before, rising and falling categories | `ADMIN_SUMMARY` | Integrated; falls back to `/intelligence/categories` and `/geography` (no comparison) when it is missing |
+| `/admin/intelligence/market/listings/{id}` | `/listings/{id}` listing analytics (funnel, daily chart, deals by status, nightly snapshots) and the `/market` drawer | `ADMIN_SUMMARY` | Integrated |
+| `/admin/intelligence/market/anomalies`, `POST /anomalies/scan`, `/models` | `/market` anomalies and models | `ADMIN_SUMMARY` | Integrated |
+
+Fields added with the negotiation and completion stages are optional in the contracts. Against an API from before them the page says which ranking or list needs the upgrade, and a missing figure is a dash, never a zero.
+
 ## Write surface
 
 | Endpoint | Backend behavior |

@@ -12,7 +12,7 @@ export type ApiResource =
   | "communications" | "workerDiagnostics" | "communicationDetail" | "communicationRecipients" | "communicationStats"
   | "alerts" | "revenue" | "timeseries" | "productionCosts" | "productionCostSummary" | "productionCostUsage" | "productionCostEntries" | "productionCostAdjustments" | "productionCostPricing" | "listingDetail" | "disputeDetail" | "storeDetail"
   | "intelligencePulse" | "intelligenceInsights" | "intelligenceCategories" | "intelligenceGeography" | "intelligenceFunnel"
-  | "intelligenceCohorts" | "intelligenceSellers" | "marketRankings" | "marketPerformance" | "marketAnomalies" | "marketModels" | "marketListingDetail" | "reports" | "reportPreview" | "reportDetail"
+  | "intelligenceCohorts" | "intelligenceSellers" | "marketRankings" | "marketPerformance" | "marketDemand" | "marketAnomalies" | "marketModels" | "marketListingDetail" | "reports" | "reportPreview" | "reportDetail"
   | "feedback" | "feedbackStats" | "feedbackDetail"
   | "activityLive" | "activityEngagement" | "activityRetention" | "activityUsers" | "activityUserProfile"
   | "userModeration" | "commandCenter";

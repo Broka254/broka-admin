@@ -51,6 +51,7 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   intelligenceSellers: "/admin/intelligence/sellers",
   marketRankings: "/admin/intelligence/market/rankings",
   marketPerformance: "/admin/intelligence/market/performance",
+  marketDemand: "/admin/intelligence/market/demand",
   marketAnomalies: "/admin/intelligence/market/anomalies",
   marketModels: "/admin/intelligence/market/models",
   reports: "/admin/reports",

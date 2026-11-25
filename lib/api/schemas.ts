@@ -24,6 +24,9 @@ import {
   MarketRankingsSchema,
 } from "@/lib/api/market-schemas";
 
+import { OperationsSchema } from "@/lib/api/operations-schemas";
+import { CatalogSchema, DefinitionListSchema, RunDetailSchema, RunListSchema } from "@/lib/api/report-builder-schemas";
+
 const nullableString = z.string().nullable();
 const isoDate = nullableString;
 const money = z.number();
@@ -1248,6 +1251,11 @@ export const AdminResourceSchemas = {
   marketAnomalies: MarketAnomaliesSchema,
   marketModels: MarketModelsSchema,
   marketListingDetail: MarketListingDetailSchema,
+  operations: OperationsSchema,
+  reportBuilderCatalog: CatalogSchema,
+  reportBuilderRuns: RunListSchema,
+  reportBuilderDefinitions: DefinitionListSchema,
+  reportBuilderRunDetail: RunDetailSchema,
   reports: ReportListSchema,
   reportPreview: ReportDetailSchema,
   reportDetail: ReportDetailSchema,

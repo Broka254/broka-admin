@@ -37,6 +37,16 @@ import {
 } from "@/lib/api/intelligence-schemas";
 import { MarketScanResultSchema } from "@/lib/api/market-schemas";
 import {
+  DefinitionDeletedSchema,
+  DefinitionInSchema,
+  DefinitionPatchSchema,
+  DefinitionSchema,
+  PreviewSchema,
+  RunDetailSchema,
+  RunInSchema,
+  SpecInSchema,
+} from "@/lib/api/report-builder-schemas";
+import {
   AdminEmailSendInSchema,
   AdminEmailSendOutSchema,
   EMAIL_ERROR_CODES,
@@ -198,6 +208,53 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/reports\/generate$/,
     requestSchema: ReportGenerateInSchema,
     responseSchema: ReportDetailSchema,
+  },
+  // The report builder. A preview stores nothing; a run, a regeneration and a
+  // saved report's run each write a new archived run (a regeneration never
+  // overwrites the one it rebuilds). Saved reports change only with the
+  // version the administrator read (409 otherwise), and deletion is a POST
+  // because this proxy exposes no DELETE.
+  {
+    method: "POST",
+    pattern: /^admin\/report-builder\/preview$/,
+    requestSchema: SpecInSchema,
+    responseSchema: PreviewSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/report-builder\/runs$/,
+    requestSchema: RunInSchema,
+    responseSchema: RunDetailSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/report-builder\/runs\/([A-Za-z0-9-]+)\/regenerate$/,
+    requestSchema: null,
+    responseSchema: RunDetailSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/report-builder\/definitions$/,
+    requestSchema: DefinitionInSchema,
+    responseSchema: DefinitionSchema,
+  },
+  {
+    method: "PATCH",
+    pattern: /^admin\/report-builder\/definitions\/([A-Za-z0-9-]+)$/,
+    requestSchema: DefinitionPatchSchema,
+    responseSchema: DefinitionSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/report-builder\/definitions\/([A-Za-z0-9-]+)\/delete$/,
+    requestSchema: null,
+    responseSchema: DefinitionDeletedSchema,
+  },
+  {
+    method: "POST",
+    pattern: /^admin\/report-builder\/definitions\/([A-Za-z0-9-]+)\/run$/,
+    requestSchema: null,
+    responseSchema: RunDetailSchema,
   },
   // Email Reply: one message to one address from the BROKA admin address. The
   // request schema is strict and names no sender, Reply-To or HTML, so none

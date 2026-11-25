@@ -60,6 +60,10 @@ const resourcePaths: Record<StaticAdminResource, string> = {
   activityRetention: "admin/activity/retention",
   activityUsers: "admin/activity/users",
   commandCenter: "admin/command-center",
+  operations: "admin/operations",
+  reportBuilderCatalog: "admin/report-builder/catalog",
+  reportBuilderRuns: "admin/report-builder/runs",
+  reportBuilderDefinitions: "admin/report-builder/definitions",
 };
 
 export class AdminRequestError extends Error {
@@ -95,6 +99,9 @@ const SUMMARY_RESOURCES: ReadonlySet<string> = new Set(["summary", "opsSnapshot"
 // Founder intelligence is heavier (dozens of aggregates per read) and moves
 // slowly: refreshed every two minutes while visible, never in the background.
 const INTELLIGENCE_RESOURCES: ReadonlySet<string> = new Set(["intelligencePulse", "intelligenceInsights", "feedbackStats", "commandCenter"]);
+// Operations samples land once a minute per process: read again each minute
+// while the tab is visible.
+const OPERATIONS_RESOURCES: ReadonlySet<string> = new Set(["operations"]);
 
 export function useAdminResource<K extends StaticAdminResource>(resource: K, query?: URLSearchParams, enabled = true) {
   return useQuery<AdminResourcePayloads[K]>({
@@ -105,7 +112,9 @@ export function useAdminResource<K extends StaticAdminResource>(resource: K, que
       ? { refetchInterval: 30_000, refetchIntervalInBackground: false }
       : INTELLIGENCE_RESOURCES.has(resource as string)
         ? { refetchInterval: 120_000, refetchIntervalInBackground: false, staleTime: 60_000 }
-        : {}),
+        : OPERATIONS_RESOURCES.has(resource as string)
+          ? { refetchInterval: 60_000, refetchIntervalInBackground: false, staleTime: 30_000 }
+          : {}),
   });
 }
 
@@ -126,7 +135,7 @@ export function useAdminUsers(query: URLSearchParams, enabled = true) {
   });
 }
 
-const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail" | "activityUserProfile", string> = {
+const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail" | "activityUserProfile" | "reportBuilderRunDetail", string> = {
   activityUserProfile: "admin/activity/users",
   userDetail: "admin/users",
   dealDetail: "admin/deals",
@@ -135,6 +144,7 @@ const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disp
   storeDetail: "admin/stores",
   reportDetail: "admin/reports",
   feedbackDetail: "admin/feedback",
+  reportBuilderRunDetail: "admin/report-builder/runs",
 };
 
 export function useAdminDetail<K extends keyof typeof DETAIL_PATHS>(resource: K, id: string, enabled = true) {

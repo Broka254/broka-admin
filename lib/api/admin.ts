@@ -6,7 +6,7 @@ import { parseAdminResource, AdminActionResultSchema, type AdminActionResult, ty
 import { ZodError } from "zod";
 
 export type { StaticAdminResource };
-export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats" | "reportDetail" | "feedbackDetail" | "marketListingDetail">;
+export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats" | "reportDetail" | "feedbackDetail" | "marketListingDetail" | "reportBuilderRunDetail">;
 
 export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   summary: "/admin/summary",
@@ -63,6 +63,11 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   activityRetention: "/admin/activity/retention",
   activityUsers: "/admin/activity/users",
   commandCenter: "/admin/command-center",
+  // Operations over time (backend api/core/operations.py) and the report builder.
+  operations: "/admin/operations",
+  reportBuilderCatalog: "/admin/report-builder/catalog",
+  reportBuilderRuns: "/admin/report-builder/runs",
+  reportBuilderDefinitions: "/admin/report-builder/definitions",
   feedbackStats: "/admin/feedback/stats",
 };
 
@@ -81,6 +86,7 @@ const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   // resolved from RESOURCE_BY_PATH first; ids are UUIDs.
   { pattern: /^admin\/intelligence\/market\/listings\/([A-Za-z0-9-]+)$/, resource: "marketListingDetail" },
   { pattern: /^admin\/reports\/([A-Za-z0-9-]+)$/, resource: "reportDetail" },
+  { pattern: /^admin\/report-builder\/runs\/([A-Za-z0-9-]+)$/, resource: "reportBuilderRunDetail" },
   { pattern: /^admin\/feedback\/([A-Za-z0-9-]+)$/, resource: "feedbackDetail" },
 ];
 

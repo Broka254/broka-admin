@@ -56,11 +56,19 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   reports: "/admin/reports",
   reportPreview: "/admin/reports/preview",
   feedback: "/admin/feedback",
+  // Signed-in sessions and foreground activity (backend api/domains/admin/activity.py).
+  activityLive: "/admin/activity/live",
+  activityEngagement: "/admin/activity/engagement",
+  activityRetention: "/admin/activity/retention",
+  activityUsers: "/admin/activity/users",
+  commandCenter: "/admin/command-center",
   feedbackStats: "/admin/feedback/stats",
 };
 
 const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   { pattern: /^admin\/users\/([^/]+)$/, resource: "userDetail" },
+  { pattern: /^admin\/activity\/users\/([^/]+)$/, resource: "activityUserProfile" },
+  { pattern: /^admin\/users\/([^/]+)\/moderation$/, resource: "userModeration" },
   { pattern: /^admin\/deals\/([^/]+)$/, resource: "dealDetail" },
   { pattern: /^admin\/listings\/([^/]+)$/, resource: "listingDetail" },
   { pattern: /^admin\/disputes\/([^/]+)$/, resource: "disputeDetail" },

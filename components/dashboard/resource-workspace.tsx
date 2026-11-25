@@ -11,7 +11,7 @@ import { Skeleton, ResourceState, StatusBadge, UnavailablePanel } from "@/compon
 import { UsersTable } from "@/components/dashboard/users-table";
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
 import { MarketplaceAnalytics } from "@/components/dashboard/analytics/marketplace-analytics";
-import { UsersAnalytics } from "@/components/dashboard/analytics/users-analytics";
+import { UserIntelligenceView } from "@/components/dashboard/user-intelligence/user-intelligence-view";
 
 import type { StaticAdminResource } from "@/types/broka";
 type WsFilter =
@@ -23,7 +23,7 @@ type WorkspaceDefinition = {
   filters?: WsFilter[]; pageSize?: number; defaults?: Record<string, string>;
   // Self-fetching chart sections (timeseries analytics) render instead of
   // the generic resource table; they own their own loading/error states.
-  custom?: "marketplaceAnalytics" | "usersAnalytics";
+  custom?: "marketplaceAnalytics" | "userIntelligence";
 };
 
 const ALL = { value: "all", label: "All" };
@@ -130,7 +130,7 @@ const workspaces: Record<string, WorkspaceDefinition> = {
   commissions: { title: "Commissions", eyebrow: "Financial operations", description: "Recognised commission is on the Command Center and Finance Integrity pages. No time-series commission analytics endpoint exists.", missing: "Use Finance Integrity for commission reconciliation." },
   "zeno/negotiations": { title: "Zeno Negotiations", eyebrow: "BROKA intelligence", description: "Negotiation message counts are on the Zeno Activity page from durable tables.", missing: "Per-negotiation admin detail is not exposed by the backend." },
   "analytics/marketplace": { title: "Marketplace Analytics", eyebrow: "Analytics", description: "GMV, deals, listings and disputes as durable time-series from the admin analytics endpoint.", missing: "No marketplace time-series analytics endpoint exists.", endpoint: "/admin/analytics/timeseries", custom: "marketplaceAnalytics" },
-  "analytics/users": { title: "User Analytics", eyebrow: "Analytics", description: "Signups and user activity as durable time-series from the admin analytics endpoint.", missing: "No user time-series analytics endpoint exists.", endpoint: "/admin/analytics/timeseries", custom: "usersAnalytics" },
+  "analytics/users": { title: "User intelligence", eyebrow: "Analytics", description: "Live presence, DAU, WAU and MAU, session length, retention and the account activity table.", missing: "The user activity endpoints are not available on this backend.", endpoint: "/admin/activity/engagement", custom: "userIntelligence" },
   settings: { title: "Settings", eyebrow: "Control center", description: "Deployment settings remain server-owned and never reveal API keys or secret values.", missing: "This deployment intentionally exposes no browser-side secret or direct backend setting mutation." },
 };
 
@@ -225,6 +225,11 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
     setParams({ [param]: value });
   }
 
+  // The user workspace draws its own header and sections.
+  if (definition.custom === "userIntelligence") {
+    return <UserIntelligenceView />;
+  }
+
   if (definition.custom) {
     return <div className="space-y-6">
       <PageHeader
@@ -233,7 +238,7 @@ export function ResourceWorkspace({ slug }: { slug: string[] }) {
         description={definition.description}
         actions={<StatusBadge tone="neutral">Time-series surface</StatusBadge>}
       />
-      {definition.custom === "marketplaceAnalytics" ? <MarketplaceAnalytics /> : <UsersAnalytics />}
+      <MarketplaceAnalytics />
     </div>;
   }
 

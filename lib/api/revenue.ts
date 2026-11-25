@@ -56,13 +56,16 @@ export type RevenueSeriesBucket = z.infer<typeof SeriesBucketSchema>;
 
 const TimeseriesPointSchema = z.object({
   t: z.string(),
-  v: z.number(),
+  // null: the system did not measure this bucket (active_users before tracking began).
+  // It is never a zero to plot or sum.
+  v: z.number().nullable(),
 });
 
 export const TimeseriesResponseSchema = z.object({
   from: z.string(),
   to: z.string(),
   bucket: RevenueBucketSchema,
+  coverage: z.object({ active_users_started_on: z.string().nullable() }).optional(),
   series: z.record(z.string(), z.array(TimeseriesPointSchema)),
 });
 

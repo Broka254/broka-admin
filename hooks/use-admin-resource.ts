@@ -54,6 +54,11 @@ const resourcePaths: Record<StaticAdminResource, string> = {
   reportPreview: "admin/reports/preview",
   feedback: "admin/feedback",
   feedbackStats: "admin/feedback/stats",
+  activityLive: "admin/activity/live",
+  activityEngagement: "admin/activity/engagement",
+  activityRetention: "admin/activity/retention",
+  activityUsers: "admin/activity/users",
+  commandCenter: "admin/command-center",
 };
 
 export class AdminRequestError extends Error {
@@ -85,10 +90,10 @@ async function fetchAdminPath<T>(path: string, query?: URLSearchParams, signal?:
 
 // Queries that back always-visible operational chrome (health badge, command
 // center, ops snapshot) poll every 30s while the tab is focused.
-const SUMMARY_RESOURCES: ReadonlySet<string> = new Set(["summary", "opsSnapshot", "health"]);
+const SUMMARY_RESOURCES: ReadonlySet<string> = new Set(["summary", "opsSnapshot", "health", "activityLive"]);
 // Founder intelligence is heavier (dozens of aggregates per read) and moves
 // slowly: refreshed every two minutes while visible, never in the background.
-const INTELLIGENCE_RESOURCES: ReadonlySet<string> = new Set(["intelligencePulse", "intelligenceInsights", "feedbackStats"]);
+const INTELLIGENCE_RESOURCES: ReadonlySet<string> = new Set(["intelligencePulse", "intelligenceInsights", "feedbackStats", "commandCenter"]);
 
 export function useAdminResource<K extends StaticAdminResource>(resource: K, query?: URLSearchParams, enabled = true) {
   return useQuery<AdminResourcePayloads[K]>({
@@ -120,7 +125,8 @@ export function useAdminUsers(query: URLSearchParams, enabled = true) {
   });
 }
 
-const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail", string> = {
+const DETAIL_PATHS: Record<"userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail" | "activityUserProfile", string> = {
+  activityUserProfile: "admin/activity/users",
   userDetail: "admin/users",
   dealDetail: "admin/deals",
   listingDetail: "admin/listings",

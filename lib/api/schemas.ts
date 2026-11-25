@@ -714,13 +714,230 @@ export const RevenueResponseSchema = z.object({
 });
 export type RevenueResponse = z.infer<typeof RevenueResponseSchema>;
 
+// `v` is null for a bucket the system did not measure (active_users before
+// tracking began). Never render null as zero.
 export const TimeseriesResponseSchema = z.object({
   from: z.string(),
   to: z.string(),
   bucket: z.string(),
-  series: z.record(z.string(), z.array(z.object({ t: z.string(), v: z.number() }))),
+  coverage: z.object({ active_users_started_on: z.string().nullable() }).optional(),
+  series: z.record(z.string(), z.array(z.object({ t: z.string(), v: z.number().nullable() }))),
 });
 export type TimeseriesResponse = z.infer<typeof TimeseriesResponseSchema>;
+
+// ── Signed-in sessions and foreground activity (backend api/domains/admin/activity.py)
+
+const ActivityCountsSchema = z.object({ last_5m: z.number(), last_15m: z.number(), last_60m: z.number() });
+const ActivityPercentSchema = z.object({ last_5m: z.number().nullable(), last_15m: z.number().nullable(), last_60m: z.number().nullable() });
+
+export const ActivityLiveSchema = z.object({
+  generated_at: z.string(),
+  presence_window_seconds: z.number(),
+  active_users_now: z.number(),
+  active_sessions_now: z.number(),
+  active_users: ActivityCountsSchema,
+  registered_users: z.number(),
+  active_user_percentage: ActivityPercentSchema,
+  peak_concurrent_users_24h: z.object({
+    value: z.number().nullable(),
+    sampled_at: z.string().nullable(),
+    sample_interval_seconds: z.number(),
+    samples_in_window: z.number(),
+  }),
+  coverage_started_on: z.string().nullable(),
+});
+export type ActivityLive = z.infer<typeof ActivityLiveSchema>;
+
+export const ActivityEngagementSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  as_of_date: z.string(),
+  dau: z.number(),
+  wau: z.number(),
+  mau: z.number(),
+  dau_mau_ratio: z.number().nullable(),
+  active_users_in_range: z.number(),
+  eligible_registered_users: z.number(),
+  active_user_percentage: z.number().nullable(),
+  new_active_users: z.number(),
+  returning_active_users: z.number(),
+  sessions_started_in_range: z.number(),
+  closed_sessions_in_range: z.number(),
+  average_session_foreground_seconds: z.number().nullable(),
+  median_session_foreground_seconds: z.number().nullable(),
+  median_sample_truncated: z.boolean(),
+  average_daily_active_seconds_per_user: z.number().nullable(),
+  coverage_started_on: z.string().nullable(),
+});
+export type ActivityEngagement = z.infer<typeof ActivityEngagementSchema>;
+
+export const ActivityRetentionSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  horizons_days: z.array(z.number()),
+  cohorts: z.array(z.object({
+    cohort_date: z.string(),
+    registered: z.number(),
+    d1_retained: z.number().nullable(),
+    d1_pct: z.number().nullable(),
+    d7_retained: z.number().nullable(),
+    d7_pct: z.number().nullable(),
+    d30_retained: z.number().nullable(),
+    d30_pct: z.number().nullable(),
+  })),
+  coverage_started_on: z.string().nullable(),
+});
+export type ActivityRetention = z.infer<typeof ActivityRetentionSchema>;
+
+export const ActivityUsersSchema = z.array(z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  account_type: z.string().nullable(),
+  registered_at: z.string().nullable(),
+  last_seen: z.string().nullable(),
+  is_online: z.boolean(),
+  presence_label: z.string(),
+  listings: z.number(),
+  sessions_30d: z.number(),
+  active_days_30d: z.number(),
+  foreground_seconds_30d: z.number(),
+  is_flagged: z.boolean(),
+  is_admin: z.boolean(),
+  trust_score: z.number(),
+}));
+export type ActivityUserRow = z.infer<typeof ActivityUsersSchema>[number];
+
+// ── Account restriction and suspension (backend api/domains/admin/moderation.py)
+
+export const AccountStatusValues = ["active", "restricted", "suspended"] as const;
+export const SuspensionDurations = ["24h", "7d", "30d", "permanent"] as const;
+
+export const AccountStatusStateSchema = z.object({
+  user_id: z.string(),
+  status: z.enum(AccountStatusValues),
+  suspended_until: z.string().nullable(),
+  status_reason: z.string().nullable(),
+  status_changed_at: z.string().nullable(),
+  status_changed_by: z.string().nullable(),
+  status_version: z.number(),
+});
+export type AccountStatusState = z.infer<typeof AccountStatusStateSchema>;
+
+export const AccountModerationEventSchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  from_status: z.string(),
+  to_status: z.string(),
+  suspended_until: z.string().nullable(),
+  reason: z.string(),
+  notes: z.string().nullable(),
+  evidence_refs: z.string().nullable(),
+  actor_id: z.string(),
+  request_id: z.string().nullable(),
+  created_at: z.string(),
+});
+export type AccountModerationEvent = z.infer<typeof AccountModerationEventSchema>;
+
+export const UserModerationSchema = AccountStatusStateSchema.extend({
+  history: z.array(AccountModerationEventSchema),
+});
+export type UserModeration = z.infer<typeof UserModerationSchema>;
+
+// ── Command Center (backend api/core/command_center.py) ─────────────────────
+// unit, kind and good stay plain strings: a unit added later renders as a
+// count instead of failing the whole page's contract.
+
+export const CommandMetricSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  kind: z.string(),
+  unit: z.string(),
+  good: z.string(),
+  value: z.number().nullable(),
+  previous: z.number().nullable(),
+  delta: z.number().nullable(),
+  change_pct: z.number().nullable(),
+  definition: z.string(),
+  caption: z.string().nullable(),
+  href: z.string().nullable(),
+  available: z.boolean(),
+  unavailable_reason: z.string().nullable(),
+});
+export type CommandMetric = z.infer<typeof CommandMetricSchema>;
+
+export const CommandGroupSchema = z.object({
+  key: z.string(),
+  title: z.string(),
+  metrics: z.array(CommandMetricSchema),
+});
+export type CommandGroup = z.infer<typeof CommandGroupSchema>;
+
+export const CommandCenterSchema = z.object({
+  generated_at: z.string(),
+  window: z.object({
+    days: z.number(),
+    from: z.string(),
+    to: z.string(),
+    previous_from: z.string(),
+    previous_to: z.string(),
+  }),
+  staff_excluded: z.boolean(),
+  activity_coverage_started_on: z.string().nullable(),
+  groups: z.array(CommandGroupSchema),
+  decisions: InsightsResponseSchema,
+  pulse: PulseSchema,
+});
+export type CommandCenter = z.infer<typeof CommandCenterSchema>;
+
+// The body the browser may send. Strict: nothing beyond these fields reaches the backend.
+export const AccountStatusChangeInSchema = z.object({
+  reason: z.string().min(3).max(500),
+  notes: z.string().max(2000).optional(),
+  expected_version: z.number().int().min(0),
+  duration: z.enum(SuspensionDurations).optional(),
+  evidence_refs: z.array(z.string().min(1).max(200)).max(20).optional(),
+}).strict();
+export type AccountStatusChangeIn = z.infer<typeof AccountStatusChangeInSchema>;
+
+export const ActivityUserProfileSchema = z.object({
+  generated_at: z.string(),
+  user: z.object({
+    id: z.string(),
+    name: z.string().nullable(),
+    account_type: z.string().nullable(),
+    is_flagged: z.boolean(),
+    is_admin: z.boolean(),
+    registered_at: z.string().nullable(),
+    last_seen: z.string().nullable(),
+    is_online: z.boolean(),
+    presence_label: z.string(),
+  }),
+  totals: z.object({
+    sessions: z.number(),
+    foreground_seconds: z.number(),
+    first_session_at: z.string().nullable(),
+    last_active_at: z.string().nullable(),
+    active_days: z.number(),
+    first_active_on: z.string().nullable(),
+  }),
+  last_30_days: z.object({ active_days: z.number(), foreground_seconds: z.number() }),
+  recent_sessions: z.array(z.object({
+    id: z.string(),
+    started_at: z.string().nullable(),
+    last_active_at: z.string().nullable(),
+    ended_at: z.string().nullable(),
+    end_reason: z.string().nullable(),
+    foreground_seconds: z.number(),
+    is_open: z.boolean(),
+  })),
+  daily: z.array(z.object({
+    date: z.string(),
+    foreground_seconds: z.number(),
+    first_active_at: z.string().nullable(),
+    last_active_at: z.string().nullable(),
+  })),
+});
+export type ActivityUserProfile = z.infer<typeof ActivityUserProfileSchema>;
 
 // ── Production service-cost API (verified against backend/api/domains/service_costs/router.py)
 
@@ -1005,6 +1222,11 @@ export const AdminResourceSchemas = {
   communications: CommunicationListSchema, workerDiagnostics: WorkerDiagnosticsSchema, communicationDetail: CommunicationDetailSchema,
   communicationRecipients: RecipientPageSchema, communicationStats: CommunicationStatsSchema,
   alerts: AlertListResponseSchema, revenue: RevenueResponseSchema, timeseries: TimeseriesResponseSchema,
+  activityLive: ActivityLiveSchema, activityEngagement: ActivityEngagementSchema,
+  activityRetention: ActivityRetentionSchema, activityUsers: ActivityUsersSchema,
+  activityUserProfile: ActivityUserProfileSchema,
+  userModeration: UserModerationSchema,
+  commandCenter: CommandCenterSchema,
   productionCosts: ProductionCostsResponseSchema,
   productionCostSummary: ProductionCostSummarySchema,
   productionCostUsage: ProductionCostUsageResponseSchema,

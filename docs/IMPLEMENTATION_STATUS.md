@@ -37,6 +37,19 @@
 | `/admin/reports`, `/preview`, `/{id}`, `POST /generate` | `/reports` | `ADMIN_SUMMARY` | Integrated; reports are written by the backend sweep |
 | `/admin/feedback`, `/stats`, `/{id}`, `PATCH /{id}` | `/complaints`, rail and header badge | `VIEW_FEEDBACK` / `MANAGE_FEEDBACK` | Integrated; triage pushes the reporter |
 
+### Activity, account status and the Command Center (backend PR #24)
+
+Definitions and limits: `ADMIN_INTELLIGENCE.md` in the backend repository.
+
+| Endpoint | Frontend surface | Authorization | Status |
+|---|---|---|---|
+| `/admin/command-center?window_days=7\|30` | Command Center: the executive overview (five groups of figures with previous-period comparisons), the decision feed and the pulse sections | `ADMIN_SUMMARY` | Integrated; falls back to `/intelligence/pulse` and `/insights` when it fails |
+| `/admin/analytics/timeseries` `active_users` | Command Center trends, User intelligence trend | `ADMIN_SUMMARY` | Integrated; null days are gaps, never zero |
+| `/admin/activity/live`, `/engagement`, `/retention` | User intelligence, Command Center live strip | `ADMIN_SUMMARY` | Integrated |
+| `/admin/activity/users`, `/users/{id}` | User intelligence table, user page activity record | `MANAGE_USERS` | Integrated |
+| `/admin/users/{id}/moderation` | User page account status panel | `MANAGE_USERS` | Integrated |
+| `POST /admin/users/{id}/restrict\|suspend\|reinstate` | Account status panel via `POST /api/broka/users/{id}/status/{change}` | `MANAGE_ACCOUNT_STATUS` | Integrated; reason, typed CONFIRM and `expected_version` required |
+
 ## Write surface
 
 | Endpoint | Backend behavior |

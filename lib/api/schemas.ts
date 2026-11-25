@@ -17,6 +17,7 @@ import {
 
 import {
   MarketAnomaliesSchema,
+  MarketDemandSchema,
   MarketListingDetailSchema,
   MarketModelsSchema,
   MarketPerformanceSchema,
@@ -1243,6 +1244,7 @@ export const AdminResourceSchemas = {
   intelligenceSellers: SellersResponseSchema,
   marketRankings: MarketRankingsSchema,
   marketPerformance: MarketPerformanceSchema,
+  marketDemand: MarketDemandSchema,
   marketAnomalies: MarketAnomaliesSchema,
   marketModels: MarketModelsSchema,
   marketListingDetail: MarketListingDetailSchema,

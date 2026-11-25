@@ -10,6 +10,7 @@ import { ResourceState, SectionEyebrow, StatusBadge } from "@/components/ui/prim
 import { ValidatedResourceView } from "@/components/dashboard/validated-resource-view";
 import { UserActivityPanel } from "@/components/dashboard/user-intelligence/user-activity-panel";
 import { AccountStatusPanel } from "@/components/dashboard/user-intelligence/account-status-panel";
+import { ListingAnalyticsPanel } from "@/components/intelligence/listing-analytics";
 import { formatDateTime } from "@/lib/format";
 import { formatRouteLabel } from "@/lib/utils";
 
@@ -185,6 +186,7 @@ export function RecordDetail({ resource, resourceId }: { resource: DetailResourc
 
     {resource === "deals" ? <>{dealDetail.isLoading ? <div className="data-panel p-5"><ResourceState state="loading" message="Loading deal detail" /></div> : dealDetail.isError ? <div className="data-panel p-5"><ResourceState state={dealDetail.error && "status" in dealDetail.error && dealDetail.error.status === 404 ? "empty" : "error"} message={dealDetail.error instanceof Error ? dealDetail.error.message : "Unable to load this deal."} /></div> : dealDetail.data ? <section className="data-panel overflow-hidden"><ValidatedResourceView resource="dealDetail" data={dealDetail.data} /></section> : null}</> : null}
 
+    {resource === "listings" ? <ListingAnalyticsPanel listingId={resourceId} /> : null}
     {resource === "listings" || resource === "disputes" || resource === "stores" ? <LooseDetail resource={resource} resourceId={resourceId} /> : null}
 
     {hasApiAction ? <section className="data-panel border-rose-400/15 p-5">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { CalendarClock, CalendarDays, Radar, RefreshCw, Sparkles } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
@@ -118,6 +119,7 @@ export function ReportsCenter() {
         <div className="flex flex-wrap items-center gap-2">
           <Segmented label="Report kind" value={kind} options={KINDS} onChange={(value) => update({ kind: value === "weekly" ? null : value, id: null })} />
           {schedule ? <StatusBadge tone={schedule.enabled ? "success" : "warning"}>{schedule.enabled ? `Automatic · ${schedule.timezone}` : "Automatic reports off"}</StatusBadge> : null}
+          <Link href="/reports/builder" className="focus-ring rounded-lg border border-[#8b75ff]/35 bg-[#8b75ff]/10 px-3 py-1.5 text-xs font-semibold text-[#ded8ff]">Build a custom report</Link>
         </div>
       </section>
 

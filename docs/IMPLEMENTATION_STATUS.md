@@ -64,6 +64,18 @@ Definitions and limits: `ADMIN_INTELLIGENCE.md` in the backend repository. Every
 
 Fields added with the negotiation and completion stages are optional in the contracts. Against an API from before them the page says which ranking or list needs the upgrade, and a missing figure is a dash, never a zero.
 
+### Report builder and operations (backend PR #26)
+
+Definitions and limits: `ADMIN_INTELLIGENCE.md` in the backend repository. A report covers whole UTC days, end day included, up to the catalog's `max_range_days` (366). A figure the data cannot measure is listed with its reason and left out of the summary, changes and observations. It is never shown as zero.
+
+| Endpoint | Frontend surface | Authorization | Status |
+|---|---|---|---|
+| `/admin/operations?window_hours=1\|6\|24\|168` | `/operations`: API requests, errors and latency with the busiest, slowest and failing routes; database pool and refused requests; payments by provider; push and chat delivery; call outcomes; background loops, queues and failed items | `ADMIN_SUMMARY` | Integrated. Each API process writes one sample a minute. A figure without a source reads "Not measured" with its reason |
+| `/admin/report-builder/catalog` | `/reports/builder`: categories, metrics, comparisons, groupings, filter options and email recipients | `ADMIN_SUMMARY` | Integrated |
+| `/admin/report-builder/runs`, `/runs/{id}` | `/reports/builder`: archive and stored report | `ADMIN_SUMMARY` | Integrated |
+| `/admin/report-builder/runs/{id}/pdf` | PDF download through `/api/broka/report-builder/runs/{id}/pdf` | `ADMIN_SUMMARY` | Integrated. The route relays only a PDF of at most 20 MB and passes only a recognised file name |
+| `/admin/report-builder/definitions` | Saved and scheduled reports | `ADMIN_SUMMARY` | Integrated |
+
 ## Write surface
 
 | Endpoint | Backend behavior |
@@ -81,6 +93,13 @@ Fields added with the negotiation and completion stages are optional in the cont
 | `POST /admin/communications/{id}/cancel` | Draft or scheduled only; optional audit reason; no post-publication withdrawal exists |
 | `POST /admin/communications/{id}/complete` | Published only and only when no recipient row is queued/sending/retry-scheduled; delivery completion, not incident resolution |
 | `POST /admin/communications/{id}/recipients/retry` | Queues eligible recipients; an omitted list means every eligible recipient, so the client always sends an explicit non-empty `recipient_ids` list |
+| `POST /admin/report-builder/preview` | Builds a report from a spec and stores nothing |
+| `POST /admin/report-builder/runs` | Builds a report and archives it as a run |
+| `POST /admin/report-builder/runs/{id}/regenerate` | Builds a new run linked to the one it rebuilds (`regenerated_from`). The original is kept |
+| `POST /admin/report-builder/definitions` | Saves a report with an optional schedule: daily, weekly, monthly or every N days, at an hour in UTC. Scheduled runs happen only while `ADMIN_REPORTS_ENABLED` is on. Each run is emailed to the chosen administrators through Resend when `RESEND_API_KEY` and `BROKA_ADMIN_EMAIL_FROM` are set; each recipient's result is recorded on the run |
+| `PATCH /admin/report-builder/definitions/{id}` | Changes a saved report only at the `expected_version` it was read at; a stale version is a `409` |
+| `POST /admin/report-builder/definitions/{id}/delete` | Removes a saved report. It is a POST because the dashboard proxy has no DELETE |
+| `POST /admin/report-builder/definitions/{id}/run` | Runs a saved report now and archives the run |
 
 The user/fraud mutations above use granular `require_permission` dependencies. The frontend sends `X-Idempotency-Key` and a `reason` body where required. Communications draft creation sends the header but the inspected backend does not enforce it; the client-side retry identity is not server deduplication.
 

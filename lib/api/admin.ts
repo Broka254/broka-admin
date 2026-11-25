@@ -61,6 +61,7 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   activityEngagement: "/admin/activity/engagement",
   activityRetention: "/admin/activity/retention",
   activityUsers: "/admin/activity/users",
+  commandCenter: "/admin/command-center",
   feedbackStats: "/admin/feedback/stats",
 };
 

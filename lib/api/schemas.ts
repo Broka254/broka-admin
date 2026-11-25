@@ -843,6 +843,52 @@ export const UserModerationSchema = AccountStatusStateSchema.extend({
 });
 export type UserModeration = z.infer<typeof UserModerationSchema>;
 
+// ── Command Center (backend api/core/command_center.py) ─────────────────────
+// unit, kind and good stay plain strings: a unit added later renders as a
+// count instead of failing the whole page's contract.
+
+export const CommandMetricSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  kind: z.string(),
+  unit: z.string(),
+  good: z.string(),
+  value: z.number().nullable(),
+  previous: z.number().nullable(),
+  delta: z.number().nullable(),
+  change_pct: z.number().nullable(),
+  definition: z.string(),
+  caption: z.string().nullable(),
+  href: z.string().nullable(),
+  available: z.boolean(),
+  unavailable_reason: z.string().nullable(),
+});
+export type CommandMetric = z.infer<typeof CommandMetricSchema>;
+
+export const CommandGroupSchema = z.object({
+  key: z.string(),
+  title: z.string(),
+  metrics: z.array(CommandMetricSchema),
+});
+export type CommandGroup = z.infer<typeof CommandGroupSchema>;
+
+export const CommandCenterSchema = z.object({
+  generated_at: z.string(),
+  window: z.object({
+    days: z.number(),
+    from: z.string(),
+    to: z.string(),
+    previous_from: z.string(),
+    previous_to: z.string(),
+  }),
+  staff_excluded: z.boolean(),
+  activity_coverage_started_on: z.string().nullable(),
+  groups: z.array(CommandGroupSchema),
+  decisions: InsightsResponseSchema,
+  pulse: PulseSchema,
+});
+export type CommandCenter = z.infer<typeof CommandCenterSchema>;
+
 // The body the browser may send. Strict: nothing beyond these fields reaches the backend.
 export const AccountStatusChangeInSchema = z.object({
   reason: z.string().min(3).max(500),
@@ -1180,6 +1226,7 @@ export const AdminResourceSchemas = {
   activityRetention: ActivityRetentionSchema, activityUsers: ActivityUsersSchema,
   activityUserProfile: ActivityUserProfileSchema,
   userModeration: UserModerationSchema,
+  commandCenter: CommandCenterSchema,
   productionCosts: ProductionCostsResponseSchema,
   productionCostSummary: ProductionCostSummarySchema,
   productionCostUsage: ProductionCostUsageResponseSchema,

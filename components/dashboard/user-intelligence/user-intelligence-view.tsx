@@ -56,7 +56,8 @@ function windowFallback(): DateRangeSelection {
   return { from, to, bucket: "day" };
 }
 
-function LiveStrip() {
+/** Live presence: the User intelligence page and the Command Center both show it. */
+export function LiveActivityStrip() {
   const live = useAdminResource("activityLive");
   const state = stateOf(live);
   const data = live.data;
@@ -371,7 +372,7 @@ export function UserIntelligenceView() {
         meta={<span className="text-[11px] text-slate-500">Window {formatShortDate(range.from)} to {formatShortDate(range.to)} (UTC, exclusive end)</span>}
       />
 
-      <LiveStrip />
+      <LiveActivityStrip />
 
       <Panel
         id="engagement"

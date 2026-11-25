@@ -70,6 +70,9 @@ export interface AnalyticsChartDef {
   title: string;
   subtitle: string;
   money?: boolean;
+  /** False for a series whose buckets must not be summed (distinct active
+   * accounts per day): the chart reports its peak instead of a total. */
+  additive?: boolean;
   /** Verified workspace where the same records can be inspected. */
   href?: string;
   linkLabel?: string;
@@ -121,7 +124,9 @@ export function TimeseriesBody({
       />
     );
   }
-  const available = charts.filter((chart) => (series?.[chart.key]?.length ?? 0) > 0);
+  // A series whose every bucket is null was not measured (active_users before
+  // tracking began): it is missing, not a chart of nothing.
+  const available = charts.filter((chart) => (series?.[chart.key] ?? []).some((point) => point.v !== null));
   if (available.length === 0) return <ResourceState state="empty" message={emptyMessage} />;
   return (
     <div className="space-y-3">
@@ -155,7 +160,8 @@ export function SeriesChart({ def, points }: { def: AnalyticsChartDef; points: T
   const measured = points.flatMap((point) => (point.v === null ? [] : [point.v]));
   const total = measured.reduce((sum, value) => sum + value, 0);
   const highest = measured.length ? Math.max(...measured) : 0;
-  const summary = `${def.title}: ${points.length} ${points.length === 1 ? "bucket" : "buckets"} from ${formatShortDate(first.t)} to ${formatShortDate(last.t)}. Total ${formatValue(total)}. Highest ${formatValue(highest)}.`;
+  const additive = def.additive !== false;
+  const summary = `${def.title}: ${points.length} ${points.length === 1 ? "bucket" : "buckets"} from ${formatShortDate(first.t)} to ${formatShortDate(last.t)}.${additive ? ` Total ${formatValue(total)}.` : ""} Highest ${formatValue(highest)}.`;
   return (
     <figure className="data-panel flex flex-col p-4 transition-colors hover:border-[#8b75ff]/30">
       <figcaption className="flex items-start justify-between gap-2">
@@ -223,7 +229,7 @@ export function SeriesChart({ def, points }: { def: AnalyticsChartDef; points: T
         </ResponsiveContainer>
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/[0.055] pt-2">
-        <span className="text-[10px] tabular-nums text-slate-600">Total {formatValue(total)} · units from the backend series</span>
+        <span className="text-[10px] tabular-nums text-slate-600">{additive ? `Total ${formatValue(total)}` : `Peak ${formatValue(highest)}`} · units from the backend series</span>
         {def.href ? (
           <Link href={def.href} className="focus-ring inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 transition hover:text-[#ded8ff]">
             {def.linkLabel ?? "Open workspace"}

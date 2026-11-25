@@ -15,7 +15,7 @@ export type ApiResource =
   | "intelligenceCohorts" | "intelligenceSellers" | "marketRankings" | "marketPerformance" | "marketAnomalies" | "marketModels" | "marketListingDetail" | "reports" | "reportPreview" | "reportDetail"
   | "feedback" | "feedbackStats" | "feedbackDetail"
   | "activityLive" | "activityEngagement" | "activityRetention" | "activityUsers" | "activityUserProfile"
-  | "userModeration";
+  | "userModeration" | "commandCenter";
 
 export type StaticAdminResource = Exclude<
   ApiResource,

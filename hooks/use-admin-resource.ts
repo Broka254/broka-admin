@@ -64,6 +64,7 @@ const resourcePaths: Record<StaticAdminResource, string> = {
   reportBuilderCatalog: "admin/report-builder/catalog",
   reportBuilderRuns: "admin/report-builder/runs",
   reportBuilderDefinitions: "admin/report-builder/definitions",
+  operationsAnomalies: "admin/operations/anomalies",
 };
 
 export class AdminRequestError extends Error {

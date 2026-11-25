@@ -16,7 +16,7 @@ export type ApiResource =
   | "feedback" | "feedbackStats" | "feedbackDetail"
   | "activityLive" | "activityEngagement" | "activityRetention" | "activityUsers" | "activityUserProfile"
   | "userModeration" | "commandCenter"
-  | "operations" | "reportBuilderCatalog" | "reportBuilderRuns" | "reportBuilderDefinitions" | "reportBuilderRunDetail";
+  | "operations" | "operationsAnomalies" | "reportBuilderCatalog" | "reportBuilderRuns" | "reportBuilderDefinitions" | "reportBuilderRunDetail";
 
 export type StaticAdminResource = Exclude<
   ApiResource,

@@ -24,7 +24,7 @@ import {
   MarketRankingsSchema,
 } from "@/lib/api/market-schemas";
 
-import { OperationsSchema } from "@/lib/api/operations-schemas";
+import { OperationsAnomaliesSchema, OperationsSchema } from "@/lib/api/operations-schemas";
 import { CatalogSchema, DefinitionListSchema, RunDetailSchema, RunListSchema } from "@/lib/api/report-builder-schemas";
 
 const nullableString = z.string().nullable();
@@ -1252,6 +1252,7 @@ export const AdminResourceSchemas = {
   marketModels: MarketModelsSchema,
   marketListingDetail: MarketListingDetailSchema,
   operations: OperationsSchema,
+  operationsAnomalies: OperationsAnomaliesSchema,
   reportBuilderCatalog: CatalogSchema,
   reportBuilderRuns: RunListSchema,
   reportBuilderDefinitions: DefinitionListSchema,

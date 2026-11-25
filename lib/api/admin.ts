@@ -68,6 +68,8 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   reportBuilderCatalog: "/admin/report-builder/catalog",
   reportBuilderRuns: "/admin/report-builder/runs",
   reportBuilderDefinitions: "/admin/report-builder/definitions",
+  // Operations figures judged against their own history (backend api/core/ops_anomalies.py).
+  operationsAnomalies: "/admin/operations/anomalies",
   feedbackStats: "/admin/feedback/stats",
 };
 

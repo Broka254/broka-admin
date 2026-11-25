@@ -36,6 +36,7 @@ import {
   ReportGenerateInSchema,
 } from "@/lib/api/intelligence-schemas";
 import { MarketScanResultSchema } from "@/lib/api/market-schemas";
+import { AnswerSchema, AskInSchema } from "@/lib/api/assistant-schemas";
 import {
   DefinitionDeletedSchema,
   DefinitionInSchema,
@@ -255,6 +256,14 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     pattern: /^admin\/report-builder\/definitions\/([A-Za-z0-9-]+)\/run$/,
     requestSchema: null,
     responseSchema: RunDetailSchema,
+  },
+  // The Intelligence Assistant: one question, one read-only answer. The question
+  // is checked against a strict schema here, and nothing is stored or changed.
+  {
+    method: "POST",
+    pattern: /^admin\/assistant\/ask$/,
+    requestSchema: AskInSchema,
+    responseSchema: AnswerSchema,
   },
   // Email Reply: one message to one address from the BROKA admin address. The
   // request schema is strict and names no sender, Reply-To or HTML, so none

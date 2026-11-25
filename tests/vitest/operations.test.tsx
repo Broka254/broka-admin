@@ -75,7 +75,7 @@ describe("OperationsView", () => {
     expect(screen.getByRole("table", { name: "Busiest endpoints" })).toHaveTextContent("GET /listings/{listing_id}");
     expect(screen.getByText(/The balance is insufficient for the transaction #/)).toBeInTheDocument();
     expect(screen.getByText(/This process now: 2 of 5 connections checked out/)).toBeInTheDocument();
-    expect(screen.getByText(/Sampling began/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Sampling coverage" })).getByText(/Sampling began/)).toBeInTheDocument();
   });
 
   it("never presents FCM acceptance as delivery, and says what was not measured", () => {

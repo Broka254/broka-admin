@@ -76,6 +76,19 @@ Definitions and limits: `ADMIN_INTELLIGENCE.md` in the backend repository. A rep
 | `/admin/report-builder/runs/{id}/pdf` | PDF download through `/api/broka/report-builder/runs/{id}/pdf` | `ADMIN_SUMMARY` | Integrated. The route relays only a PDF of at most 20 MB and passes only a recognised file name |
 | `/admin/report-builder/definitions` | Saved and scheduled reports | `ADMIN_SUMMARY` | Integrated |
 
+### Predictive intelligence and the assistant (backend branch `feat/predictive-assistant`)
+
+Definitions and limits: `ADMIN_INTELLIGENCE.md` in the backend repository. Both surfaces read the analytics their pages read, and neither stores anything.
+
+| Endpoint | Frontend surface | Authorization | Status |
+|---|---|---|---|
+| `/admin/operations/anomalies` | `/operations`: "Unusual changes on the last complete day". Each figure against its 28 days before, with what happened, the impact and what to check | `ADMIN_SUMMARY` | Implemented. A day is judged only with at least 720 samples, and a figure needs seven measured days of history. Otherwise it reads "Not measured" or "Too little history", never zero. Not judged yet: active users, call connection outcomes, slow statements, ZetuPay payments |
+| `POST /admin/assistant/ask` | `/assistant`: one question, one answer with the figures behind it | `ADMIN_SUMMARY`, 120 questions an hour per administrator | Implemented as deterministic intents over the same analytics. No language model writes the answer. An instruction (suspend, refund, send, delete...) is refused and linked to the page where it is done. Nothing is stored |
+
+The assistant answers: users active right now (a live presence sample), sign-ups, payments, active users, listings, anomalies, forecasts, and a summary of the last seven complete UTC days. It points category growth and demand to Marketplace intelligence and does not rank categories itself.
+
+Forecasts are shown only when their seven-day backtest passed, and every answer gives the method and the band. Known gaps: missing days count as zero in the history, and no forecast yet covers supply shortages or payment failures. The marketplace scan (`/admin/intelligence/market/anomalies`) covers new registrations, new listings, first-time listing views, M-Pesa payments and failed pushes.
+
 ## Write surface
 
 | Endpoint | Backend behavior |

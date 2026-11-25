@@ -21,13 +21,54 @@ vi.mock("@/hooks/use-admin-resource", () => ({
 
 import { OperationsView } from "@/components/operations/operations-view";
 import { useAdminResource } from "@/hooks/use-admin-resource";
-import { OperationsSchema } from "@/lib/api/operations-schemas";
+import { OperationsAnomaliesSchema, OperationsSchema } from "@/lib/api/operations-schemas";
 import { parseAdminResource } from "@/lib/api/schemas";
 import { bucketLabel, formatAge, formatOpsValue, opsChange, opsChangeTone } from "@/lib/operations";
 import { operationsFixture } from "./fixtures/report-builder";
 
-function serve(payload: unknown) {
-  vi.mocked(useAdminResource).mockReturnValue({ data: OperationsSchema.parse(payload), isLoading: false, isError: false, error: null, refetch: vi.fn() } as never);
+// The anomaly checks are a second resource on the same page, so the mock answers
+// each resource by name: the operations figures for "operations", the checks for
+// "operationsAnomalies".
+function anomaliesFixture(): Record<string, unknown> {
+  return {
+    generated_at: "2026-11-25T12:00:00Z",
+    data_as_of: "2026-11-25T00:00:00Z",
+    evaluated_day: "2026-11-24",
+    baseline: { from: "2026-10-27T00:00:00Z", to_exclusive: "2026-11-24T00:00:00Z", days: 28, min_measured_days: 7 },
+    rules: { min_samples_per_day: 720, z_threshold: 3.5, high_z: 6 },
+    anomalies: [{
+      key: "api_error_rate", label: "API error rate", unit: "percent", status: "flagged", reason: null,
+      observed: 30, baseline_median: 1, baseline_days: 28, z_score: 58, deviation: { absolute: 29, pct: 2900 },
+      direction: "up", date: "2026-11-24", severity: "high",
+      what_happened: "API error rate was 30.0% on 24 Nov 2026 (UTC), above its usual 1.0%.",
+      impact: "Requests failed with server errors, so some users saw errors.",
+      suggested_action: "Open Operations for that day and check the failing routes, then the database pool.",
+      source: "ops_samples", evidence: [{ label: "API error rate", value: 30, source: "ops_samples" }],
+    }],
+    figures: [
+      { key: "api_error_rate", label: "API error rate", unit: "percent", status: "flagged", reason: null, observed: 30,
+        baseline_median: 1, baseline_days: 28, z_score: 58, deviation: { absolute: 29, pct: 2900 }, direction: "up" },
+      { key: "push_failed", label: "Pushes refused or failed", unit: "count", status: "insufficient_history",
+        reason: "2 measured days before it; 7 are needed to judge it.", observed: 3, baseline_median: null, baseline_days: 2,
+        z_score: null, deviation: null, direction: null },
+      { key: "pool_saturations", label: "Times the connection pool was full", unit: "count", status: "not_measured",
+        reason: "The sampler recorded too few samples for this day, so it is not compared.", observed: null,
+        baseline_median: null, baseline_days: 0, z_score: null, deviation: null, direction: null },
+    ],
+    covered_elsewhere: [],
+    not_covered: [{ figure: "Active users", reason: "No anomaly rule judges it yet." }],
+  };
+}
+
+function serve(payload: unknown, anomalies: unknown = anomaliesFixture()) {
+  vi.mocked(useAdminResource).mockImplementation(((resource: string) => ({
+    data: resource === "operationsAnomalies" ? OperationsAnomaliesSchema.parse(anomalies) : OperationsSchema.parse(payload),
+    isLoading: false, isError: false, error: null, refetch: vi.fn(),
+  })) as never);
+}
+
+function operationsCalls() {
+  return vi.mocked(useAdminResource).mock.calls.filter((call) => call[0] === "operations");
 }
 
 describe("operations contract", () => {
@@ -100,9 +141,27 @@ describe("OperationsView", () => {
 
   it("asks for the window chosen", () => {
     render(<OperationsView />);
-    expect(vi.mocked(useAdminResource).mock.calls.at(-1)?.[1]?.toString()).toBe("window_hours=24");
+    expect(operationsCalls().at(-1)?.[1]?.toString()).toBe("window_hours=24");
     fireEvent.click(screen.getByRole("radio", { name: "6 hours" }));
-    expect(vi.mocked(useAdminResource).mock.calls.at(-1)?.[1]?.toString()).toBe("window_hours=6");
+    expect(operationsCalls().at(-1)?.[1]?.toString()).toBe("window_hours=6");
+  });
+
+  it("shows the unusual changes the checks found, with what to check", () => {
+    render(<OperationsView />);
+    expect(screen.getByText("Unusual changes on the last complete day")).toBeInTheDocument();
+    const item = screen.getByTestId("anomaly-api_error_rate");
+    expect(within(item).getByText("API error rate was 30.0% on 24 Nov 2026 (UTC), above its usual 1.0%.")).toBeInTheDocument();
+    expect(within(item).getByText("high")).toBeInTheDocument();
+    expect(within(item).getByText(/Open Operations for that day/)).toBeInTheDocument();
+  });
+
+  it("says which figures could not be judged and why, and never shows them as zero", () => {
+    render(<OperationsView />);
+    const table = screen.getByRole("table", { name: "Each figure against its history" });
+    expect(within(table).getByText("Too little history")).toBeInTheDocument();
+    expect(within(table).getByText("2 measured days before it; 7 are needed to judge it.")).toBeInTheDocument();
+    expect(within(table).getByText("Not measured")).toBeInTheDocument();
+    expect(screen.getByText("Active users:")).toBeInTheDocument();
   });
 
   it("explains a deployment that has not sampled yet", () => {

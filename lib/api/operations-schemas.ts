@@ -77,3 +77,48 @@ export const OperationsSchema = z.object({
   definitions: z.record(z.string(), z.string()),
 }).passthrough();
 export type Operations = z.infer<typeof OperationsSchema>;
+
+// GET /admin/operations/anomalies (backend api/core/ops_anomalies.py): each
+// figure compared with its own history on the last complete UTC day. A figure
+// is "not_measured" or "insufficient_history" rather than zero, and only a
+// "flagged" figure carries what happened, its impact and what to check.
+const nullableNumberOrNull = z.number().nullable();
+
+const FigureSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  unit: z.string(),
+  status: z.enum(["flagged", "normal", "insufficient_history", "not_measured"]),
+  reason: z.string().nullable(),
+  observed: nullableNumberOrNull,
+  baseline_median: nullableNumberOrNull,
+  baseline_days: count,
+  z_score: nullableNumberOrNull,
+  deviation: z.object({ absolute: z.number(), pct: nullableNumberOrNull }).nullable(),
+  direction: z.enum(["up", "down", "flat"]).nullable(),
+}).passthrough();
+
+const AnomalySchema = FigureSchema.extend({
+  date: z.string(),
+  severity: z.enum(["high", "medium"]),
+  what_happened: z.string(),
+  impact: z.string(),
+  suggested_action: z.string(),
+  source: z.string(),
+  evidence: z.array(z.object({ label: z.string(), value: z.number(), source: z.string() })),
+});
+
+export const OperationsAnomaliesSchema = z.object({
+  generated_at: z.string(),
+  data_as_of: z.string(),
+  evaluated_day: z.string(),
+  baseline: z.object({
+    from: z.string(), to_exclusive: z.string(), days: count, min_measured_days: count,
+  }),
+  rules: z.object({ min_samples_per_day: count, z_threshold: z.number(), high_z: z.number() }),
+  anomalies: z.array(AnomalySchema),
+  figures: z.array(FigureSchema),
+  covered_elsewhere: z.array(z.object({ figure: z.string(), where: z.string(), reason: z.string() })),
+  not_covered: z.array(z.object({ figure: z.string(), reason: z.string() })),
+}).passthrough();
+export type OperationsAnomalies = z.infer<typeof OperationsAnomaliesSchema>;

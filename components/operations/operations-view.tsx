@@ -257,6 +257,89 @@ const PANELS: Record<string, (props: { section: OperationsSection; data: Operati
   calls: CallsPanel, background: BackgroundPanel,
 };
 
+const FIGURE_STATUS: Record<string, { label: string; tone: "danger" | "success" | "warning" | "neutral" }> = {
+  flagged: { label: "Flagged", tone: "danger" },
+  normal: { label: "Normal", tone: "success" },
+  insufficient_history: { label: "Too little history", tone: "warning" },
+  not_measured: { label: "Not measured", tone: "neutral" },
+};
+
+// Unusual changes against each figure's own history (GET /admin/operations/anomalies).
+// A figure without enough history, or without samples for the day, says so: it
+// is never compared with zero.
+function AnomaliesPanel() {
+  const anomalies = useAdminResource("operationsAnomalies");
+  const data = anomalies.data;
+  return (
+    <Panel id="unusual" eyebrow="Anomalies" title="Unusual changes on the last complete day"
+      description="Each figure is compared with the 28 days before it. A day counts only with enough samples, and a figure needs seven measured days of history before it is judged.">
+      {anomalies.isLoading ? (
+        <ResourceState state="loading" message="Comparing the figures with their history…" />
+      ) : anomalies.isError ? (
+        isEndpointMissing(anomalies.error) ? (
+          <ResourceState state="unavailable" message="Unusual-change checks need the upgraded BROKA API." />
+        ) : (
+          <ResourceState state="error" message="Unusual changes could not be checked." />
+        )
+      ) : data ? (
+        <div className="space-y-5">
+          {data.anomalies.length ? (
+            <ul className="space-y-3">
+              {data.anomalies.map((a) => (
+                <li key={a.key} data-testid={`anomaly-${a.key}`} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-100">{a.what_happened}</p>
+                    <Chip tone={a.severity === "high" ? "danger" : "warning"}>{a.severity}</Chip>
+                  </div>
+                  <p className="mt-1 text-slate-400">
+                    Observed {formatOpsValue(a.observed, a.unit)} against a median of {formatOpsValue(a.baseline_median, a.unit)} over {a.baseline_days} measured days before it (z {a.z_score}).
+                  </p>
+                  <p className="mt-1 text-slate-400">Impact: {a.impact}</p>
+                  <p className="mt-1 text-slate-300">Check: {a.suggested_action}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">Source: {a.source}. Day: {a.date} (UTC).</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-400">No figure moved outside its usual range on {data.evaluated_day} (UTC).</p>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-xs">
+              <caption className="sr-only">Each figure against its history</caption>
+              <thead><tr><Th>Figure</Th><Th>Status</Th><Th right>Observed</Th><Th right>Usual</Th><Th right>Measured days before</Th></tr></thead>
+              <tbody>
+                {data.figures.map((f) => {
+                  const status = FIGURE_STATUS[f.status] ?? FIGURE_STATUS.not_measured;
+                  return (
+                    <tr key={f.key} className="border-t border-white/[0.06]">
+                      <td className="px-2 py-1.5 text-slate-200">{f.label}</td>
+                      <td className="px-2 py-1.5">
+                        <Chip tone={status.tone}>{status.label}</Chip>
+                        {f.reason ? <p className="mt-1 text-[10px] text-slate-500">{f.reason}</p> : null}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{formatOpsValue(f.observed, f.unit)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{formatOpsValue(f.baseline_median, f.unit)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{formatCount(f.baseline_days)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {data.not_covered.length ? (
+            <div>
+              <Eyebrow>Not judged yet</Eyebrow>
+              <ul className="mt-1 space-y-1 text-xs text-slate-400">
+                {data.not_covered.map((n) => <li key={n.figure}><span className="font-semibold text-slate-300">{n.figure}:</span> {n.reason}</li>)}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
 export function OperationsView() {
   const [windowValue, setWindowValue] = useState<OperationWindow>("24");
   const query = useMemo(() => new URLSearchParams({ window_hours: windowValue }), [windowValue]);
@@ -288,6 +371,7 @@ export function OperationsView() {
               </p>
             ) : <p>No operations sample has been recorded yet. Each API process writes one a minute once the upgraded API runs; payments, chat delivery and calls are read from their own records meanwhile.</p>}
           </section>
+          <AnomaliesPanel />
           {data.sections.map((section) => {
             const Render = PANELS[section.key];
             return Render ? <div key={section.key}>{Render({ section, data })}</div> : (

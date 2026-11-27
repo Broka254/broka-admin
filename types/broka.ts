@@ -16,13 +16,14 @@ export type ApiResource =
   | "feedback" | "feedbackStats" | "feedbackDetail"
   | "activityLive" | "activityEngagement" | "activityRetention" | "activityUsers" | "activityUserProfile"
   | "userModeration" | "commandCenter"
-  | "operations" | "operationsAnomalies" | "reportBuilderCatalog" | "reportBuilderRuns" | "reportBuilderDefinitions" | "reportBuilderRunDetail";
+  | "operations" | "operationsAnomalies" | "reportBuilderCatalog" | "reportBuilderRuns" | "reportBuilderDefinitions" | "reportBuilderRunDetail"
+  | "zenoStatus" | "zenoBriefing" | "zenoConversations" | "zenoConversationDetail";
 
 export type StaticAdminResource = Exclude<
   ApiResource,
   "userDetail" | "dealDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats"
   | "listingDetail" | "disputeDetail" | "storeDetail" | "reportDetail" | "feedbackDetail" | "marketListingDetail"
-  | "activityUserProfile" | "userModeration" | "reportBuilderRunDetail"
+  | "activityUserProfile" | "userModeration" | "reportBuilderRunDetail" | "zenoConversationDetail"
 >;
 
 export type AdminActionName = "flag" | "unflag" | "recompute-trust" | "promote-admin" | "resolve-fraud-event";

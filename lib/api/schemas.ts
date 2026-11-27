@@ -26,6 +26,12 @@ import {
 
 import { OperationsAnomaliesSchema, OperationsSchema } from "@/lib/api/operations-schemas";
 import { CatalogSchema, DefinitionListSchema, RunDetailSchema, RunListSchema } from "@/lib/api/report-builder-schemas";
+import {
+  ZenoBriefingSchema,
+  ZenoConversationDetailSchema,
+  ZenoConversationListSchema,
+  ZenoStatusSchema,
+} from "@/lib/api/jarvis-schemas";
 
 const nullableString = z.string().nullable();
 const isoDate = nullableString;
@@ -1263,6 +1269,10 @@ export const AdminResourceSchemas = {
   feedback: FeedbackPageSchema,
   feedbackStats: FeedbackStatsSchema,
   feedbackDetail: FeedbackDetailSchema,
+  zenoStatus: ZenoStatusSchema,
+  zenoBriefing: ZenoBriefingSchema,
+  zenoConversations: ZenoConversationListSchema,
+  zenoConversationDetail: ZenoConversationDetailSchema,
 } as const;
 
 export type AdminResourcePayloads = { [K in keyof typeof AdminResourceSchemas]: z.infer<(typeof AdminResourceSchemas)[K]> };

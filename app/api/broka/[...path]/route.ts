@@ -37,6 +37,8 @@ import {
 } from "@/lib/api/intelligence-schemas";
 import { MarketScanResultSchema } from "@/lib/api/market-schemas";
 import { AnswerSchema, AskInSchema } from "@/lib/api/assistant-schemas";
+import { ZenoChatRequestSchema, ZenoChatResponseSchema, ZenoDeleteResultSchema } from "@/lib/api/jarvis-schemas";
+import { isZenoResource, zenoFailureResponse, zenoInvalidQueryResponse, zenoReadQuery } from "@/lib/api/zeno-proxy";
 import {
   DefinitionDeletedSchema,
   DefinitionInSchema,
@@ -75,11 +77,14 @@ function totalCount(response: Response): string | null {
 }
 
 type MutationOperation = {
-  method: "POST" | "PATCH";
+  method: "POST" | "PATCH" | "DELETE";
   pattern: RegExp;
   requestSchema: ZodType | null;
   responseSchema: ZodType;
   requiresIdempotencyKey?: boolean;
+  // "zeno": the failure is classified by lib/api/zeno-proxy.ts. Only its
+  // approved codes reach the browser, with the messages written there.
+  errorPolicy?: "zeno";
   // Error codes the backend gives this operation's failures, each with a
   // fixed message the backend writes. A failure body that carries one of
   // these is relayed - code and message - whatever its status, 5xx included.
@@ -277,6 +282,24 @@ const MUTATION_OPERATIONS: MutationOperation[] = [
     requiresIdempotencyKey: true,
     relayErrorCodes: EMAIL_ERROR_CODE_SET,
   },
+  // Jarvis Mode: one investigation turn. It runs approved read-only analytics
+  // tools and stores the question and its answer. Nothing else changes.
+  {
+    method: "POST",
+    pattern: /^admin\/zeno\/chat$/,
+    requestSchema: ZenoChatRequestSchema,
+    responseSchema: ZenoChatResponseSchema,
+    errorPolicy: "zeno",
+  },
+  // Deleting one of the administrator's own investigations. This is the only
+  // DELETE the proxy forwards. Any other DELETE path is refused as not allowlisted.
+  {
+    method: "DELETE",
+    pattern: /^admin\/zeno\/conversations\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    requestSchema: null,
+    responseSchema: ZenoDeleteResultSchema,
+    errorPolicy: "zeno",
+  },
 ];
 
 function findMutationOperation(method: string, pathWithoutLeadingSlash: string): MutationOperation | null {
@@ -351,6 +374,16 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
     );
   }
 
+  // Jarvis Mode reads accept only the parameters their endpoint documents.
+  // Other reads forward their query string unchanged, as before.
+  const requestUrl = new URL(request.url);
+  let upstreamSearch = requestUrl.search;
+  if (isZenoResource(resource)) {
+    const query = zenoReadQuery(resource, requestUrl.searchParams);
+    if (!query.ok) return zenoInvalidQueryResponse(id);
+    upstreamSearch = query.search;
+  }
+
   const session = await readSessionTokens();
   let accessToken = session.accessToken;
   const refreshToken = session.refreshToken;
@@ -362,8 +395,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
     return session.refreshRejected ? clearSession(response) : response;
   }
 
-  const sourceUrl = new URL(request.url);
-  const upstreamPath = `${requestedPath}${sourceUrl.search}`;
+  const upstreamPath = `${requestedPath}${upstreamSearch}`;
   try {
     let upstream = await upstreamFetch(upstreamPath, { method: "GET", headers: { "X-Request-ID": id } }, accessToken);
     let refreshedTokens: RefreshedTokens | undefined = session.refreshed;
@@ -373,6 +405,10 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
       upstream = await upstreamFetch(upstreamPath, { method: "GET", headers: { "X-Request-ID": id } }, accessToken);
     }
     if (!upstream.ok) {
+      if (isZenoResource(resource)) {
+        const response = await zenoFailureResponse(upstream, id);
+        return upstream.status === 401 ? clearSession(response) : response;
+      }
       const response = NextResponse.json(
         {
           code: upstream.status === 403 ? "forbidden" : upstream.status === 401 ? "unauthorized" : "upstream_error",
@@ -403,7 +439,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
 }
 
 async function handleMutation(
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "DELETE",
   request: Request,
   context: { params: Promise<{ path: string[] }> }
 ) {
@@ -520,6 +556,10 @@ async function handleMutation(
     }
 
     if (!upstream.ok) {
+      if (operation.errorPolicy === "zeno") {
+        const response = await zenoFailureResponse(upstream, id);
+        return upstream.status === 401 ? clearSession(response) : response;
+      }
       // Only a client-error body is relayed to the browser, and only after it
       // is length-capped. A 5xx body can contain an upstream stack trace or
       // internal payload, so it is replaced with a generic message - unless
@@ -626,4 +666,10 @@ export async function POST(request: Request, context: { params: Promise<{ path: 
 
 export async function PATCH(request: Request, context: { params: Promise<{ path: string[] }> }) {
   return handleMutation("PATCH", request, context);
+}
+
+// Only the allowlisted DELETE operations (the Jarvis conversation path) reach
+// handleMutation's table. Every other DELETE is answered 404 there.
+export async function DELETE(request: Request, context: { params: Promise<{ path: string[] }> }) {
+  return handleMutation("DELETE", request, context);
 }

@@ -6,7 +6,7 @@ import { parseAdminResource, AdminActionResultSchema, type AdminActionResult, ty
 import { ZodError } from "zod";
 
 export type { StaticAdminResource };
-export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats" | "reportDetail" | "feedbackDetail" | "marketListingDetail" | "reportBuilderRunDetail">;
+export type DetailAdminResource = Extract<ApiResource, "userDetail" | "dealDetail" | "listingDetail" | "disputeDetail" | "storeDetail" | "communicationDetail" | "communicationRecipients" | "communicationStats" | "reportDetail" | "feedbackDetail" | "marketListingDetail" | "reportBuilderRunDetail" | "zenoConversationDetail">;
 
 export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   summary: "/admin/summary",
@@ -71,6 +71,11 @@ export const ADMIN_ENDPOINTS: Record<StaticAdminResource, string> = {
   // Operations figures judged against their own history (backend api/core/ops_anomalies.py).
   operationsAnomalies: "/admin/operations/anomalies",
   feedbackStats: "/admin/feedback/stats",
+  // Jarvis Mode (backend api/domains/admin_zeno). Reads only; the chat POST and
+  // conversation DELETE are mutation operations, not listed here.
+  zenoStatus: "/admin/zeno/status",
+  zenoBriefing: "/admin/zeno/briefing",
+  zenoConversations: "/admin/zeno/conversations",
 };
 
 const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
@@ -90,6 +95,8 @@ const DETAIL_PATTERNS: Array<{ pattern: RegExp; resource: ApiResource }> = [
   { pattern: /^admin\/reports\/([A-Za-z0-9-]+)$/, resource: "reportDetail" },
   { pattern: /^admin\/report-builder\/runs\/([A-Za-z0-9-]+)$/, resource: "reportBuilderRunDetail" },
   { pattern: /^admin\/feedback\/([A-Za-z0-9-]+)$/, resource: "feedbackDetail" },
+  // A conversation id is the backend's UUID4 string; any other segment is refused.
+  { pattern: /^admin\/zeno\/conversations\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/, resource: "zenoConversationDetail" },
 ];
 
 // "." and ".." are not ids: fetch() resolves them, so admin/communications/..

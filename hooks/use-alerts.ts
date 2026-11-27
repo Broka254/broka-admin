@@ -15,7 +15,9 @@ export type AlertFilters = {
 
 export function buildAlertListParams(filters: AlertFilters = {}): URLSearchParams {
   const params = new URLSearchParams();
-  if (filters.status && filters.status !== "all") params.set("status", filters.status);
+  // "all" is sent, not omitted: the backend defaults a missing status to "open",
+  // so omitting it returned open alerts under an "All statuses" label.
+  if (filters.status) params.set("status", filters.status);
   if (filters.severity && filters.severity !== "all") params.set("severity", filters.severity);
   if (filters.kind?.trim()) params.set("kind", filters.kind.trim());
   params.set("limit", String(filters.limit ?? 50));

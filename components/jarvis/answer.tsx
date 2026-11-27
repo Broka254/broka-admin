@@ -262,10 +262,16 @@ export function AnswerBlock({
   );
 }
 
-/** A question the administrator asked, kept compact so the answers stay the focus. */
-export function QuestionBubble({ text, pending = false }: { text: string; pending?: boolean }) {
+/**
+ * A question the administrator asked, kept compact so the answers stay the focus.
+ * `step` labels a follow-up within its investigation; the first question has none.
+ */
+export function QuestionBubble({ text, pending = false, step }: { text: string; pending?: boolean; step?: number }) {
   return (
-    <div className="flex justify-end">
+    <div className="flex flex-col items-end gap-1">
+      {step !== undefined ? (
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Step {step}</p>
+      ) : null}
       <p
         className={cn(
           "max-w-[min(34rem,92%)] whitespace-pre-line rounded-2xl rounded-br-md border border-[#8b75ff]/25 bg-[#8b75ff]/10 px-4 py-2.5 text-sm leading-6 text-[#ece9ff]",

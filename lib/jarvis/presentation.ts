@@ -252,6 +252,23 @@ export function splitStoredAnswer(content: string): { headline: string; summary:
   return { headline: content.slice(0, index).trim(), summary: content.slice(index + 2).trim() };
 }
 
+/**
+ * Step numbers for the follow-up questions in a transcript, keyed by turn id.
+ * Numbers are given only when `complete` is true, meaning every earlier turn
+ * is loaded. Otherwise a count would start from the wrong question, so none is given.
+ */
+export function questionSteps(turns: ReadonlyArray<{ id: string; role: string }>, complete: boolean): Map<string, number> {
+  const steps = new Map<string, number>();
+  if (!complete) return steps;
+  let asked = 0;
+  for (const turn of turns) {
+    if (turn.role !== "user") continue;
+    asked += 1;
+    if (asked > 1) steps.set(turn.id, asked);
+  }
+  return steps;
+}
+
 export type TurnPage = { offset: number; limit: number };
 
 /**

@@ -14,6 +14,7 @@ import {
 import {
   formatUtc,
   jarvisErrorKind,
+  questionSteps,
   splitStoredAnswer,
   STARTER_QUESTIONS,
 } from "@/lib/jarvis/presentation";
@@ -147,6 +148,9 @@ export function InvestigationPanel({
   const latestMatchedTurn = latest
     ? turns.some((turn) => turn.role === "assistant" && turn.content === `${latest.answer.headline}\n\n${latest.answer.summary}`)
     : true;
+  const steps = questionSteps(turns, !hasEarlierTurns);
+  const askedCount = turns.filter((turn) => turn.role === "user").length;
+  const pendingStep = !hasEarlierTurns && askedCount > 0 ? askedCount + 1 : undefined;
 
   // Keep the newest answer in view. On narrow screens the page itself scrolls,
   // so this only moves the transcript when it is its own scroll region.
@@ -250,7 +254,7 @@ export function InvestigationPanel({
 
               {turns.map((turn) =>
                 turn.role === "user" ? (
-                  <QuestionBubble key={turn.id} text={turn.content} />
+                  <QuestionBubble key={turn.id} text={turn.content} step={steps.get(turn.id)} />
                 ) : (
                   <StoredTurn
                     key={turn.id}
@@ -264,7 +268,7 @@ export function InvestigationPanel({
 
               {pendingQuestion !== null ? (
                 <div className="space-y-3">
-                  <QuestionBubble text={pendingQuestion} pending />
+                  <QuestionBubble text={pendingQuestion} pending step={pendingStep} />
                   <p role="status" className="flex items-center gap-2 pl-1 text-xs text-slate-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#54d7e9] motion-safe:animate-pulse" aria-hidden="true" />
                     Zeno is reading the verified figures for this question.

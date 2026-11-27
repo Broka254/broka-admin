@@ -65,6 +65,9 @@ const resourcePaths: Record<StaticAdminResource, string> = {
   reportBuilderRuns: "admin/report-builder/runs",
   reportBuilderDefinitions: "admin/report-builder/definitions",
   operationsAnomalies: "admin/operations/anomalies",
+  zenoStatus: "admin/zeno/status",
+  zenoBriefing: "admin/zeno/briefing",
+  zenoConversations: "admin/zeno/conversations",
 };
 
 export class AdminRequestError extends Error {

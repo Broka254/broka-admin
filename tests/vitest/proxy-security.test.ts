@@ -216,10 +216,19 @@ describe("admin proxy security boundaries", () => {
     expect(forwardedHeaders.get("X-Idempotency-Key")).toBeNull();
   });
 
-  it("does not export unlisted HTTP methods", async () => {
+  it("exports DELETE only for the allowlisted Jarvis conversation path, and never PUT", async () => {
     const route = await import("@/app/api/broka/[...path]/route");
-    expect(route).not.toHaveProperty("DELETE");
+    expect(route).toHaveProperty("DELETE");
     expect(route).not.toHaveProperty("PUT");
+    const refused = await route.DELETE(
+      new Request("http://localhost/api/broka/admin/communications/comm-1", {
+        method: "DELETE",
+        headers: { origin: "http://localhost" },
+      }),
+      context("admin", "communications", "comm-1"),
+    );
+    expect(refused.status).toBe(404);
+    expect(await refused.json()).toMatchObject({ code: "mutation_not_allowlisted" });
   });
 
   it("rejects unsupported request fields instead of forwarding them", async () => {

@@ -1,15 +1,16 @@
 "use client";
 
 import {
-  Activity, BadgeDollarSign, BarChart3, Bell, Bot, ChevronDown, ChevronLeft, ChevronRight, ClipboardList,
-  CornerDownLeft, FileSearch, FileText, Gauge, Landmark, LayoutDashboard, LogOut, Mail, Megaphone, Menu,
-  MessageSquareWarning, Network, Radar, Receipt, Search, ShieldAlert, Store, TrendingUp, Users, X,
+  Activity, BadgeDollarSign, BarChart3, Bell, Bot, Briefcase, ChevronDown, ChevronLeft, ChevronRight, ClipboardList,
+  Cpu, CornerDownLeft, FileSearch, FileText, Gauge, Landmark, LayoutDashboard, LogOut, Mail, Megaphone, Menu,
+  Microscope, MessageSquareWarning, Network, Orbit, Radar, Radio, Receipt, Search, ShieldAlert, Store, TrendingUp, Users, X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { cn, formatRouteLabel } from "@/lib/utils";
+import { JARVIS_SECTIONS, sectionForPath, type JarvisSectionKey } from "@/lib/jarvis/sections";
 import { useUnreadAlerts } from "@/hooks/use-alerts";
 import { useAlertsStream } from "@/hooks/use-alerts-stream";
 import { useAdminResource } from "@/hooks/use-admin-resource";
@@ -20,8 +21,21 @@ import { InfoTip } from "@/components/ui/tooltip";
 type NavEntry = { label: string; href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; badge?: "complaints" };
 type NavGroup = { label: string; entries: NavEntry[] };
 
+// One icon per Jarvis section. The section list itself lives in lib/jarvis/sections.ts.
+const JARVIS_ICONS: Record<JarvisSectionKey, NavEntry["icon"]> = {
+  command: Orbit,
+  core: Cpu,
+  business: Briefcase,
+  marketplace: Store,
+  trust: ShieldAlert,
+  operations: Activity,
+  studio: Microscope,
+  live: Radio,
+};
+
 const navGroups: NavGroup[] = [
-  { label: "Founder", entries: [{ label: "Command Center", href: "/", icon: LayoutDashboard }, { label: "Intelligence", href: "/intelligence", icon: Radar }, { label: "Growth", href: "/growth", icon: TrendingUp }, { label: "Market Intelligence", href: "/market", icon: Radar }, { label: "Reports", href: "/reports", icon: FileText }, { label: "Report Builder", href: "/reports/builder", icon: FileText }, { label: "Jarvis Mode", href: "/assistant", icon: Bot }] },
+  { label: "Jarvis Mode", entries: JARVIS_SECTIONS.map((section) => ({ label: section.label, href: section.href, icon: JARVIS_ICONS[section.key] })) },
+  { label: "Founder", entries: [{ label: "Command Center", href: "/", icon: LayoutDashboard }, { label: "Intelligence", href: "/intelligence", icon: Radar }, { label: "Growth", href: "/growth", icon: TrendingUp }, { label: "Market Intelligence", href: "/market", icon: Radar }, { label: "Reports", href: "/reports", icon: FileText }, { label: "Report Builder", href: "/reports/builder", icon: FileText }] },
   { label: "Respond", entries: [{ label: "Complaints", href: "/complaints", icon: MessageSquareWarning, badge: "complaints" }, { label: "Email Reply", href: "/email-reply", icon: Mail }, { label: "Alert Centre", href: "/alerts", icon: Bell }] },
   { label: "Marketplace", entries: [{ label: "Listings", href: "/listings", icon: Store }, { label: "Deals", href: "/deals", icon: ClipboardList }, { label: "Stores", href: "/stores", icon: Store }] },
   { label: "Identity", entries: [{ label: "All Users", href: "/users", icon: Users }, { label: "Admins", href: "/users?type=admin", icon: Users }] },
@@ -266,12 +280,14 @@ function Breadcrumbs({ pathname, group, title }: { pathname: string; group?: str
   const root = segments[0];
   const isDetail = segments.length > 1;
   const rootEntry = root ? allEntries.find((entry) => entry.href.split("?")[0] === `/${root}` && !entry.href.includes("?")) : undefined;
+  // Every Jarvis section lives under /assistant. Its crumbs name the workspace, then the section.
+  const jarvis = root === "assistant";
   return (
     <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-slate-500 lg:flex">
       {pathname === "/" ? <><span className="text-slate-400">Founder</span><ChevronRight size={11} aria-hidden="true" /><span className="truncate text-slate-300">Overview</span></> : <>
         <Link href="/" className="focus-ring whitespace-nowrap rounded hover:text-slate-200">Command Center</Link>
-        {root ? <><ChevronRight size={11} aria-hidden="true" /><Link href={`/${root}`} className="focus-ring rounded hover:text-slate-200">{rootEntry?.label ?? formatRouteLabel(root)}</Link></> : null}
-        {isDetail ? <><ChevronRight size={11} aria-hidden="true" /><span className="truncate text-slate-300">{formatRouteLabel(segments[1])}</span></> : null}
+        {root ? <><ChevronRight size={11} aria-hidden="true" /><Link href={`/${root}`} className="focus-ring rounded hover:text-slate-200">{jarvis ? "Jarvis Mode" : (rootEntry?.label ?? formatRouteLabel(root))}</Link></> : null}
+        {isDetail ? <><ChevronRight size={11} aria-hidden="true" /><span className="truncate text-slate-300">{jarvis ? sectionForPath(pathname).label : formatRouteLabel(segments[1])}</span></> : null}
         {group && !root ? <><ChevronRight size={11} aria-hidden="true" /><span className="truncate text-slate-300">{title}</span></> : null}
       </>}
     </nav>

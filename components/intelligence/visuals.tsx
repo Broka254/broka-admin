@@ -99,6 +99,23 @@ export function Ring({ value, target, size = 136, stroke = 10, label, caption, f
             <stop offset="100%" stopColor={to} />
           </linearGradient>
         </defs>
+        {/* Instrument ticks: twelve faint marks so the gauge reads as a dial. */}
+        {Array.from({ length: 12 }, (_, index) => {
+          const angle = (index * 30 - 90) * (Math.PI / 180);
+          const inner = radius - stroke / 2 - 3;
+          const outer = radius + stroke / 2 + 3;
+          return (
+            <line
+              key={index}
+              x1={centre + inner * Math.cos(angle)}
+              y1={centre + inner * Math.sin(angle)}
+              x2={centre + outer * Math.cos(angle)}
+              y2={centre + outer * Math.sin(angle)}
+              stroke="rgba(195,202,226,0.16)"
+              strokeWidth={1}
+            />
+          );
+        })}
         <circle cx={centre} cy={centre} r={radius} fill="none" stroke="rgba(195,202,226,0.09)" strokeWidth={stroke} />
         <circle
           cx={centre}
@@ -110,7 +127,7 @@ export function Ring({ value, target, size = 136, stroke = 10, label, caption, f
           strokeLinecap="round"
           strokeDasharray={`${dash} ${circumference}`}
           transform={`rotate(-90 ${centre} ${centre})`}
-          className="ring-arc"
+          className="ring-arc breathe-glow"
           style={{ filter: "drop-shadow(0 0 6px rgba(139,117,255,0.45))" }}
         />
         {targetAngle !== null ? (
@@ -185,21 +202,61 @@ export function Sparkline({ values, label, height = 34, tone = "#8b75ff" }: { va
   const min = Math.min(...values);
   const span = max - min || 1;
   const points = values.map((value, index) => `${(index / (values.length - 1)) * 100},${height - ((value - min) / span) * (height - 4) - 2}`).join(" ");
+  const last = values[values.length - 1];
+  const lastY = height - ((last - min) / span) * (height - 4) - 2;
   return (
-    <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="h-[34px] w-full" role="img" aria-label={label}>
-      <polyline points={points} fill="none" stroke={tone} strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-      <polyline points={`0,${height} ${points} 100,${height}`} fill={tone} opacity="0.08" stroke="none" />
-    </svg>
+    <div className="relative">
+      <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="h-[34px] w-full" role="img" aria-label={label}>
+        <polyline points={points} fill="none" stroke={tone} strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={`0,${height} ${points} 100,${height}`} fill={tone} opacity="0.08" stroke="none" />
+      </svg>
+      {/* Live-end marker: the newest reading, glowing. Placed outside the svg so
+          preserveAspectRatio="none" cannot stretch it into an ellipse. */}
+      <span
+        className="pointer-events-none absolute h-1.5 w-1.5 -translate-y-1/2 translate-x-1/2 rounded-full breathe"
+        style={{ top: `${(lastY / height) * 100}%`, right: 0, background: tone, boxShadow: `0 0 8px ${tone}` }}
+        aria-hidden="true"
+      />
+    </div>
   );
 }
 
+/** Decorative radar dial: static rings and blips under one slow CSS sweep. */
+export function RadarGlyph({ size = 120, className }: { size?: number; className?: string }) {
+  return (
+    <div
+      className={cn("radar-sweep relative shrink-0 overflow-hidden rounded-full border border-[#54d7e9]/25 bg-[#05060d]/60", className)}
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 100 100" className="h-full w-full">
+        <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(84,215,233,0.16)" strokeWidth="1" />
+        <circle cx="50" cy="50" r="32" fill="none" stroke="rgba(84,215,233,0.13)" strokeWidth="1" />
+        <circle cx="50" cy="50" r="18" fill="none" stroke="rgba(84,215,233,0.11)" strokeWidth="1" />
+        <line x1="50" y1="4" x2="50" y2="96" stroke="rgba(84,215,233,0.09)" strokeWidth="1" />
+        <line x1="4" y1="50" x2="96" y2="50" stroke="rgba(84,215,233,0.09)" strokeWidth="1" />
+        <circle cx="68" cy="30" r="2.4" fill="#54d7e9" opacity="0.9" />
+        <circle cx="34" cy="62" r="2" fill="#8b75ff" opacity="0.85" />
+        <circle cx="56" cy="70" r="1.8" fill="#54d7e9" opacity="0.7" />
+      </svg>
+    </div>
+  );
+}
+
+/** The fixed, drifting aurora layer. Rendered once per authenticated shell. */
+export function AuroraField() {
+  return <div className="aurora-field print-hidden" aria-hidden="true" />;
+}
+
 /** Section shell shared by every intelligence surface. */
-export function Panel({ id, eyebrow, title, description, actions, children, className }: {
-  id?: string; eyebrow?: string; title: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string;
+export function Panel({ id, eyebrow, title, description, actions, children, className, tag }: {
+  id?: string; eyebrow?: string; title: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; tag?: string;
 }) {
   return (
-    <section id={id} className={cn("holo-panel scroll-mt-24 p-5 sm:p-6", className)} aria-labelledby={id ? `${id}-title` : undefined}>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section id={id} className={cn("holo-panel hud-frame scroll-mt-24 p-5 sm:p-6", className)} aria-labelledby={id ? `${id}-title` : undefined}>
+      {tag ? <span className="hud-tag hud-tag--right" aria-hidden="true">{tag}</span> : null}
+      <div className="spectrum-rule pointer-events-none absolute inset-x-14 top-0 opacity-70" aria-hidden="true" />
+      <div className="relative mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {eyebrow ? <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#a895ff]">{eyebrow}</p> : null}
           <h2 id={id ? `${id}-title` : undefined} className="mt-1 font-display text-lg font-bold tracking-[-0.03em] text-white">{title}</h2>
@@ -217,8 +274,10 @@ export function PageHeader({ eyebrow, title, description, actions, icon, meta }:
   eyebrow: string; title: ReactNode; description?: ReactNode; actions?: ReactNode; icon?: ReactNode; meta?: ReactNode;
 }) {
   return (
-    <header className="instrument-panel px-5 py-5 sm:px-6">
+    <header className="instrument-panel hud-frame px-5 py-5 sm:px-6">
       <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-50 constellation" aria-hidden="true" />
+      <div className="scanlines pointer-events-none absolute inset-0 opacity-50" aria-hidden="true" />
+      <div className="spectrum-rule pointer-events-none absolute inset-x-16 top-0 opacity-80" aria-hidden="true" />
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -270,7 +329,7 @@ export function SectionHeading({ id, eyebrow, title, description, meta, actions,
     <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}>
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#a895ff]">
-          <span className="h-1 w-1 rounded-full bg-[#54d7e9] shadow-[0_0_8px_rgba(84,215,233,0.8)]" aria-hidden="true" />
+          <span className="h-1 w-1 rounded-full bg-[#54d7e9] shadow-[0_0_8px_rgba(84,215,233,0.8)] breathe" aria-hidden="true" />
           {eyebrow}
         </p>
         <h2 id={id} className="mt-1.5 font-display text-lg font-bold tracking-[-0.03em] text-white">{title}</h2>
@@ -292,6 +351,7 @@ export function StatTile({ label, value, change, good = "up", caption, hint, ico
         <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">{label}</p>
         {icon ? <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.035]", accent)} aria-hidden="true">{icon}</span> : null}
       </div>
+      {/* value + caption below */}
       <p className={cn("mt-3 font-display text-[1.6rem] font-bold leading-none tracking-[-0.04em] tabular-nums", unavailable ? "text-slate-600" : "text-white")}>{value}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
         {change !== undefined ? <DeltaChip change={change} good={good} /> : null}
@@ -299,7 +359,7 @@ export function StatTile({ label, value, change, good = "up", caption, hint, ico
       </div>
     </>
   );
-  const className = "stat-tile group focus-ring block";
+  const className = "stat-tile hud-frame hud-frame--dim group focus-ring block";
   if (href && isInternalHref(href)) return <Link href={href} className={className} title={hint}>{body}</Link>;
   return <div className={className} title={hint}>{body}</div>;
 }
@@ -345,7 +405,7 @@ export function MetricCard({ label, value, caption, change, good = "up", hint, i
   // definition button remains a valid sibling button rather than a button
   // nested inside an anchor.
   return (
-    <div className="stat-tile group relative h-full">
+    <div className="stat-tile hud-frame hud-frame--dim group relative h-full">
       <div className="pointer-events-none relative z-10">{content}</div>
       {href && isInternalHref(href) ? <Link href={href} className="focus-ring absolute inset-0 z-0 rounded-[1rem]" aria-label={`Open ${label}`} /> : null}
     </div>

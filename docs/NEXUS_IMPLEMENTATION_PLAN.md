@@ -20,6 +20,91 @@ Deliver a coherent redesign in small, reviewable slices. Establish the global sh
 
 **Exit gate:** a verified inventory and baseline. No functional changes in this phase.
 
+
+## Verified repository inventory (main branch)
+
+### Route entry points
+
+The current App Router contains these page entry points:
+
+| Route | Source page |
+|---|---|
+| `/login` | `app/(auth)/login/page.tsx` |
+| `/` | `app/(dashboard)/page.tsx` |
+| `/alerts` | `app/(dashboard)/alerts/page.tsx` |
+| `/assistant` | `app/(dashboard)/assistant/page.tsx` |
+| `/assistant/business` | `app/(dashboard)/assistant/business/page.tsx` |
+| `/assistant/core` | `app/(dashboard)/assistant/core/page.tsx` |
+| `/assistant/live` | `app/(dashboard)/assistant/live/page.tsx` |
+| `/assistant/marketplace` | `app/(dashboard)/assistant/marketplace/page.tsx` |
+| `/assistant/operations` | `app/(dashboard)/assistant/operations/page.tsx` |
+| `/assistant/studio` | `app/(dashboard)/assistant/studio/page.tsx` |
+| `/assistant/trust` | `app/(dashboard)/assistant/trust/page.tsx` |
+| `/communications` | `app/(dashboard)/communications/page.tsx` |
+| `/complaints` | `app/(dashboard)/complaints/page.tsx` |
+| `/email-reply` | `app/(dashboard)/email-reply/page.tsx` |
+| `/growth` | `app/(dashboard)/growth/page.tsx` |
+| `/intelligence` | `app/(dashboard)/intelligence/page.tsx` |
+| `/market` | `app/(dashboard)/market/page.tsx` |
+| `/operations` | `app/(dashboard)/operations/page.tsx` |
+| `/production-costs` | `app/(dashboard)/production-costs/page.tsx` |
+| `/reports` | `app/(dashboard)/reports/page.tsx` |
+| `/reports/builder` | `app/(dashboard)/reports/builder/page.tsx` |
+| `/revenue` | `app/(dashboard)/revenue/page.tsx` |
+| Additional legacy/admin destinations | `app/(dashboard)/[...slug]/page.tsx` catch-all |
+
+The shared dashboard route group is protected by `app/(dashboard)/layout.tsx`, which calls `requireAdminSession()` and passes the verified admin identity into `AdminShell`. Jarvis routes share `app/(dashboard)/assistant/layout.tsx`, which mounts `JarvisProvider` and `JarvisFrame`.
+
+### Navigation groups found in the shell
+
+The existing `components/layout/admin-shell.tsx` defines these groups and destinations. Preserve them unless an explicit product decision changes the information architecture:
+
+- **Jarvis Mode:** Command Centre, Intelligence Core, Business Intelligence, Marketplace Intelligence, Trust & Safety, Operations Intelligence, Investigation Studio, Live Intelligence Feed.
+- **Founder:** Command Center, Intelligence, Growth, Market Intelligence, Reports, Report Builder.
+- **Respond:** Complaints, Email Reply, Alert Centre.
+- **Marketplace:** Listings, Deals, Stores.
+- **Identity:** All Users, Admins.
+- **Trust & Safety:** Fraud, Disputes.
+- **Money:** Revenue, Production Costs, Payments, Finance Integrity, Transactions, Escrow, Commissions.
+- **Zeno:** AI Activity, Negotiations, AI Savings.
+- **Analytics:** Platform, Marketplace, Users.
+- **System:** Service Communications, Operations, Service Health, Audit Logs, Diagnostics, Events, Workflow Versions, Settings.
+
+The catch-all route means the page-file inventory alone is not a complete list of navigable destinations. The navigation configuration and `lib/workspaces.ts` must also be audited before sign-off.
+
+### Existing implementation touchpoints
+
+| Concern | Existing source | NEXUS approach |
+|---|---|---|
+| Global dashboard shell and navigation | `components/layout/admin-shell.tsx` | First visual implementation target; preserve route matching, search palette, alert/complaint badges, API/stream status, logout, and responsive drawer behavior. |
+| Dashboard auth boundary | `app/(dashboard)/layout.tsx`, `lib/auth/session.ts` | Treat as protected infrastructure; no visual refactor should alter session checks. |
+| Jarvis shared frame | `components/jarvis/frame.tsx` | Align its section navigation and Zeno command bar with the new shell without duplicating navigation. |
+| Jarvis session state | `components/jarvis/provider.tsx`, `hooks/use-jarvis.ts` | Preserve current session and command semantics; do not invent AI actions. |
+| Global tokens and component styling | `app/globals.css` | Extend existing BROKA tokens and primitives; avoid competing palettes. |
+| Existing motion preference | `hooks/use-reduced-motion.ts` and global CSS | Reuse and verify; do not introduce a second preference hook. |
+| Shared dashboard primitives | `components/ui/primitives.tsx`, `components/intelligence/visuals.tsx`, `components/jarvis/ui/primitives.tsx` | Consolidate selectively after checking consumers; preserve honest data-state rendering. |
+| Route metadata and fonts | `app/layout.tsx` | Retain self-hosted Inter and Montserrat fonts and existing metadata behavior. |
+
+### Verified baseline constraints
+
+- Next.js 15 App Router, React 19, Tailwind CSS 4, Recharts, Lucide icons, TanStack Query, and Zod are already present.
+- No animation library is currently listed in `package.json`; begin with CSS and existing React patterns. Add a dependency only if a concrete interaction cannot be implemented well with the current stack.
+- Existing global CSS already includes a reduced-motion media query and Jarvis motion primitives.
+- The authenticated shell intentionally does not use localStorage or sessionStorage for tokens or recent routes. Keep that security constraint intact.
+- The current shell already has desktop collapse and a mobile drawer. NEXUS should improve their visual quality and interaction details, not replace working behavior without reason.
+- The current Jarvis frame has its own compact mobile section strip. Coordinate this with the global shell so users do not receive redundant navigation.
+
+## Phase 0 findings and first-slice decision
+
+The initial inventory confirms that the highest-leverage first implementation is the global shell, not an immediate rewrite of every dashboard. The first code slice should target:
+
+1. `app/globals.css` — NEXUS tokens, reusable surface primitives, and restrained motion primitives.
+2. `components/layout/admin-shell.tsx` — desktop navigation, mobile drawer, header, and workspace frame.
+3. `components/jarvis/frame.tsx` — consistent Jarvis section navigation and shared command workspace.
+4. Focused tests for shell navigation, drawer state, keyboard behavior, and reduced-motion handling.
+
+Do not change `app/(dashboard)/layout.tsx`, auth/session modules, API proxy routes, or backend contracts for visual reasons. Before coding, inspect the full relevant component implementations and their tests, then capture baseline verification on the feature branch.
+
 ## Phase 1 — NEXUS foundation and global shell
 
 1. Implement the NEXUS token layer in the existing global CSS, mapping to established BROKA tokens rather than creating competing values.
